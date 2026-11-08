@@ -1,0 +1,89 @@
+#!/bin/bash
+# Helper privilégié du greeter de connexion.
+#
+# Seul programme autorisé sans mot de passe par
+# /etc/polkit-1/rules.d/50-greeter-palette.rules — il est donc volontairement
+# minuscule, sans shell évalué, et il valide tout ce qu'il reçoit :
+#   - `apply <id>`              choisit un thème déjà présent dans le thème
+#   - `set-palette <conf> <bg>` remplace la palette générée et le fond
+#
+# Toute autre invocation sort en erreur.
+
+set -euo pipefail
+
+THEME="/usr/share/sddm/themes/sddm-astronaut-theme"
+SDDM_CONF="/etc/sddm.conf.d/10-sddm-theme.conf"
+MARKER="# Généré par dev/sddm/generate.py"
+
+die() { echo "greeter-palette: $*" >&2; exit 2; }
+
+[ "$(id -u)" -eq 0 ] || die "à lancer via pkexec"
+[ -d "$THEME" ] || die "thème absent : $THEME"
+
+cmd="${1:-}"
+
+case "$cmd" in
+apply)
+    id="${2:-}"
+    # Identifiant strict : lettres (les noms amont en portent, « Genshin »,
+    # « R1999_1 »), chiffres, souligné, tiret et point. Rien d'autre ne peut
+    # désigner un dossier, donc pas de traversée de chemin possible.
+    [[ "$id" =~ ^[A-Za-z0-9_.-]+$ ]] && [[ "$id" != "." && "$id" != ".." ]] \
+        || die "identifiant invalide"
+    if [ -f "$THEME/Themes/$id.conf" ]; then
+        # Conf du thème astronaut : c'est la metadata qui désigne le fichier.
+        sed -i "s|^ConfigFile=.*|ConfigFile=Themes/$id.conf|" "$THEME/metadata.desktop"
+        current="sddm-astronaut-theme"
+    elif [ -d "/usr/share/sddm/themes/$id" ] && [ -f "/usr/share/sddm/themes/$id/metadata.desktop" ]; then
+        # Thème complet (qylock) : sa propre metadata porte déjà son ConfigFile,
+        # il suffit de nommer son dossier.
+        current="$id"
+    else
+        die "configuration inconnue : $id"
+    fi
+    mkdir -p "$(dirname "$SDDM_CONF")"
+    printf '[Theme]\nCurrent=%s\n' "$current" > "$SDDM_CONF"
+    echo "appliqué : $id"
+    ;;
+
+set-palette)
+    src_conf="${2:-}"
+    src_bg="${3:-}"
+    [ -f "$src_conf" ] || die "conf introuvable"
+    [ -f "$src_bg" ] || die "fond introuvable"
+    [ "$(stat -c %s "$src_conf")" -le 12288 ] || die "conf trop grosse"
+    [ "$(stat -c %s "$src_bg")" -le 8388608 ] || die "fond trop gros"
+
+    # Le fichier doit être celui du générateur : marqueur + uniquement des
+    # sections, des commentaires et des couples CLE="valeur".
+    grep -qxF "[General]" "$src_conf" || die "conf: en-tête inattendu"
+    grep -qF "$MARKER" "$src_conf" || die "conf: marqueur du générateur absent"
+    if grep -vE '^[[:space:]]*$|^#|^\[[A-Za-z]+\]$|^[A-Za-z]+="[^"\\]*"$' "$src_conf" >/dev/null; then
+        die "conf: ligne non reconnue"
+    fi
+
+    # Le fond doit être un PNG à la taille déclarée par la conf : le générateur
+    # suit l'écran de la machine (1920x1080 sur le desktop, la taille du panneau
+    # sur le laptop). Repli 1920x1080 si la conf ne les déclare pas.
+    head -c 8 "$src_bg" | od -An -tx1 | tr -d ' \n' | grep -qx '89504e470d0a1a0a' \
+        || die "fond: ce n'est pas un PNG"
+    want_w="$(awk -F'"' '/^ScreenWidth=/{print $2; exit}' "$src_conf")"
+    want_h="$(awk -F'"' '/^ScreenHeight=/{print $2; exit}' "$src_conf")"
+    want="1920x1080"
+    if [[ "${want_w:-}" =~ ^[0-9]+$ && "${want_h:-}" =~ ^[0-9]+$ ]]; then
+        want="${want_w}x${want_h}"
+    fi
+    dims="$(identify -format '%wx%h' "$src_bg" 2>/dev/null || true)"
+    [ "$dims" = "$want" ] || die "fond: dimensions $dims au lieu de $want"
+
+    install -Dm644 "$src_conf" "$THEME/Themes/palette.conf"
+    install -Dm644 "$src_bg" "$THEME/Backgrounds/wallpaper.png"
+    sed -i "s|^ConfigFile=.*|ConfigFile=Themes/palette.conf|" "$THEME/metadata.desktop"
+    printf '[Theme]\nCurrent=sddm-astronaut-theme\n' > "$SDDM_CONF"
+    echo "palette installée"
+    ;;
+
+*)
+    die "commande inconnue : ${cmd:-<vide>}"
+    ;;
+esac
