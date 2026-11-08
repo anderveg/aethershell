@@ -1044,6 +1044,54 @@ Rectangle {
         cmdProc.running = true
     }
 
+    // Résumé de tiroir : un chemin du thème (`$HOME/...`) se lit mieux en `~`.
+    function resumeChemin(chemin) {
+        const s = String(chemin || "")
+        return s.replace(/^\$HOME/, "~").replace(/\/$/, "")
+    }
+
+    // Chemins des réglages → chemin absolu. Les valeurs du thème commencent par
+    // `$HOME` ; le sélecteur de dossier, lui, ne travaille qu'en absolu.
+    function cheminAbsolu(chemin) {
+        let s = String(chemin || "")
+        if (s.indexOf("$HOME") === 0) s = Quickshell.env("HOME") + s.substring(5)
+        return s.replace(/\/$/, "")
+    }
+
+    // Sélecteur de dossier des deux chemins de *Fonds d'écran & Captures* :
+    // une feuille du panneau (SelecteurDossier.qml), pas un dialogue Qt — une
+    // vraie fenêtre s'ouvrirait sous la surface de couche du panneau.
+    property string selecteurCible: ""
+
+    // Installation des paquets manquants (onglet « Apps & Alertes »). Le script
+    // lit dependencies.txt, filtre sur la distribution et élève par pkexec —
+    // l'agent polkit du shell pose la question dans la session.
+    property string depsEtat: ""
+    property string depsDetail: ""
+
+    Process {
+        id: depsProc
+        onRunningChanged: {
+            if (running) {
+                root.depsEtat = "vérification…"
+                root.depsDetail = ""
+            }
+        }
+        stderr: SplitParser {
+            onRead: donnee => root.depsDetail = String(donnee)
+        }
+        onExited: code => {
+            root.depsEtat = code === 0 ? "à jour" : "incomplet (code " + code + ")"
+        }
+    }
+
+    function installerDependances() {
+        if (depsProc.running)
+            return
+        depsProc.command = ["python3", Quickshell.shellPath("core/deps_install.py")]
+        depsProc.running = true
+    }
+
     function runConfigCmd(args) {
         if (!cmdProc.running) {
             startConfigCmd(args)
@@ -1857,6 +1905,7 @@ Rectangle {
                 id: secTheme
                 objectName: "secTheme"
                 title: "Thème & Palette"
+                summary: String(Theme.paletteEtiquettes[Theme.activeTheme] || Theme.activeTheme)
                 icon: "palette"
                 expanded: root.sectionOpen("esthetique_theme", true)
                 onToggled: expanded => {
@@ -2157,6 +2206,7 @@ Rectangle {
                 id: secFonds
                 objectName: "secFonds"
                 title: "Fonds d'écran & Captures"
+                summary: root.resumeChemin(root.wallpaperDir)
                 icon: "image"
                 expanded: root.sectionOpen("esthetique_fonds", false)
                 onToggled: expanded => {
@@ -2221,7 +2271,7 @@ Rectangle {
                 }
 
                 Rectangle {
-                    width: parent.width - 145 - 85 - 2 * 8
+                    width: parent.width - 145 - 85 - 70 - 3 * 8
                     height: 28
                     color: Theme.bg
                     radius: Theme.globalRadius
@@ -2242,6 +2292,32 @@ Rectangle {
                                 root.runConfigCmd(["style", "wallpaper_dir", wpDirInput.text.trim()])
                             }
                         }
+                    }
+                }
+
+                // Sélecteur de dossier : le champ et son bouton écrivent le même
+                // réglage, mais on ne tape pas un chemin absolu à la main.
+                Rectangle {
+                    width: 70
+                    height: 28
+                    radius: Theme.globalRadius
+                    color: wpPickMa2.containsMouse ? Theme.accentMuted : Theme.surfaceVariant
+                    border.color: Theme.accentMuted
+                    border.width: 1
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Choisir"
+                        color: wpPickMa2.containsMouse ? Theme.bg : Theme.fg
+                        font.pixelSize: Theme.textXs
+                    }
+
+                    MouseArea {
+                        id: wpPickMa2
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.ouvrirSelecteur("wallpaper_dir", "Dossier des fonds d'écran", wpDirInput.text)
                     }
                 }
 
@@ -2291,7 +2367,7 @@ Rectangle {
                 }
 
                 Rectangle {
-                    width: parent.width - 145 - 85 - 2 * 8
+                    width: parent.width - 145 - 85 - 70 - 3 * 8
                     height: 28
                     color: Theme.bg
                     radius: Theme.globalRadius
@@ -2312,6 +2388,30 @@ Rectangle {
                                 root.runConfigCmd(["style", "screenshots_dir", shotsDirInput.text.trim()])
                             }
                         }
+                    }
+                }
+
+                Rectangle {
+                    width: 70
+                    height: 28
+                    radius: Theme.globalRadius
+                    color: shotsPickMa2.containsMouse ? Theme.accentMuted : Theme.surfaceVariant
+                    border.color: Theme.accentMuted
+                    border.width: 1
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Choisir"
+                        color: shotsPickMa2.containsMouse ? Theme.bg : Theme.fg
+                        font.pixelSize: Theme.textXs
+                    }
+
+                    MouseArea {
+                        id: shotsPickMa2
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.ouvrirSelecteur("screenshots_dir", "Dossier des captures d'écran", shotsDirInput.text)
                     }
                 }
 
@@ -2430,6 +2530,7 @@ Rectangle {
             CollapsibleSection {
                 id: secAspect
                 title: "Fenêtres Hyprland"
+                summary: "Gaps " + root.gapsIn + "/" + root.gapsOut + " · " + (root.blurEnabled ? "flou actif" : "flou coupé")
                 icon: "cog"
                 expanded: root.sectionOpen("esthetique_aspect", false)
                 onToggled: expanded => {
@@ -2902,6 +3003,10 @@ Rectangle {
                         }
                     }
 
+                    // Rendu du masque : un calque plein écran (copie du fond) ou un
+                    // MultiEffect par widget, qui découpe la carte elle-même. Le
+                    // second est plus juste — rien ne se décale — mais rend chaque
+                    // widget hors écran à chaque changement.
                     Row {
                         width: parent.width
                         spacing: 8
@@ -2955,6 +3060,7 @@ Rectangle {
                 id: secBarre
                 objectName: "secBarre"
                 title: "Surfaces & Verre du shell"
+                summary: "Opacité " + Math.round(Theme.shellOpacity * 100) + " % · Rayon " + Theme.globalRadius
                 icon: "monitor"
                 expanded: root.sectionOpen("quickshell_barre", false)
                 onToggled: expanded => {
@@ -3202,6 +3308,7 @@ Rectangle {
                 id: secBarres
                 objectName: "secBarres"
                 title: "Barre principale & Barres annexes"
+                summary: "Hauteur " + Theme.barHeight + " · " + (root.barGapsTransparent ? "îlots transparents" : "capsule continue")
                 icon: "monitor"
                 expanded: root.sectionOpen("quickshell_barres", true)
                 onToggled: expanded => {
@@ -3540,6 +3647,7 @@ Rectangle {
                 id: secApplets
                 objectName: "secApplets"
                 title: "Applets de la barre"
+                summary: root.appletRows.length + " applets"
                 icon: "widgets"
                 expanded: root.sectionOpen("quickshell_applets", false)
                 onToggled: expanded => {
@@ -4112,6 +4220,7 @@ Rectangle {
                     id: secVisualiseur
                     objectName: "secVisualiseur"
                     title: "Visualiseur audio"
+                    summary: (root.vizActif ? "actif" : "coupé") + " · " + (root.vizStyle === "barres" ? "barres" : "onde")
                     icon: "music"
                     expanded: root.sectionOpen("quickshell_visualiseur", false)
                     onToggled: expanded => {
@@ -4374,6 +4483,7 @@ Rectangle {
                 id: secWidgets
                 objectName: "secWidgets"
                 title: "Widgets du bureau"
+                summary: root.widgetsList.length + " widgets"
                 icon: "widgets"
                 // État persisté comme les autres tiroirs ; ouvert par défaut,
                 // c'est le premier de l'onglet « Bureau & Lanceur ».
@@ -5086,6 +5196,7 @@ Rectangle {
                 id: secPilule
                 objectName: "secPilule"
                 title: "Pilule de lancement (Spotlight)"
+                summary: root.launcherPosition
                 icon: "rocket"
                 expanded: root.sectionOpen("widgets_pilule", false)
                 onToggled: expanded => {
@@ -5150,6 +5261,11 @@ Rectangle {
                 }
 
 
+                // Respiration entre le choix de position et la ligne d'historique :
+                // les deux règlent la même pilule, mais se lisaient comme un seul
+                // bloc compact.
+                Item { width: parent.width; height: Theme.space2 * 3 }
+
                 // Historique des lancements de la pilule (style_vars.json : launch_history)
                 Row {
                 id: launchHistoryRow
@@ -5169,8 +5285,10 @@ Rectangle {
                 Rectangle {
                 id: clearHistBtn
                 visible: root.launchHistory
-                width: visible ? clearHistText.implicitWidth + 22 : 0
-                height: 32
+                // 0,8 × la taille du bouton voisin (32) : il efface un historique,
+                // il n'a pas à peser autant que la bascule qu'il accompagne.
+                width: visible ? clearHistText.implicitWidth + 18 : 0
+                height: 26
                 radius: Theme.globalRadius
                 color: Theme.surfaceVariant
                 border.color: Theme.accentMuted
@@ -5223,6 +5341,66 @@ Rectangle {
             // d'une clé. Elle est rangée dans secrets.json (mode 600) et le panneau
             // ne montre jamais que ses derniers caractères.
 
+            // Cadenas des widgets : hors tiroir, sous les réglages. Il vaut pour
+            // tout le bureau, pas pour un widget — c'est une garde contre le
+            // déplacement accidentel (SUPER + SHIFT + clic).
+            Item { width: 1; height: 12 }
+
+            Row {
+                width: parent.width
+                spacing: 10
+
+                Text {
+                    width: 200
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Déplacement des widgets :"
+                    color: Theme.fg
+                    font.pixelSize: Theme.textSm
+                    elide: Text.ElideRight
+                }
+
+                Rectangle {
+                    width: 120
+                    height: 26
+                    radius: Theme.globalRadius
+                    color: Theme.widgetsLocked ? Theme.accent : Theme.surfaceVariant
+                    border.color: Theme.accent
+                    border.width: 1
+
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: 6
+
+                        // Glyphe monochrome du jeu d'icônes : l'emoji de cadenas
+                        // arrive en couleur dans une barre qui n'en a aucun.
+                        Icon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            glyph: "lock"
+                            size: Theme.iconSm
+                            color: Theme.widgetsLocked ? Theme.bg : Qt.alpha(Theme.fg, 0.7)
+                            opacityLevel: 1
+                        }
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: Theme.widgetsLocked ? "Verrouillé" : "Libre"
+                            color: Theme.widgetsLocked ? Theme.bg : Theme.fg
+                            font.pixelSize: Theme.textXs
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.runConfigCmd([
+                            "style", "widgets_locked",
+                            Theme.widgetsLocked ? "false" : "true"
+                        ])
+                    }
+                }
+
+            }
+
         }
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -5243,6 +5421,7 @@ Rectangle {
                 id: secApiKeys
                 objectName: "secApiKeys"
                 title: "Accès API"
+                summary: Object.keys(root.apiKeys).length + " clés"
                 icon: "lock"
                 expanded: root.sectionOpen("widgets_api", false)
                 onToggled: expanded => {
@@ -5382,6 +5561,7 @@ Rectangle {
                 id: secLocalisation
                 objectName: "secLocalisation"
                 title: "Localisation"
+                summary: root.timezoneStr
                 icon: "cloud"
                 expanded: root.sectionOpen("donnees_localisation", true)
                 onToggled: expanded => {
@@ -5625,6 +5805,7 @@ Rectangle {
                 id: secCalendrier
                 objectName: "secCalendrier"
                 title: "Calendrier Nextcloud"
+                summary: root.ncStatut !== "" ? root.ncStatut : "non configuré"
                 icon: "calendar"
                 expanded: root.sectionOpen("quickshell_calendrier", false)
                 onToggled: expanded => {
@@ -5767,6 +5948,7 @@ Rectangle {
                 id: secHomelab
                 objectName: "secHomelab"
                 title: "Homelab (Proxmox)"
+                summary: root.homelabUrl !== "" ? root.resumeChemin(root.homelabUrl) : "non configuré"
                 icon: "cloud-check"
                 expanded: root.sectionOpen("widgets_homelab", false)
                 onToggled: expanded => {
@@ -5997,6 +6179,7 @@ Rectangle {
                 id: secTaches
                 objectName: "secTaches"
                 title: "Tâches — fichiers suivis"
+                summary: root.todoFichiers.length + " fichiers"
                 icon: "check"
                 expanded: root.sectionOpen("taches_fichiers", false)
                 onToggled: expanded => {
@@ -6249,6 +6432,7 @@ Rectangle {
                 id: secEcrans
                 objectName: "secEcrans"
                 title: "Moniteurs & Résolution"
+                summary: root.selectedMonitorName + " · " + root.monitorsList.length + " écran(s)"
                 icon: "monitor"
                 expanded: root.sectionOpen("ecrans_moniteurs", true)
                 onToggled: expanded => {
@@ -6531,6 +6715,7 @@ Rectangle {
                 id: secProfils
                 objectName: "secProfils"
                 title: "Profils & Rotation"
+                summary: root.isLaptop ? "portable" : "fixe"
                 icon: "tablet"
                 expanded: root.sectionOpen("ecrans_profils", false)
                 onToggled: expanded => {
@@ -6674,6 +6859,7 @@ Rectangle {
                 id: secHorloge
                 objectName: "secHorloge"
                 title: "Horloge, Réseau & Batterie"
+                summary: root.ntpSynced ? "NTP synchronisé" : "NTP manuel"
                 icon: "clock"
                 expanded: root.sectionOpen("systeme_horloge", false)
                 onToggled: expanded => {
@@ -6774,6 +6960,7 @@ Rectangle {
                 id: secNuit
                 objectName: "secNuit"
                 title: "Mode nuit"
+                summary: root.nuitAllumee ? ("allumé · " + root.nuitTemp + " K") : "éteint"
                 icon: "weather-night"
                 expanded: root.sectionOpen("systeme_nuit", true)
                 onToggled: expanded => {
@@ -6982,6 +7169,7 @@ Rectangle {
                 id: secClavier
                 objectName: "secClavier"
                 title: "Disposition du clavier"
+                summary: root.kbLayout
                 icon: "keyboard"
                 expanded: root.sectionOpen("clavier_disposition", true)
                 onToggled: expanded => {
@@ -7055,6 +7243,7 @@ Rectangle {
                 id: secBinds
                 objectName: "secBinds"
                 title: "Raccourcis Hyprland"
+                summary: root.bindsList.length + " raccourcis"
                 icon: "cog"
                 expanded: root.sectionOpen("clavier_binds", false)
                 onToggled: expanded => {
@@ -7296,6 +7485,7 @@ Rectangle {
                 id: secApps
                 objectName: "secApps"
                 title: "Applications par défaut"
+                summary: root.appVarsModel.length + " programmes"
                 icon: "rocket"
                 expanded: root.sectionOpen("apps_programs", true)
                 onToggled: expanded => {
@@ -7547,6 +7737,7 @@ Rectangle {
                 id: secNotifs
                 objectName: "secNotifs"
                 title: "Notifications & Actions au clic"
+                summary: root.dndActif ? "ne pas déranger" : "alertes actives"
                 icon: "bell"
                 expanded: root.sectionOpen("quickshell_notifications", false)
                 onToggled: expanded => {
@@ -8023,6 +8214,7 @@ Rectangle {
                 id: secAutostart
                 objectName: "secAutostart"
                 title: "Programmes lancés au démarrage"
+                summary: root.autostartModel.length + " programmes"
                 icon: "power"
                 expanded: root.sectionOpen("apps_autostart", false)
                 onToggled: expanded => {
@@ -8248,6 +8440,61 @@ Rectangle {
                 }
             }
             }   // end CollapsibleSection secAutostart
+
+            // Hors tiroir : c'est une action, pas un réglage. Elle installe ce que
+            // dependencies.txt réclame et qui manque sur cette machine.
+            Item { width: 1; height: 12 }
+
+            Row {
+                width: parent.width
+                spacing: 10
+
+                Rectangle {
+                    id: depsBtn
+                    width: depsBtnText.implicitWidth + 26
+                    height: 28
+                    radius: Theme.globalRadius
+                    color: depsBtnMa.containsMouse ? Theme.accentMuted : Theme.accent
+
+                    Text {
+                        id: depsBtnText
+                        anchors.centerIn: parent
+                        text: "Installer les paquets manquants"
+                        color: Theme.bg
+                        font.pixelSize: Theme.text2xs
+                        font.bold: true
+                    }
+
+                    MouseArea {
+                        id: depsBtnMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.installerDependances()
+                    }
+                }
+
+                // Rien à côté du bouton quand tout va bien : une coche, et c'est
+                // tout. Un échec, lui, se dit — c'est la seule information utile.
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: root.depsEtat === "à jour"
+                    glyph: "check"
+                    size: Theme.iconSm
+                    color: Theme.success
+                    opacityLevel: 1
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: root.depsEtat !== "" && root.depsEtat !== "à jour"
+                    width: parent.width - depsBtn.width - Theme.iconSm - 20
+                    text: root.depsEtat
+                    color: Theme.error
+                    font.pixelSize: Theme.textXs
+                    elide: Text.ElideRight
+                }
+            }
         }   // end Column tabAppsCol
 
             // Onglet Connexion : le greeter est un composant séparé (grille de
@@ -8262,6 +8509,7 @@ Rectangle {
                     id: secGreeter
                     objectName: "secGreeter"
                     title: "Thème de l'écran de connexion (SDDM)"
+                    summary: root.greeterSelected !== "" ? root.greeterSelected : "thème par défaut"
                     icon: "lock"
                     expanded: root.sectionOpen("greeter_theme", true)
                     onToggled: expanded => {
@@ -8280,4 +8528,36 @@ Rectangle {
             }
     }   // end Flickable mainFlickable
     }   // end Item tabContentArea
+
+    // Feuille modale du panneau : dernier enfant, donc au-dessus de tout.
+    //
+    // Chargée par **URL** et non par nom de type : « SelecteurDossier is not a
+    // type » — le moteur ne l'enregistre pas dans l'import implicite du dossier,
+    // alors qu'un Loader par chemin n'a pas besoin de cet enregistrement.
+    Loader {
+        id: selecteurLoader
+        anchors.fill: parent
+        z: 1000
+        source: "SelecteurDossier.qml"
+        onLoaded: {
+            item.accepte.connect(chemin => root.validerSelecteur(chemin))
+            item.annule.connect(() => { root.selecteurCible = "" })
+        }
+    }
+
+    function ouvrirSelecteur(cible, titre, chemin) {
+        root.selecteurCible = String(cible)
+        if (!selecteurLoader.item)
+            return
+        selecteurLoader.item.titre = String(titre)
+        selecteurLoader.item.chemin = root.cheminAbsolu(chemin)
+        selecteurLoader.item.ouvert = true
+    }
+
+    function validerSelecteur(chemin) {
+        if (root.selecteurCible === "")
+            return
+        root.runConfigCmd(["style", root.selecteurCible, String(chemin) + "/"])
+        root.selecteurCible = ""
+    }
 }
