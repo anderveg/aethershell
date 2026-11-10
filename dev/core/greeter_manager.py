@@ -134,6 +134,7 @@ def presets():
             "thumb": str(thumb) if thumb.exists() else "",
             "active": cur == THEME.name and ident == active_id(),
             "kind": "astronaut",
+            "installed": True,
         })
     # Thèmes complets (qylock) : ceux installés, puis ceux seulement récupérés.
     merged = qylock_cached()
@@ -317,6 +318,103 @@ def thumbnails(ids):
                       "message": (res.stdout + res.stderr).strip()[-400:]}))
 
 
+def qylock_pkg_name(ident):
+    """Retrouve le dossier racine dans QYLOCK_CACHE (ex: 'clockwork' pour 'clockwork-orbital')."""
+    if (QYLOCK_CACHE / ident).is_dir():
+        return ident
+    if QYLOCK_CACHE.is_dir():
+        for root in QYLOCK_CACHE.iterdir():
+            if not root.is_dir():
+                continue
+            for s in root.iterdir():
+                if s.is_dir() and f"{root.name}-{s.name}" == ident:
+                    return root.name
+        base = ident.split("-")[0]
+        if (QYLOCK_CACHE / base).is_dir():
+            return base
+    return ident
+
+
+def get_sddm_dir():
+    cand = Path(__file__).resolve().parent.parent / "sddm"
+    if cand.is_dir() and (cand / "install.sh").exists():
+        return cand
+    cand = HOME / "dev/aethershell/dev/sddm"
+    if cand.is_dir() and (cand / "install.sh").exists():
+        return cand
+    matches = list(HOME.glob("**/aethershell/dev/sddm/install.sh"))
+    if matches:
+        return matches[0].parent
+    return DEV_SDDM
+
+
+def install_qylock(ident):
+    """Installe un thème qylock depuis le cache local via dev/sddm/install.sh --qylock."""
+    pkg = qylock_pkg_name(ident)
+    src = QYLOCK_CACHE / pkg
+    if not src.is_dir():
+        fail(f"thème non trouvé dans le cache local : {pkg}")
+    sddm_dir = get_sddm_dir()
+    install_sh = sddm_dir / "install.sh"
+    if not install_sh.exists():
+        fail(f"script install.sh introuvable dans {sddm_dir}")
+    cmd = ["bash", str(install_sh), "--qylock", pkg]
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if res.returncode != 0:
+        err = (res.stderr or res.stdout or "échec de l'installation").strip()
+        fail(f"installation refusée ou échouée : {err[:300]}")
+    print(json.dumps({"ok": True, "installed": ident, "pkg": pkg, "message": res.stdout.strip()[-300:]}))
+
+
+def uninstall_themes(ids):
+    """Désinstalle des thèmes qylock de /usr/share/sddm/themes/."""
+    cur = current_theme()
+    installed = qylock_installed()
+    to_remove = []
+    for ident in ids:
+        if not ident or ident == THEME.name or ident == cur:
+            continue
+        if ident in installed:
+            to_remove.append(ident)
+
+    if not to_remove:
+        fail("aucun thème valide à désinstaller (le thème actif et astronaut ne peuvent pas être supprimés)")
+
+    # 1. Tenter via le helper privilégié greeter-palette (sans mot de passe si polkit configuré)
+    ok, out = helper("uninstall", *to_remove)
+    if ok:
+        print(json.dumps({"ok": True, "uninstalled": to_remove, "message": out}))
+        return
+
+    # 2. Si le helper n'a pas encore la commande uninstall, élévation pkexec
+    sddm_dir = get_sddm_dir()
+    helper_src = sddm_dir / "greeter-palette"
+    script_lines = ["#!/bin/bash", "set -euo pipefail"]
+    if helper_src.exists():
+        script_lines.append(f"install -Dm755 '{helper_src}' /usr/local/bin/greeter-palette")
+    for ident in to_remove:
+        t = THEMES_SYS / ident
+        script_lines.append(f"rm -rf '{t}'")
+
+    with tempfile.NamedTemporaryFile("w", prefix="sddm-uninstall-", delete=False) as tf:
+        tf.write("\n".join(script_lines) + "\n")
+        tmp_name = tf.name
+
+    try:
+        os.chmod(tmp_name, 0o755)
+        res = subprocess.run(["pkexec", "bash", tmp_name], capture_output=True, text=True)
+        if res.returncode != 0:
+            err = (res.stderr or res.stdout or "opération annulée").strip()
+            fail(f"désinstallation annulée ou échouée : {err[:200]}")
+    finally:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+
+    print(json.dumps({"ok": True, "uninstalled": to_remove, "message": f"{len(to_remove)} thème(s) désinstallé(s)"}))
+
+
 def main():
     action = sys.argv[1] if len(sys.argv) > 1 else "list"
     if action == "list":
@@ -336,6 +434,10 @@ def main():
         preview(sys.argv[2])
     elif action == "apply" and len(sys.argv) > 2:
         apply(sys.argv[2])
+    elif action == "install" and len(sys.argv) > 2:
+        install_qylock(sys.argv[2])
+    elif action == "uninstall" and len(sys.argv) > 2:
+        uninstall_themes(sys.argv[2:])
     elif action == "refresh":
         apply("palette")
     elif action == "thumbnails":

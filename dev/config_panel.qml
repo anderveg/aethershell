@@ -130,6 +130,8 @@ Rectangle {
           tab: 3, section: "", target: "monitorsRow" },
         { label: "Fuseau horaire et synchronisation NTP", words: "fuseau timezone heure ntp synchronisation horloge",
           tab: 3, section: "", target: "timezoneRow" },
+        { label: "Mise en veille automatique", words: "mise en veille veille inactivité suspend sleep ecran timer energie heure",
+          tab: 3, section: "systeme_horloge", target: "idleTimeoutRow" },
         { label: "Disposition du clavier", words: "clavier layout azerty qwerty langue",
           tab: 4, section: "", target: "kbdRow" },
         { label: "Raccourcis Hyprland", words: "raccourcis binds touches clavier hyprland",
@@ -195,6 +197,7 @@ Rectangle {
         "shellBlurRow": shellBlurRow,
         "monitorsRow": monitorsRow,
         "timezoneRow": timezoneRow,
+        "idleTimeoutRow": idleTimeoutRow,
         "kbdRow": kbdRow,
         "bindsCol": bindsCol,
         "secApps": secApps,
@@ -340,6 +343,7 @@ Rectangle {
     property var todoFichiers: []
     property string todoFocus: ""
     property string todoErreur: ""
+    property bool todoSurveillance: false
 
     function rechargerTodo() {
         todoListProc.running = false
@@ -379,6 +383,19 @@ Rectangle {
     property string selectedMonitorName: "HDMI-A-1"
     property string timezoneStr: "Europe/Paris"
     property bool ntpSynced: true
+    property int idleSuspendTimeout: 3600
+    readonly property string idleSuspendLabel: {
+        const s = root.idleSuspendTimeout
+        if (s === 900) return "15 min"
+        if (s === 1800) return "30 min"
+        if (s === 3600) return "1 heure"
+        if (s === 7200) return "2 heures"
+        if (s === 10800) return "3 heures"
+        if (s === 0) return "Désactivée"
+        if (s > 0 && s < 3600) return Math.round(s / 60) + " min"
+        if (s >= 3600) return (s / 3600).toFixed(s % 3600 === 0 ? 0 : 1) + " h"
+        return "1 heure"
+    }
     property var bindsList: []
     // Widgets de bureau (core/widgets.json) et position de la capsule du lanceur.
     property var widgetsList: []
@@ -1051,17 +1068,27 @@ Rectangle {
     }
 
     // Chemins des réglages → chemin absolu. Les valeurs du thème commencent par
-    // `$HOME` ; le sélecteur de dossier, lui, ne travaille qu'en absolu.
+    // `$HOME` ou `~` ; les sélecteurs de dossier/fichier travaillent en absolu.
     function cheminAbsolu(chemin) {
         let s = String(chemin || "")
         if (s.indexOf("$HOME") === 0) s = Quickshell.env("HOME") + s.substring(5)
+        else if (s.indexOf("~") === 0) s = Quickshell.env("HOME") + s.substring(1)
         return s.replace(/\/$/, "")
     }
 
-    // Sélecteur de dossier des deux chemins de *Fonds d'écran & Captures* :
-    // une feuille du panneau (SelecteurDossier.qml), pas un dialogue Qt — une
-    // vraie fenêtre s'ouvrirait sous la surface de couche du panneau.
+    function abregerHome(chemin) {
+        const home = Quickshell.env("HOME")
+        const s = String(chemin || "")
+        if (home && s.indexOf(home) === 0) {
+            return "~" + s.substring(home.length)
+        }
+        return s
+    }
+
+    // Sélecteurs de dossier et de fichier : feuilles modales du panneau
+    // (SelecteurDossier.qml / SelecteurFichier.qml), pas des dialogues Qt.
     property string selecteurCible: ""
+    property string selecteurFichierCible: ""
 
     // Installation des paquets manquants (onglet « Apps & Alertes »). Le script
     // lit dependencies.txt, filtre sur la distribution et élève par pkexec —
@@ -1180,6 +1207,7 @@ Rectangle {
         if (data.todo && typeof data.todo === "object") {
             root.todoFichiers = Array.isArray(data.todo.fichiers) ? data.todo.fichiers : []
             root.todoFocus = String(data.todo.focus || "")
+            root.todoSurveillance = Boolean(data.todo.surveillance)
             if (typeof data.todo.erreur === "string") {
                 root.todoErreur = data.todo.erreur
                 if (data.todo.erreur === "") {
@@ -1208,6 +1236,7 @@ Rectangle {
             if (data.display.timezone) root.timezoneStr = data.display.timezone
             if (typeof data.display.ntp === "boolean") root.ntpSynced = data.display.ntp
         }
+        if (typeof data.idle_suspend_timeout === "number") root.idleSuspendTimeout = data.idle_suspend_timeout
         if (Array.isArray(data.widgets)) root.widgetsList = data.widgets
         if (typeof data.launcher_position === "string") root.launcherPosition = data.launcher_position
         if (Array.isArray(data.binds)) {
@@ -1366,6 +1395,7 @@ Rectangle {
                     const d = JSON.parse(text.trim())
                     root.todoFichiers = d.fichiers || []
                     root.todoFocus = String(d.focus || "")
+                    root.todoSurveillance = Boolean(d.surveillance)
                 } catch (e) { }
             }
         }
@@ -2305,11 +2335,24 @@ Rectangle {
                     border.color: Theme.accentMuted
                     border.width: 1
 
-                    Text {
+                    Row {
                         anchors.centerIn: parent
-                        text: "Choisir"
-                        color: wpPickMa2.containsMouse ? Theme.bg : Theme.fg
-                        font.pixelSize: Theme.textXs
+                        spacing: 4
+
+                        Icon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            glyph: "folder"
+                            size: Math.round(Theme.iconSm * 0.78)
+                            color: wpPickMa2.containsMouse ? Theme.bg : Theme.accent
+                            opacityLevel: 1
+                        }
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Choisir"
+                            color: wpPickMa2.containsMouse ? Theme.bg : Theme.fg
+                            font.pixelSize: Theme.textXs
+                        }
                     }
 
                     MouseArea {
@@ -2399,11 +2442,24 @@ Rectangle {
                     border.color: Theme.accentMuted
                     border.width: 1
 
-                    Text {
+                    Row {
                         anchors.centerIn: parent
-                        text: "Choisir"
-                        color: shotsPickMa2.containsMouse ? Theme.bg : Theme.fg
-                        font.pixelSize: Theme.textXs
+                        spacing: 4
+
+                        Icon {
+                            anchors.verticalCenter: parent.verticalCenter
+                            glyph: "folder"
+                            size: Math.round(Theme.iconSm * 0.78)
+                            color: shotsPickMa2.containsMouse ? Theme.bg : Theme.accent
+                            opacityLevel: 1
+                        }
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Choisir"
+                            color: shotsPickMa2.containsMouse ? Theme.bg : Theme.fg
+                            font.pixelSize: Theme.textXs
+                        }
                     }
 
                     MouseArea {
@@ -6267,12 +6323,13 @@ Rectangle {
 
                     // Ajouter un fichier : le nom est libre, le chemin est étendu
                     // par l'applet (`~` reste `~`, c'est elle qui l'interprète).
+                    // Bouton "Choisir" graphique pour sélectionner un fichier .md.
                     Row {
                         width: parent.width
                         spacing: 8
 
                         Rectangle {
-                            width: 140
+                            width: 130
                             height: 30
                             radius: 6
                             color: Qt.alpha(Theme.fg, 0.06)
@@ -6302,7 +6359,7 @@ Rectangle {
                         }
 
                         Rectangle {
-                            width: parent.width - 140 - 96 - 16
+                            width: parent.width - 130 - 70 - 90 - 24
                             height: 30
                             radius: 6
                             color: Qt.alpha(Theme.fg, 0.06)
@@ -6332,8 +6389,46 @@ Rectangle {
                             }
                         }
 
+                        // Bouton "Choisir" graphique (comme pour les fonds d'écran et captures)
                         Rectangle {
-                            width: 96
+                            width: 70
+                            height: 30
+                            radius: 6
+                            color: todoPickMa.containsMouse ? Theme.accentMuted : Theme.surfaceVariant
+                            border.color: Theme.accentMuted
+                            border.width: 1
+
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 4
+
+                                Icon {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    glyph: "folder"
+                                    size: Math.round(Theme.iconSm * 0.78)
+                                    color: todoPickMa.containsMouse ? Theme.bg : Theme.accent
+                                    opacityLevel: 1
+                                }
+
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "Choisir"
+                                    color: todoPickMa.containsMouse ? Theme.bg : Theme.fg
+                                    font.pixelSize: Theme.textXs
+                                }
+                            }
+
+                            MouseArea {
+                                id: todoPickMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.ouvrirSelecteurFichier("todo_md", "Choisir un fichier Markdown", nouveauTodoChemin.text, ["md", "markdown"])
+                            }
+                        }
+
+                        Rectangle {
+                            width: 90
                             height: 30
                             radius: 6
                             color: survolTodoAjout.containsMouse
@@ -6409,6 +6504,57 @@ Rectangle {
                                         root.todoFocus = String(modelData.nom || "")
                                     }
                                 }
+                            }
+                        }
+                    }
+
+                    // ── Surveillance des tâches par Hermes ──────────────────
+                    Row {
+                        width: parent.width
+                        spacing: 12
+
+                        Column {
+                            width: parent.width - 50
+                            spacing: 2
+
+                            Text {
+                                width: parent.width
+                                text: "Surveillance des tâches par Hermes"
+                                color: root.todoSurveillance ? Theme.accent : Theme.fg
+                                font.pixelSize: Theme.textSm
+                                font.bold: true
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: "Lorsque cette option est active, cocher une case confie l'exécution de la tâche à Hermes via la file d'attente. Désactivé : simple gestionnaire de cases Markdown locales."
+                                color: Qt.alpha(Theme.fg, 0.5)
+                                font.pixelSize: Theme.textXs
+                                wrapMode: Text.WordWrap
+                            }
+                        }
+
+                        Rectangle {
+                            width: 38
+                            height: 20
+                            radius: 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: root.todoSurveillance ? Theme.accent : Qt.alpha(Theme.fg, 0.14)
+
+                            Rectangle {
+                                width: 16
+                                height: 16
+                                radius: 8
+                                y: 2
+                                x: root.todoSurveillance ? parent.width - width - 2 : 2
+                                color: root.todoSurveillance ? Theme.bg : Qt.alpha(Theme.fg, 0.75)
+                                Behavior on x { NumberAnimation { duration: 130 } }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.runConfigCmd(["todo_surveillance"])
                             }
                         }
                     }
@@ -6854,13 +7000,13 @@ Rectangle {
             // System Time, Network Shortcut (& Battery 80% Limiter if Laptop)
             }
 
-            // Tiroir : fuseau horaire, donc l'heure affichée par la barre.
+            // Tiroir : Alimentation, Veille, Fuseau horaire et Batterie
             CollapsibleSection {
                 id: secHorloge
                 objectName: "secHorloge"
-                title: "Horloge, Réseau & Batterie"
-                summary: root.ntpSynced ? "NTP synchronisé" : "NTP manuel"
-                icon: "clock"
+                title: "Alimentation, Veille & Horloge"
+                summary: "Veille : " + root.idleSuspendLabel + " · " + (root.ntpSynced ? "NTP synchronisé" : "NTP manuel")
+                icon: "power"
                 expanded: root.sectionOpen("systeme_horloge", false)
                 onToggled: expanded => {
                     root.setPanelSection("systeme_horloge", expanded)
@@ -6868,12 +7014,113 @@ Rectangle {
                 }
 
             Column {
-                id: timezoneRow   // ancre de recherche
-                objectName: "timezoneRow"
                 width: parent.width
-                spacing: 8
+                spacing: 12
 
+                // ── Mise en veille du système (inactivité) ────────────────────
+                Column {
+                    id: idleTimeoutRow
+                    objectName: "idleTimeoutRow"
+                    width: parent.width
+                    spacing: 6
+
+                    Row {
+                        width: parent.width
+                        spacing: 8
+
+                        Text {
+                            text: "Mise en veille automatique :"
+                            color: Theme.accent
+                            font.pixelSize: Theme.textSm
+                            font.bold: true
+                        }
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "inactivité avant suspension (hypridle)"
+                            color: Qt.alpha(Theme.fg, 0.55)
+                            font.pixelSize: Theme.textXs
+                        }
+                    }
+
+                    Flow {
+                        width: parent.width
+                        spacing: 6
+
+                        Repeater {
+                            model: [
+                                { label: "15 min", value: 900 },
+                                { label: "30 min", value: 1800 },
+                                { label: "1 heure (défaut)", value: 3600 },
+                                { label: "2 heures", value: 7200 },
+                                { label: "3 heures", value: 10800 },
+                                { label: "Jamais", value: 0 }
+                            ]
+
+                            Rectangle {
+                                required property var modelData
+                                readonly property bool actif: root.idleSuspendTimeout === modelData.value
+                                width: idlePillText.implicitWidth + 18
+                                height: 28
+                                radius: Theme.globalRadius
+                                color: actif ? Theme.accent : Theme.surfaceVariant
+                                border.width: 1
+                                border.color: actif ? Theme.accent : Qt.alpha(Theme.fg, 0.15)
+
+                                Text {
+                                    id: idlePillText
+                                    anchors.centerIn: parent
+                                    text: modelData.label
+                                    color: actif ? Theme.bg : Theme.fg
+                                    font.pixelSize: Theme.textXs
+                                    font.bold: actif
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        root.idleSuspendTimeout = modelData.value
+                                        root.runConfigCmd(["idle_timeout", String(modelData.value)])
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── Limite batterie 80% (portable) ─────────────────────────────
                 Rectangle {
+                    visible: root.isLaptop
+                    width: parent.width
+                    height: 44
+                    radius: Theme.globalRadius
+                    color: root.batLimit80 ? Theme.success : Theme.surfaceVariant
+                    border.color: Theme.success
+                    border.width: 1
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: root.batLimit80 ? "Limite 80% : active" : "Activer la limite 80%"
+                        color: root.batLimit80 ? Theme.bg : Theme.fg
+                        font.pixelSize: Theme.textXs
+                        font.bold: true
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            root.batLimit80 = !root.batLimit80
+                            root.runConfigCmd(["battery", root.batLimit80 ? "80" : "100"])
+                        }
+                    }
+                }
+
+                // ── Fuseau & NTP ──────────────────────────────────────────────
+                Rectangle {
+                    id: timezoneRow
+                    objectName: "timezoneRow"
                     width: parent.width
                     height: 46
                     radius: Theme.globalRadius
@@ -6896,9 +7143,10 @@ Rectangle {
                     }
                 }
 
+                // ── WiFi ──────────────────────────────────────────────────────
                 Rectangle {
                     width: parent.width
-                    height: 46
+                    height: 44
                     radius: Theme.globalRadius
                     color: openWifiMa.containsMouse ? Theme.accent : Theme.surfaceVariant
                     border.color: Theme.accent
@@ -6920,33 +7168,6 @@ Rectangle {
                         onClicked: {
                             Theme.configPanelVisible = false
                             Theme.activePopup = "wifi"
-                        }
-                    }
-                }
-
-                Rectangle {
-                    visible: root.isLaptop
-                    width: parent.width
-                    height: 46
-                    radius: Theme.globalRadius
-                    color: root.batLimit80 ? Theme.success : Theme.surfaceVariant
-                    border.color: Theme.success
-                    border.width: 1
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: root.batLimit80 ? "Limite 80% : active" : "Activer la limite 80%"
-                        color: root.batLimit80 ? Theme.bg : Theme.fg
-                        font.pixelSize: Theme.textXs
-                        font.bold: true
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            root.batLimit80 = !root.batLimit80
-                            root.runConfigCmd(["battery", root.batLimit80 ? "80" : "100"])
                         }
                     }
                 }
@@ -8559,5 +8780,43 @@ Rectangle {
             return
         root.runConfigCmd(["style", root.selecteurCible, String(chemin) + "/"])
         root.selecteurCible = ""
+    }
+
+    // Feuille modale du sélecteur de fichier (ex: Markdown pour les tâches)
+    Loader {
+        id: selecteurFichierLoader
+        anchors.fill: parent
+        z: 1000
+        source: "SelecteurFichier.qml"
+        onLoaded: {
+            item.accepte.connect(chemin => root.validerSelecteurFichier(chemin))
+            item.annule.connect(() => { root.selecteurFichierCible = "" })
+        }
+    }
+
+    function ouvrirSelecteurFichier(cible, titre, chemin, extensions) {
+        root.selecteurFichierCible = String(cible)
+        if (!selecteurFichierLoader.item)
+            return
+        selecteurFichierLoader.item.titre = String(titre)
+        if (extensions && extensions.length > 0)
+            selecteurFichierLoader.item.extensions = extensions
+        let chem = String(chemin || "")
+        if (chem === "") chem = "~"
+        selecteurFichierLoader.item.chemin = root.cheminAbsolu(chem)
+        selecteurFichierLoader.item.fichierSelectionne = (chem.endsWith(".md") || chem.endsWith(".markdown")) ? root.cheminAbsolu(chem) : ""
+        selecteurFichierLoader.item.ouvert = true
+    }
+
+    function validerSelecteurFichier(chemin) {
+        if (root.selecteurFichierCible === "todo_md") {
+            nouveauTodoChemin.text = root.abregerHome(chemin)
+            if (nouveauTodoNom.text.trim() === "") {
+                const base = String(chemin).split("/").pop().replace(/\.md$/i, "").replace(/\.markdown$/i, "")
+                if (base)
+                    nouveauTodoNom.text = base
+            }
+        }
+        root.selecteurFichierCible = ""
     }
 }

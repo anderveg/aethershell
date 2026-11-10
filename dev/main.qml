@@ -550,11 +550,11 @@ Item {
         }
     }
 
-    // Floating Configuration Panel Overlay Window
+    // Floating Configuration Panel Window (couche Top pour laisser passer les boîtes modales polkit)
     PanelWindow {
         id: configOverlayWindow
         screen: topBarWindow.screen
-        visible: Theme.configPanelVisible
+        visible: Theme.configPanelVisible && !Theme.configPanelYieldFocus
         anchors {
             top: true
             bottom: true
@@ -563,13 +563,15 @@ Item {
         }
         exclusionMode: ExclusionMode.Ignore
         color: "transparent"
-        aboveWindows: true
-        WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.keyboardFocus: Theme.configPanelVisible ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+        WlrLayershell.layer: WlrLayer.Top
+        WlrLayershell.keyboardFocus: (Theme.configPanelVisible && !Theme.configPanelYieldFocus)
+            ? WlrKeyboardFocus.OnDemand
+            : WlrKeyboardFocus.None
         WlrLayershell.namespace: "shell-config"
 
         MouseArea {
             anchors.fill: parent
+            enabled: !Theme.configPanelYieldFocus
             onClicked: Theme.configPanelVisible = false
         }
 

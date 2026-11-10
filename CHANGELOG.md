@@ -5,10 +5,96 @@ sémantique. Tant que le format des fichiers de configuration (`style_vars.json`
 `bar_applets.json`, `widgets.json`) n'est pas figé, les versions restent en `0.x` : une
 montée de mineure peut demander une adaptation des réglages.
 
+## [0.1.3] — 2026-11-10
+
+### Ajouté
+
+- **Sélecteur de fichier graphique pour les fichiers Markdown suivis (onglet Données & Comptes)** :
+  - **Bouton « Choisir »** dans le tiroir *Tâches — fichiers suivis* de [`dev/config_panel.qml`](file:///home/<utilisateur>/dev/aethershell/dev/config_panel.qml), reprenant le design et l'ergonomie des sélecteurs de dossiers de fonds d'écran et de captures.
+  - **Harmonisation visuelle des sélecteurs de dossiers** : ajout du glyphe `folder` sur les deux boutons « Choisir » du tiroir *Fonds d'écran & Captures* (onglet Apparence) pour une cohérence graphique parfaite dans tout le panneau.
+  - **Feuille modale dédiée ([`dev/SelecteurFichier.qml`](file:///home/<utilisateur>/dev/aethershell/dev/SelecteurFichier.qml))** : surface intégrée au panneau avec fond en verre et flou interne (`FlouFond`), navigation par dossier (`↑`), filtre automatique sur les extensions `.md` et `.markdown`, sélection par simple clic et validation par double-clic ou bouton « Choisir ».
+  - **Script de lecture arborescente ([`dev/core/lister_fichiers.py`](file:///home/<utilisateur>/dev/aethershell/dev/core/lister_fichiers.py))** : listing JSON rapide des dossiers et fichiers filtrés, ignorant les entrées cachées et gérant les erreurs d'accès de manière robuste.
+  - **Remplissage automatique intelligent** : la sélection insère le chemin sous forme abrégée `~/...` et pré-remplit automatiquement le nom suggéré du fichier si le champ nom est vide.
+  - **Glyphes dédiés dans [`dev/Icon.qml`](file:///home/<utilisateur>/dev/aethershell/dev/Icon.qml)** : ajout des icônes `markdown` (`\u{F0354}`) et `file-document` (`\u{F0214}`).
+
+- **Gestionnaire de déploiement — Sauvegarde fine granulaire & Moteur de pré-vol ([`dev/deploy.sh`](file:///home/<utilisateur>/dev/aethershell/dev/deploy.sh))** :
+  - **Moteur de pré-vol (`--diff` / `--dry-run`)** : analyse comparative exhaustive de l'arborescence du dépôt (`dev/`) par rapport à l'environnement vivant (`~/.config/hypr` et `~/.config/quickshell`).
+  - Rapport catégorisé avec métriques claires : fichiers préservés (états locaux protégés : palettes, applets, secrets, binds, etc.), fichiers modifiés (avec comptage précis `+X / -Y` lignes), nouveaux fichiers, fichiers orphelins à élaguer, et fichiers générés post-déploiement.
+  - Robustesse totale sous `set -euo pipefail` : isolation des sorties d'erreurs et des retours unitaires de comparaison.
+  - **Snapshots fins granulaires décompressés** : création systématique à chaque déploiement d'un snapshot miroir navigable dans `~/.config/backups_env/snapshots/<horodatage>/` avec métadonnées (`manifest.json` : horodatage, distro, origine, commit git, nombre de fichiers) et table d'empreintes sha256 (`checksums.sha256`).
+  - Rotation automatique synchronisée (`HQ_RETENTION=5`) assurant un historique maîtrisé.
+  - **Restauration granulaire par fichier (`--restore-file <chemin> [snapshot]`)** : permet de restaurer un fichier unique précis depuis un snapshot vers le vivant, avec copie de sauvegarde préalable de la version écrasée.
+  - **Déploiement direct sans sauvegarde (`deploy_only` / `--deploy-only` / `--no-backup`)** : ajout d'une fonction et d'une entrée dédiée dans le menu (option 2) pour déployer rapidement les mises à jour sans réitérer une sauvegarde quand l'environnement vivant a déjà été archivé.
+  - **Commandes CLI directes et menu enrichi** : options `--diff`, `--dry-run`, `--backup`, `--deploy-only`, `--no-backup`, `--snapshots`, `--restore-file` et menu interactif enrichi pour lister, comparer, déployer ou restaurer à la carte.
+
+- **Hermes — Surveillance et contrôle de la passerelle (Gateway & Daemon)** :
+  - Intégration de la surveillance du service systemd utilisateur `hermes-gateway.service`, de l'état du démon (`~/.hermes/gateway_state.json`) et de la vivacité du PID.
+  - Visualisation en direct du statut (actif/inactif, PID, profils desservis, version, âge du battement ticker).
+  - Contrôle et relance rapide en 1-clic (`systemctl --user restart hermes-gateway.service`) depuis le popup de la barre supérieure ([`dev/HermesPopup.qml`](file:///home/<utilisateur>/dev/aethershell/dev/HermesPopup.qml)) et le widget de bureau.
+- **Hermes — Planifications et moteur Cron** :
+  - Lecture et affichage des tâches cron planifiées (`~/.hermes/cron/jobs.json`) et du battement de cœur (`ticker_heartbeat`).
+  - Actions rapides intégrées : déclenchement d'un passage manuel (`⚡ Tick` via `hermes cron tick`) et diagnostic d'intégrité (`🔍 Doctor` via `hermes cron doctor`).
+- **Hermes — Widget de bureau enrichi, dépliable et scrollable ([`dev/widgets/hermes.qml`](file:///home/<utilisateur>/dev/aethershell/dev/widgets/hermes.qml))** :
+  - Vue compacte par défaut préservant l'espace du bureau (sessions récentes, jetons du jour, état global).
+  - Bouton interactif « Détails & Actions ▾ » / « Replier ▴ » pour afficher à la demande le volet d'administration et de diagnostic.
+  - Zone scrollable (`Flickable`) bornée à hauteur maximale avec ascenseur discret : le widget s'adapte sans jamais déborder du bureau et reste navigable à la molette.
+  - Barre d'actions rapides : ouverture immédiate d'un terminal Ghostty dédié (`hermes`), relance de passerelle, tick cron et diagnostic doctor.
+  - Journal en direct (tail sur les dernières lignes de `~/.hermes/logs/agent.log`) avec coloration contextuelle des statuts, avertissements et erreurs.
+
+- **Aperçus du greeter SDDM isolés sur un bureau dédié (`workspace 99`)** :
+  - Modification de [`dev/core/greeter_preview.sh`](file:///home/<utilisateur>/dev/aethershell/dev/core/greeter_preview.sh) : mémorisation du bureau actif et bascule automatique sur le workspace 99 avant de lancer `sddm-greeter-qt6 --test-mode`.
+  - Règle de fenêtre Hyprland dédiée dans [`dev/hypr_modular/windows.lua`](file:///home/<utilisateur>/dev/aethershell/dev/hypr_modular/windows.lua) contraignant la fenêtre du greeter sur le workspace 99.
+  - Restauration automatique du bureau de travail d'origine lors de la fermeture (appui sur `Échap`, expiration du délai de sécurité ou fermeture normale).
+  - Protection absolue : en cas de blocage ou d'erreur dans un thème testé, le bureau de travail courant n'est jamais masqué ni immobilisé.
+
+- **Minuterie de mise en veille automatique (Système & Écrans)** :
+  - Ajout d'un réglage interactif par pilules dans l'onglet *Système & Écrans* (tiroir *Alimentation, Veille & Horloge*) de [`dev/config_panel.qml`](file:///home/<utilisateur>/dev/aethershell/dev/config_panel.qml).
+  - Délais configurables : 15 min, 30 min, **1 heure (par défaut)**, 2 heures, 3 heures, ou Jamais (désactivé).
+  - Synchronisation immédiate avec la règle de suspension de [`dev/hypr_modular/hypridle.conf`](file:///home/<utilisateur>/dev/aethershell/dev/hypr_modular/hypridle.conf) et `~/.config/hypr/hypridle.conf`.
+  - Redémarrage à chaud automatique du démon utilisateur `hypridle.service` lors du clic.
+  - Indexation dans le moteur de recherche interne du panneau (`searchIndex`) sous les termes « veille », « suspend », « inactivité », « sleep », « timer ».
+
+- **Pont Todo ↔ Hermes & Interrupteur de surveillance des cases (Étape 1)** :
+  - Ajout d'un interrupteur de surveillance dans le popup Tâches ([`dev/TodoPopup.qml`](file:///home/<utilisateur>/dev/aethershell/dev/TodoPopup.qml)) et dans le panneau de configuration ([`dev/config_panel.qml`](file:///home/<utilisateur>/dev/aethershell/dev/config_panel.qml)).
+  - Persistance de l'option dans `core/todo.json` (`"surveillance": true/false`) et contrôle CLI via `todo_applet.py surveillance [on|off|toggle]`.
+  - Conditionnement de la file d'attente : cocher une case alimente `todo-demandes.json` uniquement si la surveillance est activée. En mode désactivé, la coche reste une manipulation Markdown locale classique sans solliciter l'agent.
+  - Implémentation du worker d'exécution [`dev/core/todo_worker.py`](file:///home/<utilisateur>/dev/aethershell/dev/core/todo_worker.py) : prise en charge des demandes en attente, exécution automatique par Hermes (`hermes -z`), notifications bureau de début et fin, réécriture du Markdown en `✓ fait le <date>` en cas de succès ou alerte `⚠` en cas d'échec.
+  - Indicateur visuel `⚡ hermes` dans le widget de bureau ([`dev/widgets/todo.qml`](file:///home/<utilisateur>/dev/aethershell/dev/widgets/todo.qml)) signalant quand la surveillance est active.
+
 ## [0.1.2] — 2026-11-09
+
+### Ajouté
+
+- **Filtres de thèmes dans l'onglet Connexion (Installés / Non installés / Tous)** : ajout d'une barre
+  de sélection par pilules au-dessus de la grille des miniatures permettant de filtrer la vue. Par défaut,
+  seuls les thèmes installés sont affichés, masquant les thèmes désinstallés (qui restent dans le cache local) ;
+  un clic sur « Non installés » ou « Tous » permet de les réafficher pour inspection ou réinstallation.
+- **Désinstallation multi-thèmes SDDM dans le panneau (onglet Connexion)** : ajout de cases à cocher
+  sur les vignettes des thèmes installés non-actifs (`qylock`), permettant une multi-sélection rapide
+  avec bouton d'action contextuel « Désinstaller (N) » et bouton « Annuler ».
+- **Action de désinstallation sécurisée (`greeter_manager.py uninstall`)** :
+  - Support de la désinstallation par lot dans `dev/core/greeter_manager.py` et dans le helper
+    privilégié `dev/sddm/greeter-palette`.
+  - Protection absolue : interdiction stricte de désinstaller le thème de base Astronaut
+    (`sddm-astronaut-theme`) ainsi que le thème SDDM actuellement actif.
+  - Gestion de l'élévation Polkit avec mise à niveau automatique du helper pour les suppressions futures.
+- **Bouton « Installer » pour les thèmes SDDM qylock dans le panneau** : lorsqu'un thème complet
+  récupéré dans le cache local n'a pas encore été posé dans `/usr/share/sddm/themes`, l'onglet
+  *Connexion* affiche désormais un bouton d'action dédié qui déclenche directement l'élévation
+  `pkexec` via `greeter_manager.py install <id>` et bascule automatiquement sur « Appliquer » dès
+  la pose terminée, sans devoir passer par le terminal.
 
 ### Corrigé
 
+- **Visibilité et focus des invites Polkit au-dessus du panneau de configuration** :
+  - Le panneau de configuration (`configOverlayWindow` dans [`dev/main.qml`](file:///home/<utilisateur>/dev/aethershell/dev/main.qml))
+    passe de la couche `WlrLayer.Overlay` avec `aboveWindows: true` à la couche `WlrLayer.Top`.
+  - Masquage et restauration automatiques : lorsqu'une opération réclame une authentification Polkit
+    (comme l'installation de thème), le panneau s'efface automatiquement après 180 ms pour laisser
+    l'invite Polkit totalement visible, centrée et dégagée au premier plan. Dès la validation
+    ou l'annulation de l'invite, le panneau réapparaît instantanément avec son message de statut à jour.
+  - Les opérations sans mot de passe (comme la désinstallation via le helper mis à niveau)
+    s'exécutent en moins de 180 ms sans clignotement du panneau.
 - **Appel IPC Quickshell (`quickshell ipc -n`)** : les raccourcis (`SUPER + H` pour le panneau,
   `SUPER + R` pour le spotlight, `SUPER + K`, notifications) et scripts OSD/capture passent
   désormais le drapeau `-n` à l'IPC pour cibler l'instance active la plus récente, évitant de
@@ -175,6 +261,7 @@ notifications, capture, et les services Python qui les alimentent.
 - Veille planifiée qui cochait les étapes du fichier de tâches ; la coche est désormais
   manuelle ou faite à la demande.
 
+[0.1.3]: https://github.com/anderveg/aethershell/releases/tag/v0.1.3
 [0.1.2]: https://github.com/anderveg/aethershell/releases/tag/v0.1.2
 [0.1.1]: https://github.com/anderveg/aethershell/releases/tag/v0.1.1
 [0.1.0]: https://github.com/anderveg/aethershell/releases/tag/v0.1.0

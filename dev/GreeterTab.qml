@@ -25,6 +25,67 @@ Item {
     property string status: ""
     property bool busy: false
     property string lastThumbStamp: ""
+    property var selectedRemoveList: []
+    property string themeFilter: "installed" // "installed" | "uninstalled" | "all"
+
+    readonly property int installedCount: {
+        let c = 0
+        for (let i = 0; i < presets.length; i++)
+            if (presets[i].installed !== false) c++
+        return c
+    }
+
+    readonly property int uninstalledCount: {
+        let c = 0
+        for (let i = 0; i < presets.length; i++)
+            if (presets[i].installed === false) c++
+        return c
+    }
+
+    readonly property var filteredPresets: {
+        if (themeFilter === "installed") {
+            return presets.filter(function(p) { return p.installed !== false })
+        } else if (themeFilter === "uninstalled") {
+            return presets.filter(function(p) { return p.installed === false })
+        }
+        return presets
+    }
+
+    onThemeFilterChanged: ensureSelectionValid()
+
+    function ensureSelectionValid() {
+        const fp = filteredPresets
+        if (!fp || fp.length === 0) return
+        for (let i = 0; i < fp.length; i++) {
+            if (fp[i].id === selectedId) return
+        }
+        for (let i = 0; i < fp.length; i++) {
+            if (fp[i].id === activeId) {
+                selectedId = activeId
+                return
+            }
+        }
+        selectedId = fp[0].id
+    }
+
+    function isRemoveSelected(id) {
+        return selectedRemoveList.indexOf(id) !== -1
+    }
+
+    function toggleRemoveSelection(id) {
+        let list = selectedRemoveList.slice()
+        let idx = list.indexOf(id)
+        if (idx !== -1) {
+            list.splice(idx, 1)
+        } else {
+            list.push(id)
+        }
+        selectedRemoveList = list
+    }
+
+    function clearRemoveSelection() {
+        selectedRemoveList = []
+    }
 
     readonly property var selectedPreset: {
         for (let i = 0; i < presets.length; i++)
@@ -51,7 +112,9 @@ Item {
         if (selectedId === id && status !== "")
             return
         selectedId = id
-        status = "Sélectionné : " + nameOf(id) + " — « Aperçu » ou « Appliquer »"
+        const p = selectedPreset
+        const needsInstall = p && p.installed === false
+        status = "Sélectionné : " + nameOf(id) + " — « " + (needsInstall ? "Installer" : "Appliquer") + " » ou « Aperçu »"
     }
 
     // Aperçu plein écran : on ferme le panneau pour laisser voir le greeter.
@@ -78,6 +141,34 @@ Item {
         applyTimer.restart()
     }
 
+    Timer {
+        id: yieldFocusTimer
+        interval: 180
+        repeat: false
+        onTriggered: {
+            if (greeterTab.busy) {
+                Theme.configPanelYieldFocus = true
+            }
+        }
+    }
+
+    function installSelected() {
+        if (!selectedId || busy) return
+        busy = true
+        yieldFocusTimer.start()
+        status = "Installation de " + nameOf(selectedId) + " (autorisation requise)…"
+        installProc.running = true
+    }
+
+    function uninstallSelected() {
+        if (selectedRemoveList.length === 0 || busy) return
+        busy = true
+        yieldFocusTimer.start()
+        status = "Désinstallation de " + selectedRemoveList.length + " thème(s)…"
+        uninstallProc.command = ["python3", Quickshell.shellPath("core/greeter_manager.py"), "uninstall"].concat(selectedRemoveList)
+        uninstallProc.running = true
+    }
+
     function regenerateThumbs() {
         if (busy) return
         busy = true
@@ -101,6 +192,7 @@ Item {
                     for (let i = 0; i < greeterTab.presets.length; i++)
                         if (greeterTab.presets[i].id === greeterTab.selectedId) known = true
                     if (!known) greeterTab.selectedId = d.active || ""
+                    greeterTab.ensureSelectionValid()
                     if (greeterTab.pendingId !== "") {
                         const ok = d.active === greeterTab.pendingId
                         greeterTab.status = ok
@@ -137,6 +229,64 @@ Item {
         }
     }
 
+    Process {
+        id: installProc
+        command: ["python3", Quickshell.shellPath("core/greeter_manager.py"), "install", greeterTab.selectedId]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const res = JSON.parse(text.trim())
+                    if (res.ok) {
+                        greeterTab.status = "Thème " + greeterTab.nameOf(greeterTab.selectedId) + " installé ! Vous pouvez maintenant l'appliquer."
+                    } else {
+                        greeterTab.status = "Échec : " + (res.message || "erreur d'installation")
+                    }
+                } catch (e) {
+                    if (text.trim().length > 0) greeterTab.status = text.trim()
+                }
+            }
+        }
+        onExited: (exitCode, exitStatus) => {
+            yieldFocusTimer.stop()
+            Theme.configPanelYieldFocus = false
+            greeterTab.busy = false
+            if (exitCode !== 0 && greeterTab.status.indexOf("installé") === -1) {
+                greeterTab.status = "Installation annulée ou refusée"
+            }
+            greeterTab.reload()
+        }
+    }
+
+    Process {
+        id: uninstallProc
+        command: ["python3", Quickshell.shellPath("core/greeter_manager.py"), "uninstall"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const res = JSON.parse(text.trim())
+                    if (res.ok) {
+                        const count = res.uninstalled ? res.uninstalled.length : 0
+                        greeterTab.status = count + " thème(s) désinstallé(s) avec succès !"
+                    } else {
+                        greeterTab.status = "Échec : " + (res.error || res.message || "erreur de désinstallation")
+                    }
+                } catch (e) {
+                    if (text.trim().length > 0) greeterTab.status = text.trim()
+                }
+            }
+        }
+        onExited: (exitCode, exitStatus) => {
+            yieldFocusTimer.stop()
+            Theme.configPanelYieldFocus = false
+            greeterTab.busy = false
+            if (exitCode !== 0 && greeterTab.status.indexOf("désinstallé") === -1) {
+                greeterTab.status = "Désinstallation annulée ou refusée"
+            }
+            greeterTab.clearRemoveSelection()
+            greeterTab.reload()
+        }
+    }
+
     Column {
         id: content
         width: parent.width
@@ -154,10 +304,55 @@ Item {
 
                 Text {
                     width: parent.width
-                    text: "Un clic sélectionne un thème ; « Aperçu » l'affiche en plein écran, « Appliquer » le retient pour la prochaine ouverture de session."
+                    text: "Un clic sélectionne un thème ; « Aperçu » l'affiche en plein écran, « Appliquer » le retient. Les cases à cocher permettent de sélectionner des thèmes à désinstaller."
                     color: Qt.alpha(Theme.fg, 0.62)
                     font.pixelSize: Theme.textXs
                     wrapMode: Text.WordWrap
+                }
+
+                // Barre de filtres pour afficher/masquer les thèmes
+                Row {
+                    width: parent.width
+                    spacing: Theme.space2
+
+                    Repeater {
+                        model: [
+                            { key: "installed", label: "Installés (" + greeterTab.installedCount + ")" },
+                            { key: "uninstalled", label: "Non installés (" + greeterTab.uninstalledCount + ")" },
+                            { key: "all", label: "Tous (" + greeterTab.presets.length + ")" }
+                        ]
+
+                        Rectangle {
+                            id: filterPill
+                            required property var modelData
+                            readonly property bool active: greeterTab.themeFilter === modelData.key
+                            width: pillText.implicitWidth + 24
+                            height: 28
+                            radius: Theme.globalRadius
+                            color: active
+                                ? Theme.accent
+                                : (pillMa.containsMouse ? Theme.surfaceVariant : Qt.alpha(Theme.surfaceVariant, 0.45))
+                            border.width: 1
+                            border.color: active ? Theme.accent : Qt.alpha(Theme.fg, 0.12)
+
+                            Text {
+                                id: pillText
+                                anchors.centerIn: parent
+                                text: filterPill.modelData.label
+                                color: filterPill.active ? Theme.bg : (pillMa.containsMouse ? Theme.fg : Qt.alpha(Theme.fg, 0.70))
+                                font.pixelSize: Theme.textXs
+                                font.bold: filterPill.active
+                            }
+
+                            MouseArea {
+                                id: pillMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: greeterTab.themeFilter = filterPill.modelData.key
+                            }
+                        }
+                    }
                 }
 
                 Grid {
@@ -166,13 +361,15 @@ Item {
                     spacing: Theme.space3
 
                     Repeater {
-                        model: greeterTab.presets
+                        model: greeterTab.filteredPresets
 
                         Item {
                             id: cell
                             required property var modelData
                             readonly property bool selected: greeterTab.selectedId === modelData.id
                             readonly property bool active: modelData.active
+                            readonly property bool isUninstallable: modelData.kind === "qylock" && modelData.installed === true && !modelData.active
+                            readonly property bool isCheckedForRemoval: greeterTab.isRemoveSelected(modelData.id)
 
                             width: greeterTab.cellWidth
                             height: greeterTab.cellHeight + 24
@@ -225,6 +422,42 @@ Item {
                                     }
                                 }
 
+                                // Case à cocher pour sélection multiple de désinstallation
+                                Rectangle {
+                                    id: chkBox
+                                    z: 3
+                                    visible: cell.isUninstallable
+                                    anchors.left: parent.left
+                                    anchors.top: parent.top
+                                    anchors.margins: 6
+                                    width: 20
+                                    height: 20
+                                    radius: Theme.globalRadius
+                                    color: cell.isCheckedForRemoval ? Theme.error : (chkMa.containsMouse ? Qt.alpha(Theme.bg, 0.85) : Qt.alpha(Theme.bg, 0.65))
+                                    border.width: 1.5
+                                    border.color: cell.isCheckedForRemoval ? Theme.error : (chkMa.containsMouse ? Theme.fg : Qt.alpha(Theme.fg, 0.45))
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        visible: cell.isCheckedForRemoval
+                                        text: "✓"
+                                        color: Theme.bg
+                                        font.pixelSize: Theme.textXs
+                                        font.bold: true
+                                    }
+
+                                    MouseArea {
+                                        id: chkMa
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: (mouse) => {
+                                            mouse.accepted = true
+                                            greeterTab.toggleRemoveSelection(cell.modelData.id)
+                                        }
+                                    }
+                                }
+
                                 MouseArea {
                                     anchors.fill: parent
                                     cursorShape: Qt.PointingHandCursor
@@ -257,13 +490,58 @@ Item {
                     }
                 }
 
+                Text {
+                    width: parent.width
+                    visible: greeterTab.filteredPresets.length === 0
+                    text: greeterTab.themeFilter === "uninstalled"
+                        ? "Tous les thèmes sont actuellement installés."
+                        : "Aucun thème ne correspond au filtre sélectionné."
+                    color: Qt.alpha(Theme.fg, 0.50)
+                    font.pixelSize: Theme.textSm
+                    horizontalAlignment: Text.AlignHCenter
+                    topPadding: 20
+                    bottomPadding: 20
+                }
+
                 Row {
                     width: parent.width
                     spacing: Theme.space2
 
+                    // Bouton « Installer » : visible si le thème sélectionné est à installer
+                    Rectangle {
+                        id: installBtn
+                        visible: greeterTab.selectedPreset && greeterTab.selectedPreset.installed === false
+                        width: visible ? installText.implicitWidth + 28 : 0
+                        height: 32
+                        radius: Theme.globalRadius
+                        color: greeterTab.busy
+                            ? Qt.alpha(Theme.accent, 0.25)
+                            : (installMa.containsMouse ? Qt.lighter(Theme.accent, 1.15) : Theme.accent)
+
+                        Text {
+                            id: installText
+                            anchors.centerIn: parent
+                            text: "Installer"
+                            color: Theme.bg
+                            font.pixelSize: Theme.textSm
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            id: installMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            enabled: !greeterTab.busy
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: greeterTab.installSelected()
+                        }
+                    }
+
+                    // Bouton « Appliquer » : visible si le thème est déjà installé (ou astronaut)
                     Rectangle {
                         id: applyBtn
-                        width: applyText.implicitWidth + 28
+                        visible: !greeterTab.selectedPreset || greeterTab.selectedPreset.installed !== false
+                        width: visible ? applyText.implicitWidth + 28 : 0
                         height: 32
                         radius: Theme.globalRadius
                         color: greeterTab.busy
@@ -318,9 +596,71 @@ Item {
                         }
                     }
 
-                    // Pousse « Aperçus » à droite (4 enfants, donc 3 espacements).
+                    // Bouton « Désinstaller » : visible si au moins un thème est coché
+                    Rectangle {
+                        id: uninstallBtn
+                        visible: greeterTab.selectedRemoveList.length > 0
+                        width: visible ? uninstallText.implicitWidth + 28 : 0
+                        height: 32
+                        radius: Theme.globalRadius
+                        color: greeterTab.busy
+                            ? Qt.alpha(Theme.error, 0.35)
+                            : (uninstallMa.containsMouse ? Qt.lighter(Theme.error, 1.15) : Theme.error)
+
+                        Text {
+                            id: uninstallText
+                            anchors.centerIn: parent
+                            text: "Désinstaller (" + greeterTab.selectedRemoveList.length + ")"
+                            color: Theme.bg
+                            font.pixelSize: Theme.textSm
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            id: uninstallMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            enabled: !greeterTab.busy
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: greeterTab.uninstallSelected()
+                        }
+                    }
+
+                    // Bouton « Annuler sélection » : visible si au moins un thème est coché
+                    Rectangle {
+                        id: clearRemoveBtn
+                        visible: greeterTab.selectedRemoveList.length > 0
+                        width: visible ? clearRemoveText.implicitWidth + 22 : 0
+                        height: 32
+                        radius: Theme.globalRadius
+                        color: clearRemoveMa.containsMouse ? Theme.surfaceVariant : "transparent"
+                        border.color: Qt.alpha(Theme.fg, 0.20)
+                        border.width: 1
+
+                        Text {
+                            id: clearRemoveText
+                            anchors.centerIn: parent
+                            text: "Annuler"
+                            color: Qt.alpha(Theme.fg, 0.75)
+                            font.pixelSize: Theme.textXs
+                        }
+
+                        MouseArea {
+                            id: clearRemoveMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            enabled: !greeterTab.busy
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: greeterTab.clearRemoveSelection()
+                        }
+                    }
+
+                    // Pousse « Aperçus » à droite
                     Item {
-                        width: Math.max(0, parent.width - applyBtn.width - previewBtn.width
+                        readonly property real actionWidth: installBtn.visible ? installBtn.width : applyBtn.width
+                        readonly property real removeWidth: uninstallBtn.visible
+                            ? (uninstallBtn.width + clearRemoveBtn.width + parent.spacing * 2) : 0
+                        width: Math.max(0, parent.width - actionWidth - previewBtn.width - removeWidth
                                         - regenBtn.width - parent.spacing * 3)
                         height: 1
                     }
