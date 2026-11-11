@@ -616,8 +616,52 @@ compute_diff_stats() {
     (diff -u "$src" "$dst" 2>/dev/null || true) | awk '/^\+[^+]/ {add++} /^-[^-]/ {del++} END {printf "+%d / -%d", add, del}'
 }
 
+# ── Crochets git : le dernier rempart avant un commit ───────────────────────
+# `.gitignore` écarte les maquettes et les états locaux, mais `git add -f` passe
+# outre. Le crochet versionné (`dev/hooks/pre-commit`) refuse les chemins
+# interdits et vérifie la neutralité du dépôt. Il ne sert que si `core.hooksPath`
+# pointe dessus — une configuration qui ne suit pas le clone, d'où ce passage à
+# chaque déploiement, sur chaque machine.
+installer_crochets_git() {
+    local racine
+    racine="$(git -C "$DEV_DIR" rev-parse --show-toplevel 2>/dev/null)" || return 0
+    [ -f "$racine/dev/hooks/pre-commit" ] || return 0
+    chmod +x "$racine/dev/hooks/pre-commit" 2>/dev/null || true
+
+    if [ "$(git -C "$racine" config --get core.hooksPath 2>/dev/null)" != "dev/hooks" ]; then
+        git -C "$racine" config core.hooksPath dev/hooks
+        echo "  ↪ crochets git installés (core.hooksPath = dev/hooks)"
+    fi
+
+    # Un hooksPath qui pointe dans le vide ne dit rien et laisse tout passer :
+    # c'est le piège que le crochet documente. On le vérifie donc, pas seulement
+    # la configuration.
+    local pose
+    pose="$(git -C "$racine" config --get core.hooksPath 2>/dev/null)"
+    if [ ! -x "$racine/${pose:-.git/hooks}/pre-commit" ]; then
+        echo "  ⚠️  crochets git inopérants : ${pose:-.git/hooks}/pre-commit absent ou non exécutable"
+    fi
+}
+
+# ── Neutralité : ni nom d'utilisateur ni nom de machine en dur ──────────────
+# Le dépôt doit s'installer chez quelqu'un d'autre. `core/neutralite.py` lit les
+# fichiers suivis et cherche le nom de la personne qui lance le déploiement, son
+# nom d'hôte, et tout `/home/<nom>` qui n'est pas un espace réservé. Avertissement
+# seulement : un déploiement ne doit pas être bloqué par une ligne de commentaire.
+verifier_neutralite() {
+    local sortie
+    if ! sortie="$(python3 "$DEV_DIR/core/neutralite.py" 2>&1)"; then
+        echo
+        echo "⚠️  Neutralité du dépôt — à corriger avant de publier :"
+        echo "$sortie" | sed 's/^/    /'
+        echo
+    fi
+}
+
 # ── Pré-vol : Analyse comparative (Dépôt ➜ Vivant) ──────────────────────────
 preflight_diff() {
+    verifier_neutralite
+
     local git_rev origin
     git_rev="$(git -C "$DEV_DIR" rev-parse --short HEAD 2>/dev/null || echo "inconnu")"
     origin="$(detect_origin_type)"
@@ -1079,6 +1123,51 @@ deploy_ghostty_overrides() {
     fi
 }
 
+# Flou des fenêtres GTK4 → ~/.config/gtk-4.0/aethershell-flou.css.
+#
+# Depuis GTK 4.24, GTK déclare une région de flou **vide** pour chaque surface
+# (ext-background-effect-v1) : Hyprland lit cela comme « ne me floute pas » et
+# cesse de flouter toutes les fenêtres GTK4. Le fichier livré ne fait que
+# déclarer la région (`backdrop-filter`) ; l'intensité reste celle du
+# compositeur. Détail complet dans core/gtk4-flou.css.
+#
+# Le gtk.css de la session n'est **jamais réécrit** : on y ajoute un `@import`
+# s'il manque, une seule fois. Un fichier absent est créé vide.
+poser_flou_gtk4() {
+    local source="$DEV_DIR/core/gtk4-flou.css"
+    local dossier="$HOME/.config/gtk-4.0"
+    local css="$dossier/gtk.css"
+    [ -f "$source" ] || return 0
+    mkdir -p "$dossier"
+    cp -f "$source" "$dossier/aethershell-flou.css" || return 0
+    [ -f "$css" ] || : > "$css"
+    if ! grep -qF "aethershell-flou.css" "$css"; then
+        printf "\n@import 'aethershell-flou.css';\n" >> "$css"
+        echo "  ↪ flou GTK4 : @import ajouté à ~/.config/gtk-4.0/gtk.css"
+    fi
+}
+
+# Version déployée → $CORE_DIR/version.json.
+#
+# Le dossier cible n'est pas un dépôt git : déployé, le shell ne peut pas
+# répondre seul à « quelle version tourne ? ». Le panneau (« Écrans & Système »)
+# l'affiche et `core/maj_shell.py` la compare au dernier tag publié sur GitHub.
+# C'est un état de la machine, comme les autres .json non livrés de core/ :
+# `est_etat_machine` le protège, donc aucune version ultérieure ne l'écrase ni
+# ne l'élague — il est réécrit à chaque déploiement, et c'est voulu.
+ecrire_version_deployee() {
+    local tag="" commit="" decrite=""
+    if git -C "$DEV_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+        commit="$(git -C "$DEV_DIR" rev-parse --short HEAD 2>/dev/null || true)"
+        tag="$(git -C "$DEV_DIR" describe --tags --abbrev=0 2>/dev/null || true)"
+        decrite="$(git -C "$DEV_DIR" describe --tags --always --dirty 2>/dev/null || true)"
+    fi
+    printf '{"version": "%s", "tag": "%s", "commit": "%s", "deploye_le": "%s"}\n' \
+        "$decrite" "$tag" "$commit" "$(date -Iseconds)" \
+        > "$CORE_DIR/version.json.new" || return 0
+    mv -f "$CORE_DIR/version.json.new" "$CORE_DIR/version.json" || true
+}
+
 deploy_new_env() {
     echo "🚀 Deploying $DISTRO_TITLE..."
 
@@ -1126,6 +1215,11 @@ deploy_new_env() {
     # l'élagage : elle ne vit plus dans core/ au dépôt, une seule source à la
     # racine, et l'élagage l'aurait retirée de la cible juste après la copie.
     cp -f "$DEPS_FILE" "$CORE_DIR/dependencies.txt" || true
+    # Quelle version vient d'être posée : le dossier déployé n'est pas un dépôt
+    # git, le panneau et core/maj_shell.py n'ont que ce fichier pour le savoir.
+    ecrire_version_deployee
+    # Flou des fenêtres GTK4 (région `backdrop-filter` demandée au compositeur).
+    poser_flou_gtk4
     # Index des applications de la pilule spotlight : données de la machine,
     # pas du dépôt — régénérées à chaque déploiement (et à chaque ouverture).
     if [ -f "$CORE_DIR/app_index.py" ]; then
@@ -1237,6 +1331,8 @@ deploy_new_env() {
         done
         systemctl --user daemon-reload 2>/dev/null || true
     fi
+
+    installer_crochets_git
 
     "$CORE_DIR/generate_rofi_theme.sh"
 

@@ -23,6 +23,36 @@ Plutôt qu'un simple thème de barre, AetherShell regroupe les éléments visuel
 
 ## 2. Déploiement & Mises à jour
 
+### Installer ou mettre à jour en une ligne
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/anderveg/aethershell/master/install.sh | sh
+```
+
+[`install.sh`](install.sh) fait tout : il lit la distribution dans `/etc/os-release`
+(Arch ou Fedora), clone le dépôt ou le met à jour en avance rapide s'il est déjà là,
+puis lance `dev/deploy.sh`, qui sauvegarde l'environnement avant de déployer. La même
+ligne sert à la première pose comme à toutes les mises à jour.
+
+Options : `--dir CHEMIN` (défaut : `$AETHERSHELL_DIR`, sinon `~/dev/aethershell`
+s'il existe, sinon `~/dev/aethershell`), `--arch` / `--fedora` pour forcer la cible
+au lieu de la lire dans `/etc/os-release`, `--branche NOM`, `--check` (état seul,
+sans rien déployer), `--no-deploy`, `--help`. Avec le lien, elles passent après
+`sh -s --` :
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/anderveg/aethershell/master/install.sh | sh -s -- --check
+```
+
+Le panneau suit la même version que le script : « Écrans & Système » → « Mise à jour
+du shell » affiche la version déployée, celle publiée sur GitHub, et les deux gestes
+(vérifier tout de suite, mettre à jour dans un terminal, copier la ligne pour une autre
+machine). `core/version.json` est écrit à chaque déploiement, et `core/maj_shell.py`
+n'interroge GitHub qu'une fois toutes les **280 minutes** — entre deux, il répond depuis
+son cache, donc ouvrir le panneau ne sort pas sur le réseau.
+
+### Déploiement à la main
+
 Le déploiement est piloté par le script [`dev/deploy.sh`](dev/deploy.sh), compatible avec **Arch Linux** et **Fedora** (détection automatique par `/etc/os-release`) :
 
 ```sh
@@ -46,6 +76,29 @@ Le déploiement ne remplace jamais aveuglément les fichiers vivants :
 * **États locaux protégés** : `style_vars.json`, `bar_applets.json`, `widgets.json`, `autostart.json`, `todo.json`, `secrets.json`, etc. ne sont jamais écrasés s'ils existent déjà sur la machine cible.
 * **Configuration Hyprland personnalisée** : `binds.lua`, `input.lua`, `general.lua` et les profils matériels restent maîtres. En cas de différence avec le dépôt, une copie comparative `.upstream` est générée sans toucher au fichier actif.
 * **Filet de sécurité granulaire** : chaque déploiement crée une archive `.tar.gz` de secours et un snapshot décompressé miroir sous `~/.config/backups_env/snapshots/<horodatage>/` avec table d'empreintes sha256 (`manifest.json`), permettant de restaurer un seul fichier en cas de besoin (`./deploy.sh --restore-file <chemin>`).
+
+---
+
+### Installer chez quelqu'un d'autre
+
+Rien dans le dépôt ne nomme un utilisateur, un dossier personnel ou une machine :
+AetherShell s'installe sous n'importe quel compte, et `./deploy.sh` écrit toujours
+dans le `$HOME` de la personne qui le lance.
+
+Les chemins se composent donc avec une variable, jamais en dur :
+
+| Contexte | À utiliser |
+|---|---|
+| shell | `"$HOME"`, `"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"` |
+| Python | `Path.home()`, `os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"` |
+| QML | `Quickshell.env("HOME")`, `Quickshell.env("XDG_RUNTIME_DIR")` |
+| unité systemd | `%h` (directive d'unité) |
+
+`python3 dev/core/neutralite.py` vérifie les fichiers **suivis** : il signale tout
+`/home/<nom>` qui n'est pas un espace réservé, ainsi que le nom de la personne et
+celui de sa machine. Le pré-vol du déploiement l'exécute et affiche un
+avertissement. Une ligne peut porter une dérogation explicite — `neutralite:ok —
+<raison>` — pour une compatibilité assumée.
 
 ---
 

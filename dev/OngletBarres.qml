@@ -32,6 +32,8 @@ Column {
     readonly property var cibles: ({
         "roundingIslandRow": roundingIslandRow,
         "barHeightRow": barHeightRow,
+        "barGapsOutHRow": barGapsOutHRow,
+        "barGapsOutVRow": barGapsOutVRow,
         "barGapsRow": barGapsRow,
         "secVisualiseur": secVisualiseur,
         "secApplets": secApplets,
@@ -69,8 +71,8 @@ spacing: 11
 CollapsibleSection {
     id: secBarres
     objectName: "secBarres"
-    title: "Barre principale & Barres annexes"
-    summary: "Hauteur " + Theme.barHeight + " · " + (root.barGapsTransparent ? "îlots transparents" : "capsule continue")
+    title: "Barres du shell"
+    summary: "Hauteur " + Theme.barHeight + " · gaps " + Theme.gutterH + "/" + Theme.gutterV + " · " + (root.barGapsTransparent ? "îlots transparents" : "capsule continue")
     icon: "monitor"
     expanded: root.sectionOpen("quickshell_barres", false)
     onToggled: expanded => {
@@ -174,6 +176,62 @@ CollapsibleSection {
         }
 
     }
+        // 7. Marges extérieures : deux axes indépendants — les côtés et le
+        // haut/bas ne se règlent pas ensemble.
+        Row {
+            id: barGapsOutHRow   // ancre de recherche
+            objectName: "barGapsOutHRow"
+            width: parent.width
+            spacing: 8
+
+            Text {
+                width: 160
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Gaps latéraux :"
+                color: Theme.fg
+                font.pixelSize: Theme.textSm
+                elide: Text.ElideRight
+            }
+
+            Slider {
+                anchors.verticalCenter: parent.verticalCenter
+                value: Theme.gutterH
+                minimumValue: 0
+                maximumValue: 32
+                stepSize: 1
+                suffix: " px"
+                onValueModified: newVal => {
+                    root.runConfigCmd(["style", "bar_gaps_out_h", String(newVal)])
+                }
+            }
+        }
+        Row {
+            id: barGapsOutVRow   // ancre de recherche
+            objectName: "barGapsOutVRow"
+            width: parent.width
+            spacing: 8
+
+            Text {
+                width: 160
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Gaps haut/bas :"
+                color: Theme.fg
+                font.pixelSize: Theme.textSm
+                elide: Text.ElideRight
+            }
+
+            Slider {
+                anchors.verticalCenter: parent.verticalCenter
+                value: Theme.gutterV
+                minimumValue: 0
+                maximumValue: 32
+                stepSize: 1
+                suffix: " px"
+                onValueModified: newVal => {
+                    root.runConfigCmd(["style", "bar_gaps_out_v", String(newVal)])
+                }
+            }
+        }
         Row {
             id: barBorderRow   // ancre de recherche
             objectName: "barBorderRow"
