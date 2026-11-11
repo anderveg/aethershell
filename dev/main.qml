@@ -187,6 +187,38 @@ Item {
         command: ["python3", Quickshell.shellPath("core/lien_systeme.py"), "--appliquer"]
     }
 
+    // Schémas de couleurs : le catalogue est lu **une fois** au démarrage, puis
+    // relu quand un `.colors` apparaît ou disparaît dans l'un des deux dossiers
+    // de schémas (veille inotify, un seul processus, pas de sondage). Le panneau
+    // liste le catalogue — il ne le recopie pas dans la configuration.
+    Process {
+        id: themesScanProc
+        running: true
+        command: ["python3", Quickshell.shellPath("core/themes_scan.py"), "--sync"]
+        onExited: Theme.relireCatalogue()
+    }
+    Process {
+        id: themesVeilleProc
+        running: true
+        command: ["sh", Quickshell.shellPath("core/veille_themes.sh")]
+        stdout: SplitParser {
+            // La veille signale aussi l'ouverture des dossiers : seuls les
+            // événements qui nomment un `.colors` concernent le catalogue.
+            onRead: line => { if (line.indexOf(".colors") >= 0) themesDebounce.restart() }
+        }
+    }
+    // Un seul scan pour un dépôt de plusieurs fichiers : on attend que la rafale
+    // d'événements se calme.
+    Timer {
+        id: themesDebounce
+        interval: 600
+        repeat: false
+        onTriggered: {
+            if (themesScanProc.running) return
+            themesScanProc.running = true
+        }
+    }
+
     // Mode nuit : la plage horaire s'applique **d'ici**, pas depuis l'applet
     // luminosité. Un minuteur posé dans un applet s'arrête avec lui, et la
     // modularisation permet de retirer cet applet : l'automatisme disparaissait
@@ -275,13 +307,18 @@ Item {
                 visible: Theme.barMerged && !Theme.barGapsTransparent
                 anchors.fill: parent
                 radius: Theme.pillRadius
-                color: Theme.barBg
-                // Verre dépoli autonome : ne dessine rien tant que
-                // Theme.shellFlouInterne vaut 0 (voir FlouFond.qml).
+                // Teinte au-dessus du verre : peinte sous le FlouFond, elle laissait
+                // le fond d'écran traverser à mesure qu'on montait le flou interne.
+                color: "transparent"
                 FlouFond {
                     anchors.fill: parent
                     rayon: Theme.pillRadius
                     intensite: Theme.shellFlouInterne
+                }
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.pillRadius
+                    color: Theme.barBg
                 }
                 border.color: Theme.accent
                 border.width: Theme.barBorder ? 1 : 0
@@ -315,11 +352,18 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 height: Theme.barHeight
                 radius: Theme.pillRadius
-                color: Theme.barBg
+                // Teinte au-dessus du verre (voir plus haut) : peinte sur la même
+                // surface que le FlouFond, elle laissait le fond d'écran traverser.
+                color: "transparent"
                 FlouFond {
                     anchors.fill: parent
                     rayon: Theme.pillRadius
                     intensite: Theme.shellFlouInterne
+                }
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.pillRadius
+                    color: Theme.barBg
                 }
                 border.color: Theme.accent
                 border.width: Theme.barBorder ? 1 : 0
@@ -336,11 +380,18 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 height: Theme.barHeight
                 radius: Theme.pillRadius
-                color: Theme.barBg
+                // Teinte au-dessus du verre (voir plus haut) : peinte sur la même
+                // surface que le FlouFond, elle laissait le fond d'écran traverser.
+                color: "transparent"
                 FlouFond {
                     anchors.fill: parent
                     rayon: Theme.pillRadius
                     intensite: Theme.shellFlouInterne
+                }
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.pillRadius
+                    color: Theme.barBg
                 }
                 border.color: Theme.accent
                 border.width: Theme.barBorder ? 1 : 0
@@ -357,11 +408,18 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 height: Theme.barHeight
                 radius: Theme.pillRadius
-                color: Theme.barBg
+                // Teinte au-dessus du verre (voir plus haut) : peinte sur la même
+                // surface que le FlouFond, elle laissait le fond d'écran traverser.
+                color: "transparent"
                 FlouFond {
                     anchors.fill: parent
                     rayon: Theme.pillRadius
                     intensite: Theme.shellFlouInterne
+                }
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.pillRadius
+                    color: Theme.barBg
                 }
                 border.color: Theme.accent
                 border.width: Theme.barBorder ? 1 : 0
@@ -577,6 +635,13 @@ Item {
 
         Loader {
             id: configLoader
+            // Chargé à la **première** ouverture, puis gardé en mémoire : aucune
+            // analyse des 7 500 lignes au démarrage du shell, et la réouverture
+            // est immédiate (onglet, tiroirs et défilement restent en place).
+            // Le décharger à la fermeture ferait rejouer son Component.onCompleted
+            // — donc un appel `state` à config_manager et un scan de thèmes — à
+            // chaque ouverture : ce n'est pas gratuit.
+            property bool charge: false
             anchors.centerIn: parent
             // 740 px : le rail d'onglets porte des libellés (168 px) et le
             // contenu garde ses 540 px utiles.
@@ -584,7 +649,16 @@ Item {
             // Hauteur bornée : le panneau flotte au centre au lieu de coller à
             // la barre et au bas de l'écran.
             height: Math.min(parent.height - Theme.barHeight - Theme.gutter * 4, 900)
+            active: charge
             source: "config_panel.qml"
+        }
+
+        Connections {
+            target: Theme
+            function onConfigPanelVisibleChanged() {
+                if (Theme.configPanelVisible)
+                    configLoader.charge = true
+            }
         }
     }
 

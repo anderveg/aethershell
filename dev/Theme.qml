@@ -22,10 +22,23 @@ QtObject {
     // SECTION 1: GLOBAL STYLE & ONBOARDING VARIABLES
     // ────────────────────────────────────────────────────────────────────────
     property string activeTheme: "dynamic"
-    // Clés de `palette` dans style_vars.json, dans l'ordre du fichier, et leur
-    // étiquette lisible quand elle est connue (thèmes importés de KDE).
-    property var paletteNoms: []
-    property var paletteEtiquettes: ({})
+    // Palettes écrites dans style_vars.json : les trois faites à la main, plus
+    // celle qui est active quand elle vient d'un schéma du disque.
+    property var paletteLocales: []
+    // Catalogue des schémas lus sur le disque (core/palette_cache.json) : c'est
+    // lui qui porte la liste du panneau, pas la configuration.
+    property var paletteImportees: []
+    property var etiquettesLocales: ({})
+    property var etiquettesImportees: ({})
+    readonly property var paletteEtiquettes: Object.assign({}, etiquettesLocales, etiquettesImportees)
+    // Liste montrée par le panneau : les palettes maison d'abord, puis les
+    // schémas du disque, sans doublon (l'active importée figure dans les deux).
+    readonly property var paletteNoms: {
+        const vus = []
+        for (const k of root.paletteLocales) if (k && vus.indexOf(k) < 0) vus.push(k)
+        for (const k of root.paletteImportees) if (k && vus.indexOf(k) < 0) vus.push(k)
+        return vus
+    }
 
     // Relit style_vars.json : après un import de thèmes, ou un réglage écrit
     // par un service Python.
@@ -168,7 +181,7 @@ QtObject {
     // drops, water, fluid_jar, prism, heat_shimmer, acrylic, aurora, haze.
     // style_vars.json fait foi ; general.lua ne porte que le défaut d'une
     // machine neuve.
-    property string blurVariant: "acrylic"
+    property string blurVariant: "kawase"
 
     // ────────────────────────────────────────────────────────────────────────
     // SECTION 3: PALETTE COLORS & TRANSLUCENT SURFACES
@@ -194,6 +207,12 @@ QtObject {
     // laisser voir les fenêtres est voulu. En dessous, il rend le texte lisible
     // sans dépendre de la passe de flou du compositeur.
     property real shellFlouInterne: 0.0
+    // Rayon et « passes » du flou **des surfaces** (le verre interne).
+    // Hyprland ne règle size/passes qu'en global, fenêtres comprises :
+    // ces deux-là ne concernent que `FlouFond`. Les valeurs par défaut
+    // reproduisent l'ancien rendu figé (48 px, 3 passes → 0,84).
+    property int shellFlouTaille: 48
+    property int shellFlouPasses: 3
     // Fond de bureau en profondeur (FondProfondeur.qml) : parallaxe des calques
     // au changement de bureau. Faux par défaut, le fond d'écran du démon reste
     // intact tant qu'on ne l'allume pas.
@@ -461,6 +480,8 @@ QtObject {
         if (typeof data.hypr_rounding === "number") root.hyprRounding = data.hypr_rounding
         if (typeof data.global_opacity === "number") root.globalOpacity = data.global_opacity
         if (typeof data.shell_flou_interne === "number") root.shellFlouInterne = Math.max(0, Math.min(1, data.shell_flou_interne))
+        if (typeof data.shell_flou_taille === "number") root.shellFlouTaille = Math.max(1, Math.min(96, data.shell_flou_taille))
+        if (typeof data.shell_flou_passes === "number") root.shellFlouPasses = Math.max(1, Math.min(8, data.shell_flou_passes))
         if (typeof data.depth_wallpaper === "boolean") root.depthWallpaper = data.depth_wallpaper
         if (typeof data.panel_accordion === "boolean") root.panelAccordion = data.panel_accordion
         if (typeof data.user_location_ville === "string") root.userLocationVille = data.user_location_ville
@@ -514,10 +535,10 @@ QtObject {
         }
 
         const palettes = data.palette || {}
-        // Noms des palettes disponibles : le panneau les liste au lieu de trois
-        // noms écrits en dur, et les schémas KDE importés apparaissent là.
-        root.paletteNoms = Object.keys(palettes)
-        root.paletteEtiquettes = data.palette_noms || ({})
+        // Les palettes de la configuration seulement : le catalogue des schémas
+        // du disque arrive par `catalogueFile`, juste en dessous.
+        root.paletteLocales = Object.keys(palettes)
+        root.etiquettesLocales = data.palette_noms || ({})
         const pal = palettes[root.activeTheme] || palettes["dynamic"] || {}
 
         if (pal.bg) root.bg = pal.bg
@@ -564,6 +585,34 @@ QtObject {
                     return
                 }
                 console.warn("Theme.qml: Failed to parse core/style_vars.json:", e)
+            }
+        }
+    }
+
+    // Catalogue des schémas de couleurs du disque (core/palette_cache.json), tenu
+    // par themes_scan.py. Le shell le relit quand il change : un `.colors` ajouté
+    // ou retiré des deux dossiers apparaît dans le panneau sans redémarrer.
+    function relireCatalogue() {
+        catalogueFile.reload()
+    }
+
+    property FileView catalogueFile: FileView {
+        path: Quickshell.shellPath("core/palette_cache.json")
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            try {
+                const themes = (JSON.parse(text()) || {}).themes || ({})
+                const cles = Object.keys(themes).sort()
+                const labels = {}
+                for (const cle of cles) labels[cle] = themes[cle].nom || cle
+                root.paletteImportees = cles
+                root.etiquettesImportees = labels
+            } catch (e) {
+                // Absent au tout premier démarrage : le scan du shell le crée.
+                root.paletteImportees = []
+                root.etiquettesImportees = ({})
             }
         }
     }

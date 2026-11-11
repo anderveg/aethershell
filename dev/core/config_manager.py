@@ -36,6 +36,9 @@ import tablet_mode_daemon  # noqa: E402
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DEV_ROOT = os.path.dirname(BASE_DIR)
 STYLE_FILE = os.path.join(BASE_DIR, "style_vars.json")
+
+sys.path.insert(0, BASE_DIR)
+import verrou_etat  # noqa: E402  (verrou des ecritures de style_vars.json)
 WIDGETS_FILE = os.path.join(BASE_DIR, "widgets.json")
 APP_VARS_FILE = os.path.join(BASE_DIR, "app_vars.json")
 # Cible du clic sur une notification (hint/table/types) : fichier d'état, préservé
@@ -381,7 +384,16 @@ SHELL_BLUR_NAMESPACES = ("shell-bar", "shell-bar-bas", "shell-bar-cote-gauche",
                          "shell-onboarding", "shell-spotlight",
                          "shell-spotlight-rest", "shell-cheatsheet",
                          "shell-tray-menu", "shell-shotbar",
-                         "shell-menu-session", "shell-menu-widget")
+                         "shell-menu-session", "shell-menu-widget",
+                         # Les deux sélecteurs de fichiers : fenêtres de la taille
+                         # de la carte, donc le flou tombe sur le panneau qui est
+                         # derrière eux, et nulle part ailleurs.
+                         "shell-selecteur",
+                         # Le tiroir d'historique des notifications : sa fenêtre
+                         # est plein écran (elle porte le capteur de clic
+                         # extérieur), mais seul le tiroir peint — Hyprland ne
+                         # floute que la région opaque, le reste n'est pas touché.
+                         "shell-notif-history")
 SHELL_BLUR_KEYS = ("shell_blur_enabled", "shell_blur_alpha", "shell_blur_popups")
 # Colors proposées au visualiseur : des jetons du thème, pas des valeurs libres —
 # une couleur en dur ne suivrait pas un changement de palette.
@@ -648,7 +660,7 @@ def inscrire_variante_general(variant):
     """Inscrit la variante de flou choisie dans le `general.lua` vivant.
 
     `hyprctl reload` relit le fichier : sans cette écriture, le défaut qu'il
-    porte (`acrylic`) reprend le pas sur le choix du panneau jusqu'au prochain
+    porte (`kawase` par défaut) reprend le pas sur le choix du panneau jusqu'au prochain
     démarrage du shell. Le fichier du dépôt garde son propre défaut, seule la
     copie vivante est réécrite — comme pour les gaps et l'arrondi.
     """
@@ -747,6 +759,15 @@ def update_style_var(key, value):
         data[key] = round(max(0.3, min(1.0, float(value))), 2)
     elif key == "shell_opacity":
         data[key] = round(max(0.2, min(1.0, float(value))), 2)
+    elif key == "shell_flou_taille":
+        # Rayon du flou des surfaces (le `blurMax` de MultiEffect, en pixels).
+        # Hyprland ne sait pas régler size/passes par couche : le verre interne
+        # est le seul endroit où « taille » et « passes » peuvent différer de
+        # ceux des fenêtres. Plancher à 1 : en dessous de 8 px le flou reste
+        # lisible et c'est là qu'on distingue les petits rayons.
+        data[key] = max(1, min(96, int(float(value))))
+    elif key == "shell_flou_passes":
+        data[key] = max(1, min(8, int(float(value))))
     elif key == "bar_border":
         data[key] = str(value).lower() in ("true", "1", "yes")
     elif key == "viz_fps":
@@ -1925,11 +1946,13 @@ def get_full_config_state():
         "blur_size": int(style_data.get("blur_size", 3)),
         "blur_passes": int(style_data.get("blur_passes", 3)),
         "blur_vibrancy": float(style_data.get("blur_vibrancy", 0.1696)),
-        "blur_variant": str(style_data.get("blur_variant", "acrylic")),
+        "blur_variant": str(style_data.get("blur_variant", "kawase")),
         "shell_blur_enabled": bool(style_data.get("shell_blur_enabled", True)),
         "shell_blur_alpha": float(style_data.get("shell_blur_alpha", 0.4)),
         "shell_blur_popups": bool(style_data.get("shell_blur_popups", True)),
         "shell_flou_interne": float(style_data.get("shell_flou_interne", 0.0)),
+        "shell_flou_taille": int(style_data.get("shell_flou_taille", 48)),
+        "shell_flou_passes": int(style_data.get("shell_flou_passes", 3)),
         "depth_wallpaper": bool(style_data.get("depth_wallpaper", False)),
         "panel_accordion": bool(style_data.get("panel_accordion", True)),
         "user_location_ville": str(style_data.get("user_location_ville", "") or ""),
@@ -1946,6 +1969,10 @@ def get_full_config_state():
         "display": get_monitors_info(),
         "binds": get_binds_list(),
         "apps": load_json(APP_VARS_FILE),
+        # Les cibles de notification viennent d'ici plutôt que d'un FileView du
+        # panneau : `state` est déjà appelé à l'ouverture et après chaque
+        # commande, donc une seule source au lieu de deux qui peuvent diverger.
+        "notif_targets": load_notif_targets(),
         "autostart": get_autostart(),
         "homelab": lire_homelab(),
         "todo": {"fichiers": lire_todo(), "focus": lire_todo_focus(), "surveillance": lire_todo_surveillance()},
@@ -1963,6 +1990,13 @@ def get_full_config_state():
 
 if __name__ == "__main__":
     action = sys.argv[1] if len(sys.argv) > 1 else "state"
+    # Une commande = une seule section critique sur style_vars.json : lecture,
+    # décision, écriture. Le verrou est tenu jusqu'à la sortie du processus
+    # (fermeture du descripteur). `state` n'écrit rien et reste libre : le
+    # panneau l'appelle après chaque commande, et il interroge le compositeur.
+    # Aucun sous-processus lancé ici n'écrit style_vars.json (seulement
+    # hyprctl/systemctl), donc pas de blocage en boucle.
+    _verrou_style = None if action == "state" else verrou_etat.prendre(STYLE_FILE)
     if action == "state":
         print(json.dumps(get_full_config_state()))
     elif action == "kb_layout" and len(sys.argv) > 2:

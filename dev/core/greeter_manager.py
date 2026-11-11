@@ -14,6 +14,8 @@ tout ce qui est calcul ou aperçu reste sans privilège.
 
 import json
 import os
+import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -27,8 +29,12 @@ SDDM_CONF = Path("/etc/sddm.conf.d/10-sddm-theme.conf")
 QYLOCK_CACHE = HOME / ".local/share/qylock-themes"
 HELPER = "/usr/local/bin/greeter-palette"
 THUMBS = HOME / ".cache/quickshell/greeter-thumbs"
-GENERATE = HOME / "dev/aethershell/dev/sddm/generate.py"
-DEV_SDDM = HOME / "dev/aethershell/dev/sddm"
+# Le greeter est déployé avec le shell (`~/.config/quickshell/sddm`), il ne vit
+# plus dans le clone du dépôt : sur une machine où le shell est seulement
+# déployé, refresh de palette, miniatures, installation et désinstallation
+# échouaient faute de retrouver ces fichiers.
+DEV_SDDM = HOME / ".config/quickshell/sddm"      # valeur de repli, remplacée au premier appel
+GENERATE = DEV_SDDM / "generate.py"
 
 # Libellés : les identifiants viennent des noms de fichiers du thème.
 LABELS = {
@@ -274,11 +280,13 @@ def apply(ident):
         fail(f"configuration inconnue : {ident}")
     if ident == "palette":
         # La palette peut avoir changé depuis la dernière installation.
-        gen = subprocess.run([sys.executable, str(GENERATE)], capture_output=True, text=True)
+        gen = subprocess.run([sys.executable, str(get_sddm_dir() / "generate.py")],
+                             capture_output=True, text=True)
         if gen.returncode != 0:
             fail(f"génération impossible : {gen.stderr.strip()[:200]}")
-        ok, out = helper("set-palette", str(DEV_SDDM / "out/Themes/palette.conf"),
-                         str(DEV_SDDM / "out/Backgrounds/wallpaper.png"))
+        sddm = get_sddm_dir()
+        ok, out = helper("set-palette", str(sddm / "out/Themes/palette.conf"),
+                         str(sddm / "out/Backgrounds/wallpaper.png"))
         if not ok:
             fail(f"installation de la palette refusée : {out[:200]}")
     ok, out = helper("apply", ident)
@@ -309,7 +317,7 @@ def sources(ids):
 
 
 def thumbnails(ids):
-    script = DEV_SDDM / "thumbnails.sh"
+    script = get_sddm_dir() / "thumbnails.sh"
     if not script.exists():
         fail("thumbnails.sh absent")
     cmd = ["bash", str(script), *ids] if ids else ["bash", str(script)]
@@ -336,15 +344,18 @@ def qylock_pkg_name(ident):
 
 
 def get_sddm_dir():
+    """Répertoire du greeter : le déploiement d'abord, le clone en dernier.
+
+    Le `glob("**/…")` qui parcourait tout le home a été retiré : il coûtait cher
+    et ne servait qu'aux machines où le shell était déployé sans le greeter —
+    cas que le déploiement couvre désormais.
+    """
     cand = Path(__file__).resolve().parent.parent / "sddm"
     if cand.is_dir() and (cand / "install.sh").exists():
         return cand
     cand = HOME / "dev/aethershell/dev/sddm"
     if cand.is_dir() and (cand / "install.sh").exists():
         return cand
-    matches = list(HOME.glob("**/aethershell/dev/sddm/install.sh"))
-    if matches:
-        return matches[0].parent
     return DEV_SDDM
 
 
@@ -366,8 +377,28 @@ def install_qylock(ident):
     print(json.dumps({"ok": True, "installed": ident, "pkg": pkg, "message": res.stdout.strip()[-300:]}))
 
 
+# Nom de thème acceptable : c'est ce qui passe dans un script lancé en root.
+IDENT_VALIDE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def valider_identifiants(ids):
+    """Refuse **la liste entière** si un nom sort du gabarit.
+
+    Les noms finissent entre apostrophes dans un script exécuté par
+    `pkexec bash` : une apostrophe dans un nom suffit à sortir des quotes et à
+    faire exécuter autre chose, en root. On ne filtre pas en silence — un nom
+    refusé doit être visible, sinon l'appelant croit avoir tout supprimé.
+    """
+    mauvais = [i for i in ids if not isinstance(i, str) or not IDENT_VALIDE.match(i)]
+    if mauvais:
+        fail("nom(s) de thème refusé(s) — attendu : lettres, chiffres, point, "
+             "tiret, souligné : " + ", ".join(repr(str(m)) for m in mauvais[:8]))
+    return list(ids)
+
+
 def uninstall_themes(ids):
     """Désinstalle des thèmes qylock de /usr/share/sddm/themes/."""
+    ids = valider_identifiants(list(ids))
     cur = current_theme()
     installed = qylock_installed()
     to_remove = []
@@ -391,10 +422,11 @@ def uninstall_themes(ids):
     helper_src = sddm_dir / "greeter-palette"
     script_lines = ["#!/bin/bash", "set -euo pipefail"]
     if helper_src.exists():
-        script_lines.append(f"install -Dm755 '{helper_src}' /usr/local/bin/greeter-palette")
+        script_lines.append("install -Dm755 " + shlex.quote(str(helper_src))
+                           + " /usr/local/bin/greeter-palette")
     for ident in to_remove:
         t = THEMES_SYS / ident
-        script_lines.append(f"rm -rf '{t}'")
+        script_lines.append("rm -rf " + shlex.quote(str(t)))
 
     with tempfile.NamedTemporaryFile("w", prefix="sddm-uninstall-", delete=False) as tf:
         tf.write("\n".join(script_lines) + "\n")

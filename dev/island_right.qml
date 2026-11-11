@@ -69,6 +69,15 @@ Item {
 
     property var latestToast: null
 
+    // Le toast n'est affichable que si rien ne le recouvre : aucun popup ouvert,
+    // pas de tiroir d'historique, application non écartée. Cette propriété est la
+    // seule définition de « visible » — la fenêtre la lit, et le minuteur
+    // d'affichage court avec elle (voir toastTimer).
+    readonly property bool toastVisible: latestToast !== null
+        && Theme.activePopup === ""
+        && !Theme.notifHistoryVisible
+        && Theme.quietNotifApps.indexOf(latestToast ? latestToast.appName : "") < 0
+
     // Le compteur de paquets en attente vit dans l'applet « maj ».
 
     // ────────────────────────────────────────────────────────────────────────
@@ -157,7 +166,12 @@ Item {
             // notification est déjà dans la liste ci-dessus.
             if (!Theme.doNotDisturb && Theme.quietNotifApps.indexOf(entry.appName) < 0) {
                 islandRight.latestToast = entry
-                toastTimer.restart()
+                // Le minuteur d'affichage court avec la visibilité ; il faut donc
+                // le relancer seulement si le toast est déjà affiché (nouvelle
+                // notification qui remplace la précédente), et armer la
+                // péremption dans tous les cas.
+                if (toastTimer.running) toastTimer.restart()
+                toastPeremption.restart()
             }
         }
     }
@@ -205,9 +219,26 @@ Item {
         Theme.notifArchive = out
     }
 
+    // Le compte à rebours court **pendant l'affichage**, pas à l'arrivée : une
+    // notification qui arrive pendant qu'un popup est ouvert était retardée (le
+    // toast apparaît à la fermeture, la fenêtre est réactive), mais son minuteur
+    // expirait entre-temps et elle ne s'affichait jamais — mesuré : popup ouvert
+    // 7 s, aucun toast, alors qu'un popup refermé au bout de 2 s le montrait.
     Timer {
         id: toastTimer
         interval: 4500
+        repeat: false
+        running: islandRight.toastVisible
+        onTriggered: {
+            islandRight.latestToast = null
+        }
+    }
+
+    // Péremption : une notification différée trop longtemps (popup resté ouvert)
+    // ne doit pas surgir un quart d'heure après les faits.
+    Timer {
+        id: toastPeremption
+        interval: 60000
         repeat: false
         onTriggered: islandRight.latestToast = null
     }
@@ -393,8 +424,11 @@ Item {
 
     // Retirer de la liste **et** du serveur : sans `tracked = false`, keepOnReload
     // ressuscite la notification au prochain rechargement du shell.
+    // Rend true si l'entrée était dans la liste vive. false = elle vient du repli
+    // sur l'historique, que le serveur ne connaît pas : c'est à l'appelant de la
+    // retirer du fichier (sinon la croix du centre ne fait rien).
     function forgetNotif(entry) {
-        if (!entry) return
+        if (!entry) return false
         if (entry.raw) {
             try { entry.raw.tracked = false } catch (e) {}
         }
@@ -407,9 +441,15 @@ Item {
             const copy = list.slice()
             copy.splice(i, 1)
             islandRight.notificationsList = copy
-            return
+            return true
         }
-        console.warn("notification " + entry.id + " absente de la liste au retrait")
+        // Une entrée sans `raw` vient du repli sur l'historique : son absence de la
+        // liste vive est normale, et l'appelant la retire du fichier. On ne crie
+        // donc que pour une notification vive qu'on ne retrouve pas.
+        if (entry.raw) {
+            console.warn("notification " + entry.id + " absente de la liste vive")
+        }
+        return false
     }
 
     // Actions affichables : tout sauf « default », qui est déjà le clic sur le
@@ -663,9 +703,9 @@ Item {
         implicitHeight: toastCol.implicitHeight + 20
         color: "transparent"
         // Pas de toast par-dessus le tiroir de l'historique : il le recouvrirait.
-        visible: islandRight.latestToast !== null && Theme.activePopup === ""
-            && !Theme.notifHistoryVisible
-            && Theme.quietNotifApps.indexOf(islandRight.latestToast ? islandRight.latestToast.appName : "") < 0
+        // La condition vit dans `islandRight.toastVisible`, que le minuteur
+        // d'affichage suit : une seule définition, deux lecteurs.
+        visible: islandRight.toastVisible
 
         Rectangle {
             anchors.fill: parent

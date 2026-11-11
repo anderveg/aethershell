@@ -20,15 +20,17 @@ import Quickshell.Wayland
 // l'entrée. Une cible de type « action » n'est pas rouvrable (il faudrait le
 // client) : son titre reste du texte.
 //
-// Pas de flou sur cette surface : le tiroir occupe presque toute la hauteur,
-// une règle de flou sur son namespace flouterait tout l'écran. Le fond est donc
-// plus dense que celui du panneau (0.92 au lieu de l'opacité des surfaces).
+// Le tiroir prend son verre du composant interne (`FlouFond`) et non d'une règle
+// de flou sur son namespace : sa fenêtre est plein écran (elle porte le capteur
+// de clic extérieur), donc une `layer_rule` flouterait tout l'écran. `FlouFond`
+// redessine le fond d'écran **dans** la surface et ne floute que le tiroir, avec
+// la même intensité que le panneau de configuration.
 // ────────────────────────────────────────────────────────────────────────────
 Item {
     id: root
 
     readonly property int drawerWidth: 380
-    readonly property color surfaceColor: Qt.alpha(Theme.surface, 0.92)
+    readonly property color surfaceColor: Theme.surfaceBg
     property var rows: []
     property int entryCount: 0
     // Ligne sélectionnée au clavier (-1 : aucune). Seules les cartes comptent,
@@ -41,6 +43,8 @@ Item {
     property double openedAt: 0
 
     signal closeRequested()
+
+
 
     // `Quickshell.env()` rend `undefined` pour une variable absente, et non une
     // chaîne vide : un test `!== ""` passait donc toujours, la propriété (typée
@@ -279,6 +283,22 @@ Item {
             radius: Theme.globalRadius
             color: root.surfaceColor
 
+            // Même verre que le panneau de configuration : opacité par
+            // `surfaceColor` (qui suit `shell_opacity`), flou par
+            // `shell_flou_interne`. Le tiroir gardait 0,92 en dur, sans flou.
+            // `FlouFond` ne redessine que le **fond d'écran** : il ne montre
+            // jamais les fenêtres. Le flou derrière le tiroir — celui qui compte
+            // quand une fenêtre est sous lui — vient du compositeur, par
+            // `layer_rule` sur le namespace `shell-notif-history`
+            // (`SHELL_BLUR_NAMESPACES`) ; le verre interne reste pour le cas
+            // « bureau nu », à l'intensité du réglage, comme le panneau.
+            FlouFond {
+                id: verre
+                anchors.fill: parent
+                rayon: parent.radius
+                intensite: Theme.shellFlouInterne
+            }
+
             // Sans cette surface, un clic sur une carte (hors titre, croix ou
             // bouton) traversait le tiroir et atteignait le capteur plein
             // écran : cliquer une notification la refermait.
@@ -461,10 +481,14 @@ Item {
                                 height: histCol.implicitHeight + 16
                                 radius: Theme.globalRadius
                                 readonly property bool selectionne: rowLoader.index === root.selectedRow
+                                // `surfaceVariantBg` (et non `surfaceVariant`) : la carte
+                                // laisse passer le verre du tiroir, comme les cartes du
+                                // panneau. `Qt.lighter` garde l'alpha, donc survol et
+                                // sélection restent translucides.
                                 color: selectionne
-                                    ? Qt.lighter(Theme.surfaceVariant, 1.32)
-                                    : (histMa.containsMouse ? Qt.lighter(Theme.surfaceVariant, 1.12)
-                                                            : Theme.surfaceVariant)
+                                    ? Qt.lighter(Theme.surfaceVariantBg, 1.32)
+                                    : (histMa.containsMouse ? Qt.lighter(Theme.surfaceVariantBg, 1.12)
+                                                            : Theme.surfaceVariantBg)
                                 border.width: selectionne ? 1 : 0
                                 border.color: Theme.accent
                                 Behavior on color { ColorAnimation { duration: 120 } }

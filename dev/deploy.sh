@@ -209,6 +209,63 @@ PRESERVE_CORE="style_vars.json app_vars.json secrets.json autostart.json widgets
 # comparés, et sont réécrits juste après la copie (aucun .upstream possible).
 PRESERVE_HYPR="input.lua binds.lua general.lua"
 
+# dossier_de DST : la famille d'un répertoire cible, pour est_etat_machine.
+dossier_de() {
+    case "$(basename "$1")" in
+        core) echo core ;;
+        hypr|hypr_modular) echo hypr ;;
+        *) echo "" ;;
+    esac
+}
+
+# est_etat_machine NOM DOSSIER : ce fichier appartient-il à CETTE machine ?
+#
+# Règle **unique**, appelée par le pré-vol, la copie et l'élagage. Elle remplace
+# trois jeux qui avaient divergé : le pré-vol protégeait tout `.json` de core/
+# non livré, la copie ne protégeait que `PRESERVE_CORE`, et l'élagage avait sa
+# propre liste. Un fichier pouvait donc être annoncé « protégé » puis élagué —
+# `dependencies.txt` était encore le cas au dernier pré-vol.
+est_etat_machine() {
+    local name="$1" dossier="${2:-}"
+    [ "${DEPLOY_OVERWRITE:-0}" = "1" ] && return 1
+    [ -f "$MARKER" ] || return 1
+
+    case "$name" in
+        *.upstream|*.new|*.tmp|*.tmp.*) return 0 ;;
+        secrets.json|*_cache.json) return 0 ;;
+    esac
+
+    case "$dossier" in
+        core)
+            case " $PRESERVE_CORE " in *" $name "*) return 0 ;; esac
+            # Copié après l'élagage depuis la racine du dépôt : sa place est
+            # décidée par le déploiement, pas par un inventaire.
+            [ "$name" = "dependencies.txt" ] && return 0
+            # Tout .json de core/ qui n'est pas livré est un état de la machine :
+            # composition de la barre, palette, flotte, index du lanceur…
+            case "$name" in
+                *.json)
+                    case " $JSON_DEPLOYES " in *" $name "*) return 1 ;; esac
+                    return 0
+                    ;;
+            esac
+            ;;
+        hypr)
+            # Uniquement l'état : les fichiers d'entrée de l'utilisateur et la
+            # configuration matérielle de cette machine. Les fichiers *régénérés*
+            # par le déploiement (`colors.lua`, `programs.lua`,
+            # `autostart_cmds.txt`, `hypridle.conf`…) ne sont pas de l'état : le
+            # déploiement les réécrit lui-même, et les traiter comme préservés
+            # laisserait un `.upstream` orphelin à chaque passage.
+            case " $PRESERVE_HYPR " in *" $name "*) return 0 ;; esac
+            case "$name" in
+                hardware-*.lua) return 0 ;;
+            esac
+            ;;
+    esac
+    return 1
+}
+
 is_preserved() {
     local name="$1" list="$2" item
     [ "${DEPLOY_OVERWRITE:-0}" = "1" ] && return 1
@@ -247,22 +304,18 @@ copy_dir_files() {
     for f in "$src"/*; do
         [ -f "$f" ] || continue
         name="$(basename "$f")"
-        # core/ : un .json présent sur la cible n'est jamais remplacé, sauf s'il
-        # fait partie des données livrées. Absent = on installe celui du dépôt.
-        case "$dst" in
-            */core)
-                if [ -e "$dst/$name" ] && [[ "$name" == *.json ]] \
-                   && [[ " $JSON_DEPLOYES " != *" $name "* ]]; then
-                    continue
-                fi
-                ;;
-        esac
-        # Fichiers d'état hors core/ (le cas échéant) : même règle, par liste.
-        if [ -e "$dst/$name" ] && [[ " ${NON_ECRASABLES:-} " == *" $name "* ]]; then
-            continue
+        # État de cette machine (voir est_etat_machine) : dans core/ on n'y touche
+        # pas du tout ; ailleurs on garde le fichier et on dépose .upstream.
+        if [ -e "$dst/$name" ]; then
+            local doss
+            doss="$(dossier_de "$dst")"
+            if est_etat_machine "$name" "$doss"; then
+                [ "$doss" = "core" ] && continue
+                sync_file "$f" "$dst/$name"
+                continue
+            fi
         fi
-        if [ -e "$dst/$name" ] && is_preserved "$name" "$list"; then
-            sync_file "$f" "$dst/$name"
+        if [ -e "$dst/$name" ] && [[ " ${NON_ECRASABLES:-} " == *" $name "* ]]; then
             continue
         fi
         cp "$f" "$dst/$name"
@@ -277,11 +330,15 @@ prune_target() {
         [ -f "$f" ] || continue
         name="$(basename "$f")"
         grep -qxF "$name" "$manifest" && continue
+        est_etat_machine "$name" "$(dossier_de "$dst")" && continue
         [ -n "$preserve_list" ] && is_preserved "$name" "$preserve_list" && continue
         case "$name" in
             *.upstream) continue ;;
             hypridle.conf|hyprlock.conf|hyprlock-colors.conf|autostart_cmds.txt|.quickshell_managed) continue ;;
             secrets.json) continue ;;
+            # Copié après l'élagage depuis la racine du dépôt : sans cette ligne,
+            # chaque déploiement l'archivait puis le reposait.
+            dependencies.txt) continue ;;
             # Caches écrits à l'exécution par les services : absents du dépôt par
             # construction, donc jamais « obsolètes ». Sans cette ligne, chaque
             # déploiement les archivait et le shell repartait d'un cache vide.
@@ -579,7 +636,7 @@ preflight_diff() {
         name="$(basename "$f")"
         dst="$CURRENT_HYPR/$name"
         if [ -f "$dst" ]; then
-            if is_preserved "$name" "$PRESERVE_HYPR"; then
+            if est_etat_machine "$name" hypr; then
                 if cmp -s "$f" "$dst"; then
                     list_preserved+=("hypr/$name (protégé, identique)")
                 else
@@ -609,7 +666,7 @@ preflight_diff() {
             [ -f "$f" ] || continue
             name="$(basename "$f")"
             [ -f "$DEV_DIR/hypr_modular/$name" ] && continue
-            is_preserved "$name" "$PRESERVE_HYPR" && continue
+            est_etat_machine "$name" hypr && continue
             case "$name" in
                 *.upstream|hypridle.conf|hyprlock.conf|hyprlock-colors.conf|autostart_cmds.txt|.quickshell_managed|secrets.json|*_cache.json) continue ;;
             esac
@@ -623,10 +680,8 @@ preflight_diff() {
         name="$(basename "$f")"
         dst="$CORE_DIR/$name"
         if [ -f "$dst" ]; then
-            if [[ "$name" == *.json ]] && [[ " $JSON_DEPLOYES " != *" $name "* ]]; then
+            if est_etat_machine "$name" core; then
                 list_preserved+=("quickshell/core/$name (état local protégé)")
-            elif is_preserved "$name" "$PRESERVE_CORE"; then
-                list_preserved+=("quickshell/core/$name (état protégé)")
             elif cmp -s "$f" "$dst"; then
                 count_ident=$((count_ident + 1))
             else
@@ -644,12 +699,39 @@ preflight_diff() {
             [ -f "$f" ] || continue
             name="$(basename "$f")"
             [ -f "$DEV_DIR/core/$name" ] && continue
-            is_preserved "$name" "$PRESERVE_CORE" && continue
+            est_etat_machine "$name" core && continue
             case "$name" in
                 *.upstream|secrets.json|*_cache.json|flotte.json|app_index.json) continue ;;
             esac
             list_pruned+=("quickshell/core/$name")
         done
+    fi
+
+    # 2 bis. Greeter (dev/sddm → quickshell/sddm)
+    if [ -d "$DEV_DIR/sddm" ]; then
+        for f in "$DEV_DIR/sddm"/*; do
+            [ -f "$f" ] || continue
+            name="$(basename "$f")"
+            dst="$QS_DIR/sddm/$name"
+            if [ -f "$dst" ]; then
+                if cmp -s "$f" "$dst"; then
+                    count_ident=$((count_ident + 1))
+                else
+                    stats=$(compute_diff_stats "$dst" "$f")
+                    list_modified+=("quickshell/sddm/$name ($stats)")
+                fi
+            else
+                list_added+=("quickshell/sddm/$name")
+            fi
+        done
+        if [ -d "$QS_DIR/sddm" ]; then
+            for f in "$QS_DIR/sddm"/*; do
+                [ -f "$f" ] || continue
+                name="$(basename "$f")"
+                [ -f "$DEV_DIR/sddm/$name" ] && continue
+                list_pruned+=("quickshell/sddm/$name")
+            done
+        fi
     fi
 
     # 3. Root QML & qmldir
@@ -1019,15 +1101,31 @@ deploy_new_env() {
 
     mkdir -p "$CORE_DIR"
     copy_dir_files "$DEV_DIR/core" "$CORE_DIR" "$PRESERVE_CORE"
-    # La liste des dépendances part avec le shell : le panneau (« Installer les
-    # paquets manquants », onglet Apps & Alertes) la lit à l'exécution dans
-    # core/dependencies.txt, sans savoir où le dépôt a été cloné.
-    cp -f "$DEPS_FILE" "$CORE_DIR/dependencies.txt" || true
     local core_manifest
     core_manifest=$(mktemp)
     (cd "$DEV_DIR/core" && ls -1) > "$core_manifest"
     prune_target "$CORE_DIR" "$core_manifest" "$PRESERVE_CORE"
     rm -f "$core_manifest"
+
+    # Le greeter part avec le shell (`~/.config/quickshell/sddm`) : le module le
+    # cherchait dans le clone et, à défaut, parcourait tout le home. Sur une
+    # machine où le shell est seulement déployé, refresh de palette, miniatures,
+    # installation et désinstallation échouaient. Seuls les fichiers sont copiés :
+    # `out/`, `preview/` et `__pycache__` sont des sorties de l'outil.
+    if [ -d "$DEV_DIR/sddm" ]; then
+        mkdir -p "$QS_DIR/sddm/out/Themes" "$QS_DIR/sddm/out/Backgrounds"
+        for f in "$DEV_DIR/sddm"/*; do
+            [ -f "$f" ] || continue
+            cp -f "$f" "$QS_DIR/sddm/"
+        done
+        chmod +x "$QS_DIR/sddm/install.sh" "$QS_DIR/sddm/greeter-palette" 2>/dev/null || true
+    fi
+    # La liste des dépendances part avec le shell : le panneau (« Installer les
+    # paquets manquants », onglet Apps & Alertes) la lit à l'exécution dans
+    # core/dependencies.txt, sans savoir où le dépôt a été cloné. Copiée **après**
+    # l'élagage : elle ne vit plus dans core/ au dépôt, une seule source à la
+    # racine, et l'élagage l'aurait retirée de la cible juste après la copie.
+    cp -f "$DEPS_FILE" "$CORE_DIR/dependencies.txt" || true
     # Index des applications de la pilule spotlight : données de la machine,
     # pas du dépôt — régénérées à chaque déploiement (et à chaque ouverture).
     if [ -f "$CORE_DIR/app_index.py" ]; then

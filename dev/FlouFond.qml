@@ -35,7 +35,13 @@ Item {
     property real rayon: 0
     // Force du flou : MultiEffect attend 0..1 (1 = flou maximal pour `blurMax`).
     property real flou: 0.85
-    property int flouMax: 48
+    // Rayon du flou **des surfaces**, en pixels. Deux réglages du panneau :
+    // « taille » (le rayon de base) et « passes ». Chez Hyprland, des passes
+    // supplémentaires élargissent la diffusion ; ici, le même effet se lit
+    // en multipliant le rayon (3 passes = le rayon de base, l'ancien rendu
+    // figé à 48 px). Plafonné à 160 px : au-delà, la surface coûte plus
+    // qu'elle ne gagne, et le texte bave.
+    property int flouMax: Math.min(160, Math.round(Theme.shellFlouTaille * Theme.shellFlouPasses / 3))
     // Chemin du fond d'écran courant : lu au démarrage auprès d'awww, avec un
     // repli sur le dossier de fonds si le démon ne répond pas.
     property string fond: ""
@@ -94,11 +100,17 @@ Item {
     readonly property string cheminEcran: racine.nomFond === "" ? ""
         : racine.racineFonds + "profondeur/" + racine.nomFond + "/fond-ecran.png"
     property bool ecranPret: false
+    // Un fond sans profil de profondeur n'a pas ce fichier : sans ce drapeau,
+    // chaque réévaluation de `sourceClipRect` redemandait le fichier absent et Qt
+    // journalisait « Cannot open » à chaque fois (13 par minute, mesuré).
+    property bool ecranIndisponible: false
+    onCheminEcranChanged: racine.ecranIndisponible = false
 
     Image {
         id: imageEcran
         anchors.fill: parent
-        source: racine.cheminEcran !== "" ? "file://" + racine.cheminEcran : ""
+        source: (racine.cheminEcran !== "" && !racine.ecranIndisponible)
+                ? "file://" + racine.cheminEcran : ""
         // La fenêtre du fond à montrer se choisit par `sourceClipRect`, pas en
         // déplaçant l'image : MultiEffect aligne la texture de sa source sur son
         // propre coin, donc une image décalée sortait déformée (le fond de la
@@ -114,7 +126,14 @@ Item {
         cache: true
         visible: false
         layer.enabled: true
-        onStatusChanged: racine.ecranPret = (status === Image.Ready)
+        onStatusChanged: {
+            if (status === Image.Error) {
+                racine.ecranIndisponible = true
+                racine.ecranPret = false
+            } else {
+                racine.ecranPret = (status === Image.Ready)
+            }
+        }
     }
 
     // Le fond est décodé une fois, à petite taille : le flou efface la
