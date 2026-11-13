@@ -309,7 +309,7 @@ Item {
             // 5a : surface unique derrière les trois groupes
             Rectangle {
                 id: capsuleBg
-                visible: Theme.barMerged && !Theme.barGapsTransparent
+                visible: Theme.barStyle !== "island" && Theme.barMerged && !Theme.barGapsTransparent
                 anchors.fill: parent
                 radius: Theme.pillRadius
                 // Teinte au-dessus du verre : peinte sous le FlouFond, elle laissait
@@ -351,7 +351,7 @@ Item {
             // ont la même courbe, la barre ne se coupe pas à angle droit.
             Rectangle {
                 id: zoneGauche
-                visible: Theme.barMerged && Theme.barGapsTransparent
+                visible: Theme.barStyle !== "island" && Theme.barMerged && Theme.barGapsTransparent
                 x: 0
                 width: Math.max(1, leftLoader.x + leftLoader.width)
                 anchors.verticalCenter: parent.verticalCenter
@@ -379,7 +379,7 @@ Item {
 
             Rectangle {
                 id: zoneCentre
-                visible: Theme.barMerged && Theme.barGapsTransparent
+                visible: Theme.barStyle !== "island" && Theme.barMerged && Theme.barGapsTransparent
                 x: centerLoader.x
                 width: Math.max(1, centerLoader.width)
                 anchors.verticalCenter: parent.verticalCenter
@@ -407,7 +407,7 @@ Item {
 
             Rectangle {
                 id: zoneDroite
-                visible: Theme.barMerged && Theme.barGapsTransparent
+                visible: Theme.barStyle !== "island" && Theme.barMerged && Theme.barGapsTransparent
                 x: rightLoader.x
                 width: Math.max(1, parent.width - rightLoader.x)
                 anchors.verticalCenter: parent.verticalCenter
@@ -439,14 +439,18 @@ Item {
             Item {
                 id: slotGauche
                 x: zoneGauche.x + zoneGauche.width
-                width: Math.max(0, zoneCentre.x - x)
+                width: (Theme.barStyle === "island" && dynamicIslandLoader.item)
+                    ? Math.max(0, dynamicIslandLoader.x - x)
+                    : Math.max(0, zoneCentre.x - x)
                 anchors.verticalCenter: parent.verticalCenter
                 height: Theme.barHeight
             }
 
             Item {
                 id: slotDroit
-                x: zoneCentre.x + zoneCentre.width
+                x: (Theme.barStyle === "island" && dynamicIslandLoader.item)
+                    ? dynamicIslandLoader.x + dynamicIslandLoader.width
+                    : zoneCentre.x + zoneCentre.width
                 width: Math.max(0, zoneDroite.x - x)
                 anchors.verticalCenter: parent.verticalCenter
                 height: Theme.barHeight
@@ -479,6 +483,8 @@ Item {
             // LEFT ISLAND: Launcher + Workspaces
             Loader {
                 id: leftLoader
+                visible: Theme.barStyle !== "island"
+                active: Theme.barStyle !== "island"
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 source: "island_left.qml"
@@ -487,6 +493,8 @@ Item {
             // CENTER ISLAND: Clock, Date, Hover Weather, Calendar & Config Trigger
             Loader {
                 id: centerLoader
+                visible: Theme.barStyle !== "island"
+                active: Theme.barStyle !== "island"
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.verticalCenter: parent.verticalCenter
                 source: "island_center.qml"
@@ -495,9 +503,21 @@ Item {
             // RIGHT ISLAND: Systray, System Controls, Network & Power Menu
             Loader {
                 id: rightLoader
+                visible: Theme.barStyle !== "island"
+                active: Theme.barStyle !== "island"
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 source: "island_right.qml"
+            }
+
+            // DYNAMIC ISLAND: Îlot central dynamique unique (mode island)
+            Loader {
+                id: dynamicIslandLoader
+                visible: Theme.barStyle === "island"
+                active: Theme.barStyle === "island"
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.verticalCenter: parent.verticalCenter
+                source: "DynamicIsland.qml"
             }
 
             // Séparateurs de groupes : 9 % de la couleur de texte, 1 px.
@@ -533,10 +553,11 @@ Item {
     }
 
     // OSD overlay (volume / brightness): temporary centered pill, auto-hides
+    // En mode island, l'OSD est directement projeté dans l'îlot central
     PanelWindow {
         id: osdWindow
         screen: topBarWindow.screen
-        visible: Theme.osdVisible || osdBox.opacity > 0
+        visible: (Theme.barStyle !== "island") && (Theme.osdVisible || osdBox.opacity > 0)
         anchors {
             bottom: true
             left: true
@@ -676,6 +697,7 @@ Item {
     // Spotlight Pill: bottom-centre launcher (remplace fuzzel)
     PanelWindow {
         id: spotlightWindow
+        property bool loaded: false
         screen: topBarWindow.screen
         visible: Theme.spotlightVisible
         anchors {
@@ -691,6 +713,13 @@ Item {
         WlrLayershell.keyboardFocus: Theme.spotlightVisible ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
         WlrLayershell.namespace: "shell-spotlight"
 
+        Connections {
+            target: Theme
+            function onSpotlightVisibleChanged() {
+                if (Theme.spotlightVisible) spotlightWindow.loaded = true
+            }
+        }
+
         // Un clic hors de la pilule ferme la surface — sauf juste après
         // l'ouverture, où le relâchement du clic d'invocation arrive ici.
         MouseArea {
@@ -704,6 +733,8 @@ Item {
         Loader {
             id: spotlightLoader
             anchors.fill: parent
+            active: spotlightWindow.loaded
+            visible: Theme.spotlightVisible
             source: "spotlight.qml"
         }
     }
@@ -801,7 +832,7 @@ Item {
 
     Process {
         id: cheatsheetProc
-        command: ["python3", Quickshell.shellPath("core/config_manager.py"), "state"]
+        command: ["python3", Quickshell.shellPath("core/config_manager.py"), "binds"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
@@ -886,8 +917,10 @@ Item {
     // dans first_run.qml ; elle ne s'affiche que tant que `first_run_completed`
     // est faux dans style_vars.json.
     // ────────────────────────────────────────────────────────────────────────
-    FirstRun {
+    Loader {
         id: assistantPremierLancement
+        active: !Theme.firstRunCompleted
+        source: "first_run.qml"
     }
 
     // ────────────────────────────────────────────────────────────────────────
@@ -1188,6 +1221,15 @@ Item {
                         if (item) {
                             item.options = widgetWindow.w.options || ({})
                             item.widgetId = widgetWindow.w.id || ""
+                        }
+                    }
+                }
+
+                Connections {
+                    target: widgetWindow
+                    function onWChanged() {
+                        if (widgetLoader.item) {
+                            widgetLoader.item.options = widgetWindow.w.options || ({})
                         }
                     }
                 }

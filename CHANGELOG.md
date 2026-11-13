@@ -5,6 +5,23 @@ sémantique. Tant que le format des fichiers de configuration (`style_vars.json`
 `bar_applets.json`, `widgets.json`) n'est pas figé, les versions restent en `0.x` : une
 montée de mineure peut demander une adaptation des réglages.
 
+## [0.2.2] — 2026-11-13
+
+### Ajouté
+
+- **Mode Îlot dynamique (`DynamicIsland`)** : documentation complète de la disposition commutable dans les README en français et en anglais ([`README.md`](README.md), [`docs/README.md`](docs/README.md)).
+
+### Modifié
+
+- **Largeur compacte de l'îlot dynamique** ([`dev/DynamicIsland.qml`](dev/DynamicIsland.qml)) : réduction de la taille de repos de 220 px à 90 px max pour un rendu minimaliste et épuré au centre de la barre.
+
+### Corrigé
+
+- **OSD du volume et de la luminosité dans l'îlot dynamique** ([`dev/DynamicIsland.qml`](dev/DynamicIsland.qml)) : extension animée automatique de la pilule à 160 px minimum dès l'apparition de l'OSD pour éviter tout débordement de la jauge et du pourcentage, avec retour fluide au repos à expiration.
+- **État Wi-Fi à la bascule de style de barre** ([`dev/ReseauApplet.qml`](dev/ReseauApplet.qml)) : synchronisation immédiate et binding direct sur `Theme.systemInfo` à l'instanciation du composant, supprimant le clignotement transitoire « Déconnecté » avant le rafraîchissement périodique.
+- **Ancrage et maintien du calendrier dans l'îlot dynamique** ([`dev/DynamicIsland.qml`](dev/DynamicIsland.qml), [`dev/main.qml`](dev/main.qml)) : positionnement direct sous la pilule et maintien forcé de l'état étendu tant que la popup du calendrier est ouverte.
+- **Rendu visuel des ombres et du flou** ([`dev/FlouFond.qml`](dev/FlouFond.qml)) : masque d'arrondi propre sur `MultiEffect` et alignement sans redondance.
+
 ## [0.2.1] — 2026-11-12
 
 ### Ajouté
@@ -432,6 +449,7 @@ notifications, capture, et les services Python qui les alimentent.
 - Veille planifiée qui cochait les étapes du fichier de tâches ; la coche est désormais
   manuelle ou faite à la demande.
 
+[0.2.2]: https://github.com/anderveg/aethershell/releases/tag/v0.2.2
 [0.2.1]: https://github.com/anderveg/aethershell/releases/tag/v0.2.1
 [0.2.0]: https://github.com/anderveg/aethershell/releases/tag/v0.2.0
 [0.1.5]: https://github.com/anderveg/aethershell/releases/tag/v0.1.5

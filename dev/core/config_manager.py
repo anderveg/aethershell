@@ -64,23 +64,6 @@ MATUGEN_SCHEMES = {
     "scheme-content", "scheme-fidelity", "scheme-rainbow",
 }
 
-# Variantes du flou de Hyprland 0.57 (`decoration:blur:variant`). L'index de
-# chacune est figé dans le binaire (kawase 0, frost 1, … haze 10) ; ici on ne
-# manipule que les noms, Hyprland les accepte en clair dans `hl.config`.
-BLUR_VARIANTS = (
-    "kawase",
-    "frost",
-    "ripple",
-    "drops",
-    "water",
-    "fluid_jar",
-    "prism",
-    "heat_shimmer",
-    "acrylic",
-    "aurora",
-    "haze",
-)
-
 # Explicit Workspace 1..10 keysym nomenclature per keyboard layout
 WORKSPACE_KEYS_BY_LAYOUT = {
     "fr": ["ampersand", "eacute", "quotedbl", "apostrophe", "parenleft", "minus", "egrave", "underscore", "ccedilla", "agrave"],
@@ -448,7 +431,7 @@ def apply_shell_blur(data=None):
     """Rewrite the shell-blur block of general.lua from style_vars.json, then reload Hyprland."""
     src = data if data is not None else load_json(STYLE_FILE)
     enabled = bool(src.get("shell_blur_enabled", True))
-    alpha = round(max(0.0, min(1.0, float(src.get("shell_blur_alpha", 0.4)))), 2)
+    alpha = round(max(0.0, min(1.0, float(src.get("shell_blur_alpha", 0.3)))), 2)
     popups = bool(src.get("shell_blur_popups", True))
     widget_namespaces = [f"shell-widget-{w.get('id')}" for w in load_widgets()
                          if w.get("blur", True) and w.get("id")]
@@ -782,6 +765,8 @@ def update_style_var(key, value):
         data[key] = round(max(0.5, min(4.0, float(value))), 1)
     elif key == "viz_couleur" and str(value) in VIZ_COULEURS:
         data[key] = str(value)
+    elif key == "bar_style" and str(value) in ("classic", "island"):
+        data[key] = str(value)
     elif key == "bar_gaps_transparent":
         # Espaces entre les îlots de la barre du haut : booléen, relu par
         # Theme.qml (barGapsTransparent), qui découpe le fond en trois zones.
@@ -825,13 +810,6 @@ def update_style_var(key, value):
         data[key] = max(1, min(8, int(float(value))))
     elif key == "blur_vibrancy":
         data[key] = max(0.0, min(1.0, float(value)))
-    elif key == "blur_variant" and str(value) in BLUR_VARIANTS:
-        # La variante est un nom : Hyprland le résout lui-même (les index
-        # changent d'une version à l'autre, pas les noms). On l'inscrit aussi
-        # dans general.lua pour qu'un `hyprctl reload` ne reprenne pas le
-        # défaut du fichier.
-        data[key] = str(value)
-        inscrire_variante_general(str(value))
     elif key == "shell_flou_interne":
         # Verre dépoli autonome des surfaces (MultiEffect) : 0 = éteint, 1 =
         # opaque. Appliqué par Theme.qml, aucun fichier Hyprland à réécrire.
@@ -866,6 +844,8 @@ def update_style_var(key, value):
     elif key == "widgets_multieffect":
         # Masque de profondeur rendu par un MultiEffect par widget au lieu du
         # calque plein écran. Booléen relu par Theme.qml (widgetsMultieffect).
+        data[key] = str(value).lower() in ("true", "1", "yes")
+    elif key == "first_run_completed":
         data[key] = str(value).lower() in ("true", "1", "yes")
     elif key in ("user_location_ville", "user_location_tz"):
         # Localisation de l'utilisateur : ville affichée et fuseau. Le fuseau
@@ -1940,6 +1920,7 @@ def get_full_config_state():
         "global_opacity": float(style_data.get("global_opacity", 0.7)),
         "shell_opacity": float(style_data.get("shell_opacity", 0.7)),
         "cheatsheet_opacity": float(style_data.get("cheatsheet_opacity", 0.88)),
+        "bar_style": str(style_data.get("bar_style", "classic")),
         "bar_border": bool(style_data.get("bar_border", True)),
         "bar_gaps_transparent": bool(style_data.get("bar_gaps_transparent", False)),
         "viz_fps": int(style_data.get("viz_fps", 30)),
@@ -1962,9 +1943,8 @@ def get_full_config_state():
         "blur_size": int(style_data.get("blur_size", 3)),
         "blur_passes": int(style_data.get("blur_passes", 3)),
         "blur_vibrancy": float(style_data.get("blur_vibrancy", 0.1696)),
-        "blur_variant": str(style_data.get("blur_variant", "kawase")),
         "shell_blur_enabled": bool(style_data.get("shell_blur_enabled", True)),
-        "shell_blur_alpha": float(style_data.get("shell_blur_alpha", 0.4)),
+        "shell_blur_alpha": float(style_data.get("shell_blur_alpha", 0.3)),
         "shell_blur_popups": bool(style_data.get("shell_blur_popups", True)),
         "shell_flou_interne": float(style_data.get("shell_flou_interne", 0.0)),
         "shell_flou_taille": int(style_data.get("shell_flou_taille", 48)),
@@ -2104,6 +2084,8 @@ if __name__ == "__main__":
     elif action == "rotate" and len(sys.argv) > 2:
         set_screen_rotation(sys.argv[2])
         print(json.dumps(get_full_config_state()))
+    elif action == "binds":
+        print(json.dumps({"ok": True, "binds": get_binds_list()}, ensure_ascii=False))
     elif action == "bind_set" and len(sys.argv) > 3:
         set_keybind(sys.argv[2], " ".join(sys.argv[3:]))
         print(json.dumps(get_full_config_state()))
