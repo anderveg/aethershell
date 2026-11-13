@@ -21,6 +21,7 @@ jamais faire geler la pilule.
 from __future__ import annotations
 
 import ast
+import heapq
 import json
 import math
 import os
@@ -339,6 +340,29 @@ def _rg():
     return shutil.which("rg") or ""
 
 
+INDEX_FICHIERS_TTL = 300
+
+
+def _lister_fichiers(rg):
+    """Liste des fichiers sous HOME, avec cache disque 5 min pour éviter un scan rg à chaque touche."""
+    index = CACHE / "fichiers_index.txt"
+    try:
+        if index.exists() and (time.time() - index.stat().st_mtime) < INDEX_FICHIERS_TTL:
+            return index.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        pass
+    sortie = borne([rg, "--files", str(HOME)], timeout=4.0)
+    if sortie:
+        try:
+            CACHE.mkdir(parents=True, exist_ok=True)
+            tmp = CACHE / f"fichiers_index.{os.getpid()}.tmp"
+            tmp.write_text(sortie, encoding="utf-8")
+            os.replace(tmp, index)
+        except OSError:
+            pass
+    return sortie.splitlines()
+
+
 def fichiers(texte, limite=LIMITE_DEFAUT):
     q = texte.strip().lstrip("/").strip()
     if q == "":
@@ -349,9 +373,8 @@ def fichiers(texte, limite=LIMITE_DEFAUT):
     # Sans --hidden : les dossiers cachés (~/.cache, ~/.cargo, ~/.local/share)
     # noieraient les résultats — 642 000 fichiers au lieu de 31 000, et les
     # premiers résultats seraient des README de caches.
-    sortie = borne([rg, "--files", str(HOME)], timeout=4.0)
     tries = []
-    for ligne in sortie.splitlines():
+    for ligne in _lister_fichiers(rg):
         if ligne == "":
             continue
         chemin = ligne
@@ -364,10 +387,10 @@ def fichiers(texte, limite=LIMITE_DEFAUT):
             # À score égal, le fichier le moins enfoui est le plus probable :
             # ~/dev/projet/README.md avant ~/.cargo/registry/.../README.md.
             tries.append((s, chemin.count("/"), chemin, nom))
-    tries.sort(key=lambda x: (-x[0], x[1], x[2]))
+    top = heapq.nsmallest(limite, tries, key=lambda x: (-x[0], x[1], x[2]))
     return [resultat("fichier", nom, chemin.replace(str(HOME) + "/", "~/"),
                      "", "fichier", action="open", arg=chemin)
-            for _, _prof, chemin, nom in tries[:limite]]
+            for _, _prof, chemin, nom in top]
 
 
 # Ce qui n'est jamais une réponse utile : dépendances, caches, historique Git,
@@ -405,10 +428,10 @@ def contenu(texte, limite=6):
                          for g in ("*.pdf", "*.docx", "*.odt", "*.odp"))
     pre_option = (f"--pre {shlex.quote(str(pre))} --pre-glob '*.pdf' "
                   f"--pre-glob '*.docx' --pre-glob '*.odt' --pre-glob '*.odp'")
-    base = (f"{rg} -n --no-heading --max-count 1 -i -F {shlex.quote(q)} "
+    base = (f"{shlex.quote(rg)} -n --no-heading --max-count 1 -i -F {shlex.quote(q)} "
             f"{exclusions}")
     commande = (f"{{ {base} {doc_globs} {pre_option} {shlex.quote(str(HOME))} "
-                f"2>/dev/null | head -c 300000 ; "
+                f"2>/dev/null | head -c 300000 ; echo '' ; "
                 f"{base} -g '!*.pdf' -g '!*.docx' -g '!*.odt' -g '!*.odp' "
                 f"{shlex.quote(str(HOME))} 2>/dev/null | head -c 300000 ; }}")
     sortie = borne_etat(["sh", "-c", commande], timeout=12.0)
@@ -761,11 +784,11 @@ def emoji(texte, limite=9):
             s = max(s, local)
         if s > 0:
             tries.append((s - len(nom) / 50.0, e))
-    tries.sort(key=lambda x: -x[0])
+    top = heapq.nlargest(limite, tries, key=lambda x: x[0])
     return [resultat("emoji", e["emoji"] + "  " + e.get("name", ""),
                      e.get("category", ""), "", "émoji",
                      action="copy", arg=e["emoji"])
-            for _, e in tries[:limite]]
+            for _, e in top]
 
 
 # ── processus ────────────────────────────────────────────────────────────────
@@ -818,10 +841,10 @@ def signets(texte, limite=8):
         s = max(score(q, titre or ""), score(q, url or "") - 10) if q else 1
         if s > 0:
             tries.append((s, titre or url, url))
-    tries.sort(key=lambda x: -x[0])
+    top = heapq.nlargest(limite, tries, key=lambda x: x[0])
     return [resultat("signet", titre or url, url, "", "signet",
                      action="open-url", arg=url)
-            for _, titre, url in tries[:limite]]
+            for _, titre, url in top]
 
 
 # ── aide ─────────────────────────────────────────────────────────────────────
