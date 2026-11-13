@@ -30,7 +30,7 @@ Item {
         { idx: 0, glyph: "widgets", label: "Contrôles",        src: "IslandTabControles.qml" },
         { idx: 1, glyph: "music",   label: "Média & Son",      src: "IslandTabMedia.qml" },
         { idx: 2, glyph: "bell",    label: "Alertes & Tâches", src: "IslandTabAlertes.qml" },
-        { idx: 3, glyph: "monitor", label: "Système & Réseau", src: "IslandTabSysteme.qml" },
+        { idx: 3, glyph: "cog",     label: "Système & Réseau", src: "IslandTabSysteme.qml" },
         { idx: 4, glyph: "palette", label: "Apparence",        src: "IslandTabApparence.qml" }
     ]
 
@@ -180,17 +180,6 @@ Item {
                                 ? Qt.alpha(Theme.accent, 0.20)
                                 : (tabMa.containsMouse ? Qt.alpha(Theme.fg, 0.07) : "transparent")
                             Behavior on color { ColorAnimation { duration: 140 } }
-
-                            // Liseré vertical d'accent à gauche
-                            Rectangle {
-                                visible: parent.active
-                                anchors.left: parent.left
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: 3
-                                height: 20
-                                radius: 1.5
-                                color: Theme.accent
-                            }
 
                             RowLayout {
                                 anchors.fill: parent

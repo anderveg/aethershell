@@ -181,7 +181,7 @@ Item {
     height: panelOpen ? 420 : Theme.barHeight
     Behavior on height {
         NumberAnimation {
-            duration: 240
+            duration: Theme.panelAnimDuration
             easing.type: Easing.OutCubic
         }
     }
@@ -193,10 +193,9 @@ Item {
     readonly property real expandedWidth: Math.max(
         460,
         leftApplets.implicitWidth
-        + (root.isMediaActive ? mediaDetailRow.implicitWidth : clockDateRow.implicitWidth)
+        + clockDateRow.implicitWidth
         + rightApplets.implicitWidth
         + (Theme.showConfigButton ? 36 : 0)
-        + 32
         + Theme.padH * 3 + 28
     )
 
@@ -204,7 +203,7 @@ Item {
 
     Behavior on width {
         NumberAnimation {
-            duration: 240
+            duration: Theme.panelAnimDuration
             easing.type: Easing.OutCubic
         }
     }
@@ -214,7 +213,7 @@ Item {
         id: bgRect
         anchors.fill: parent
         radius: root.panelOpen ? Math.max(Theme.pillRadius, 18) : Theme.pillRadius
-        Behavior on radius { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+        Behavior on radius { NumberAnimation { duration: Math.max(80, Theme.panelAnimDuration - 20); easing.type: Easing.OutCubic } }
         color: "transparent"
 
         FlouFond {
@@ -226,11 +225,8 @@ Item {
         Rectangle {
             anchors.fill: parent
             radius: bgRect.radius
-            color: Theme.barBg
-            opacity: root.panelOpen
-                ? Math.min(1.0, Theme.shellOpacity + 0.18)
-                : (root.expanded ? Math.min(1.0, Theme.shellOpacity + 0.12) : Theme.shellOpacity)
-            Behavior on opacity { NumberAnimation { duration: 180 } }
+            color: root.panelOpen ? Theme.surfaceBg : Theme.barBg
+            Behavior on color { ColorAnimation { duration: 180 } }
         }
 
         border.color: (root.isCalendarOpen || root.panelOpen) ? Theme.accentMuted : Theme.accent
@@ -252,6 +248,13 @@ Item {
         opacity: (root.expanded || root.panelOpen) ? 0.0 : 1.0
         visible: opacity > 0.05
         Behavior on opacity { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+
+        // Clic sur la pilule compacte : ouvre le panneau de raccourcis (façon Android)
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.ouvrirPanneau(0)
+        }
 
         // 1. OSD actif : affiche le volume / luminosité dans la pilule
         Row {
@@ -287,7 +290,7 @@ Item {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: Math.round(Theme.osdValue) + "%"
-                font.family: Theme.fontFamily
+                font.family: Theme.fontUi
                 font.pixelSize: Theme.textXs
                 font.weight: Font.Bold
                 color: Theme.fg
@@ -301,10 +304,10 @@ Item {
             spacing: 12
             visible: !Theme.osdVisible
 
-            // Horloge principale sans glyphe
+            // Horloge principale sans glyphe (clic -> panneau étendu)
             Text {
                 text: Qt.formatTime(clock.date, "HH:mm")
-                font.family: Theme.fontFamily
+                font.family: Theme.fontUi
                 font.pixelSize: Theme.textSm
                 font.weight: Font.Bold
                 color: Theme.fg
@@ -313,7 +316,7 @@ Item {
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: Theme.activePopup = (Theme.activePopup === "calendar" ? "" : "calendar")
+                    onClicked: root.ouvrirPanneau(0)
                 }
             }
 
@@ -343,7 +346,7 @@ Item {
                     Text {
                         anchors.centerIn: parent
                         text: root.isPlaying ? "󰏤" : "󰐊" // pause / play
-                        font.family: Theme.fontFamily
+                        font.family: Theme.fontUi
                         font.pixelSize: 9
                         color: Theme.accent
                     }
@@ -363,7 +366,7 @@ Item {
                         if (!t) return "Audio"
                         return t.length > 16 ? (t.substring(0, 15) + "…") : t
                     }
-                    font.family: Theme.fontFamily
+                    font.family: Theme.fontUi
                     font.pixelSize: 11
                     font.weight: Font.Medium
                     color: Theme.accent
@@ -393,34 +396,32 @@ Item {
             anchors.rightMargin: Theme.padH
             spacing: 12
 
-            // Côté Gauche : Workspaces / Lanceur (musique exclue car intégrée au centre)
+            // Côté Gauche : Workspaces / Programmes minimisés / Systray uniquement
             Item {
                 Layout.preferredWidth: leftApplets.implicitWidth
                 Layout.fillHeight: true
                 AppletRow {
                     id: leftApplets
                     ile: "haut:debut"
-                    exclude: ["musique"]
+                    include: ["systray", "workspaces", "minimise"]
                     anchors.verticalCenter: parent.verticalCenter
                 }
             }
 
-            // Centre : Horloge + Date cliquable (Calendrier) OU Média détaillé
+            // Centre : Horloge + Date (clic -> panneau étendu ; plus de lecteur dans la barre déployée)
             Item {
-                Layout.preferredWidth: root.isMediaActive ? mediaDetailRow.implicitWidth : clockDateRow.implicitWidth
+                Layout.preferredWidth: clockDateRow.implicitWidth
                 Layout.fillWidth: false
                 Layout.fillHeight: true
 
-                // Si aucun média : Horloge + Date
                 Row {
                     id: clockDateRow
-                    visible: !root.isMediaActive
                     anchors.centerIn: parent
                     spacing: 8
 
                     Text {
                         text: Qt.formatTime(clock.date, "HH:mm")
-                        font.family: Theme.fontFamily
+                        font.family: Theme.fontUi
                         font.pixelSize: Theme.textSm
                         font.weight: Font.Bold
                         color: Theme.fg
@@ -429,7 +430,7 @@ Item {
 
                     Text {
                         text: Qt.formatDate(clock.date, "ddd d MMM")
-                        font.family: Theme.fontFamily
+                        font.family: Theme.fontUi
                         font.pixelSize: Theme.textSm
                         font.weight: Font.Medium
                         color: Theme.fg
@@ -437,127 +438,22 @@ Item {
                     }
                 }
 
-                // Si média actif : Titre + Contrôles Précédent / Play / Suivant
-                Row {
-                    id: mediaDetailRow
-                    visible: root.isMediaActive
-                    anchors.centerIn: parent
-                    spacing: 10
-
-                    Text {
-                        text: ""
-                        font.family: Theme.fontFamily
-                        font.pixelSize: 11
-                        color: Theme.accent
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-
-                    Text {
-                        text: {
-                            let t = root.mediaTitle
-                            let a = root.mediaArtist
-                            if (!t) return "Audio"
-                            let s = a ? (t + " — " + a) : t
-                            return s.length > 28 ? (s.substring(0, 26) + "…") : s
-                        }
-                        color: Theme.accent
-                        font.pixelSize: 12
-                        font.weight: Font.Medium
-                        font.family: Theme.fontFamily
-                        anchors.verticalCenter: parent.verticalCenter
-                    }
-
-                    // Précédent
-                    Text {
-                        text: ""
-                        font.family: Theme.fontFamily
-                        font.pixelSize: 11
-                        color: prevMouse.containsMouse ? Theme.accent : Qt.alpha(Theme.fg, 0.7)
-                        anchors.verticalCenter: parent.verticalCenter
-                        MouseArea {
-                            id: prevMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: if (root.activePlayer) root.activePlayer.previous()
-                        }
-                    }
-
-                    // Play / Pause
-                    Text {
-                        text: root.isPlaying ? "" : ""
-                        font.family: Theme.fontFamily
-                        font.pixelSize: 12
-                        color: playMouse.containsMouse ? Theme.accent : Theme.fg
-                        anchors.verticalCenter: parent.verticalCenter
-                        MouseArea {
-                            id: playMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: if (root.activePlayer) root.activePlayer.togglePlaying()
-                        }
-                    }
-
-                    // Suivant
-                    Text {
-                        text: ""
-                        font.family: Theme.fontFamily
-                        font.pixelSize: 11
-                        color: nextMouse.containsMouse ? Theme.accent : Qt.alpha(Theme.fg, 0.7)
-                        anchors.verticalCenter: parent.verticalCenter
-                        MouseArea {
-                            id: nextMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: if (root.activePlayer) root.activePlayer.next()
-                        }
-                    }
-                }
-
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    enabled: !root.isMediaActive
-                    onClicked: Theme.activePopup = (Theme.activePopup === "calendar" ? "" : "calendar")
+                    onClicked: root.ouvrirPanneau(0)
                 }
             }
 
-            // Côté Droit : Applets système, réseau, systray, batterie, etc.
-            // L'applet "musique" est exclue pour éviter le doublon avec le lecteur central
+            // Côté Droit : Systray / Workspaces / Programmes minimisés uniquement
             Item {
                 Layout.preferredWidth: rightApplets.implicitWidth
                 Layout.fillHeight: true
                 AppletRow {
                     id: rightApplets
                     ile: "haut:fin"
-                    exclude: ["musique"]
+                    include: ["systray", "workspaces", "minimise"]
                     anchors.verticalCenter: parent.verticalCenter
-                }
-            }
-
-            // Bouton d'ouverture du panneau complet de l'îlot (5 onglets)
-            Rectangle {
-                Layout.preferredWidth: 24
-                Layout.preferredHeight: 24
-                Layout.alignment: Qt.AlignVCenter
-                radius: Theme.globalRadius
-                color: islandPanelBtnMa.containsMouse ? Qt.alpha(Theme.accent, 0.24) : Qt.alpha(Theme.fg, 0.08)
-
-                Icon {
-                    anchors.centerIn: parent
-                    glyph: "widgets"
-                    size: Theme.iconSm
-                    color: islandPanelBtnMa.containsMouse ? Theme.accent : Theme.fg
-                }
-
-                MouseArea {
-                    id: islandPanelBtnMa
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.ouvrirPanneau(0)
                 }
             }
 
@@ -604,7 +500,8 @@ Item {
         Loader {
             id: islandPanelLoader
             anchors.fill: parent
-            active: root.panelOpen || root.height > Theme.barHeight + 20
+            active: true
+            asynchronous: true
             source: "IslandPanel.qml"
             onLoaded: {
                 if (!item) return
