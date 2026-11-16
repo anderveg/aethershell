@@ -9,6 +9,101 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **`x.yy.x.x`** : ajout de fonctionnalités décisives (ex. : ajout de l'Îlot dynamique).
 - **Version majeure (`y.x.x.x`)** : conservation du schéma déjà en place (proposée lorsque l'ampleur des changements le justifie ; décision finale validée par l'utilisateur).
 
+## [0.3.8.0] — 2026-11-16
+
+### Ajouté
+- **Îlot dynamique tout-en-un (façon Impasto)** :
+  - **Sélecteur de fond d'écran inline (`SUPER + W`)** (`dev/DynamicIsland.qml`, `dev/Theme.qml`, `dev/hypr_modular/binds.lua`) : carrousel horizontal de miniatures agrandies, submap dédiée `aether-wp` (navigation molette/flèches, `Entrée` applique et ferme), bouton *Aléatoire*.
+  - **Lanceur d'applications inline (`SUPER + R`)** (`dev/DynamicIsland.qml`, `dev/Theme.qml`) : recherche temps réel (`app_index.json`, `launch_history.json`, commandes `>`, prestataires `launcher_service.py` avec `--query` / `--limit` et état *« Recherche… »*).
+  - **Notes rapides / Post-its inline (`SUPER + N`)** (`dev/DynamicIsland.qml`, `dev/IslandPanel.qml`, `dev/Theme.qml`) : multi-notes auto-sauvegardées dans `~/.cache/quickshell/quick_notes.json`, copie presse-papiers et bouton *Bureau* pour épingler sur le bureau ; masquage de `spotlightRestWindow` en mode `island`.
+- **Refonte des widgets du bureau** :
+  - **Mode édition directe & Style Glass/Carte** (`dev/main.qml`, `dev/OngletBureau.qml`, `dev/Theme.qml`, `dev/core/config_manager.py`) : poignées visuelles, glisser-déposer direct avec aimantation grille `16 px`, barre d'actions rapide par widget (`−`/`+` échelle, style `glass` via `SurfaceFloutee` vs `transparent`, suppression), et bandeau de contrôle.
+  - **Catalogue visuel 2 colonnes & Nouveaux widgets** (`dev/widgets/notes.qml`, `dev/widgets/sticker.qml`, `dev/OngletBureau.qml`, `dev/config_panel.qml`) : widgets *Notes rapides* (synchronisé avec `quick_notes.json` + pastilles multi-notes + édition `✎`) et *Sticker / Image* (PNG/SVG/WebP).
+- **Cohérence visuelle & Thémage bout-en-bout** (`dev/core/sync_apps_theme.py`, `dev/core/generate_rofi_theme.sh`, `dev/DynamicIsland.qml`, `dev/OverviewOverlay.qml`, `dev/SubmapWhichKey.qml`) : propagation automatique de la palette active vers GTK 3/4, `gsettings color-scheme` et Qt5ct/Qt6ct, et unification des courbes/durées d'animation sur `Theme.panelAnimDuration` (`Easing.OutCubic`).
+
+### Modifié / Corrigé
+- **Raccourcis Hyprland** (`dev/hypr_modular/binds.lua`) : `SUPER + G` pour la Vue d'ensemble des fenêtres (`OverviewOverlay`), `SUPER + ,` / `SUPER + SHIFT + ,` (`hl.dsp.exec_cmd`) pour le scratchpad.
+- **ONLYOFFICE** (`dev/hypr_modular/windows.lua`) : ajout de `no_blur = true, no_shadow = true` sur `opaque-onlyoffice`.
+
+## [0.3.11.00] — 2026-11-16
+
+### Ajouté
+- **Quick Toggles enrichis** (`dev/IslandTabControles.qml`, `dev/Theme.qml`, `dev/Icon.qml`) : tuile **Caffeine** (`systemd-inhibit --what=idle`), tuile **Performance** (`powerprofilesctl`), sélecteur de sortie audio instantané (`pactl`) et colonne de droite scrollable (`Flickable`).
+- **Scratchpads visuels** (`dev/hypr_modular/binds.lua`, `dev/IslandTabControles.qml`) : raccourcis `SUPER + ,` / `SUPER + SHIFT + ,` (`comma`) pour `special:scratchpad` et barre de rappel rapide dans l'onglet Contrôles.
+- **Vue d'ensemble des fenêtres / « Mission Control »** (`dev/OverviewOverlay.qml`, `dev/main.qml`, `dev/Theme.qml`, `dev/hypr_modular/binds.lua`, `dev/hypr_modular/general.lua`, `dev/core/config_manager.py`) : overlay plein écran `SUPER + G` (`shell-overview`), filtre temps réel, navigation clavier (`Hyprland.usingLua` + `Hyprland.dispatch`), focus au clic gauche et fermeture au clic milieu / `✕`.
+
+### Corrigé
+- **Îlot dynamique** (`dev/DynamicIsland.qml`) : suppression du test `&& implicitWidth > 0` sur `leftApplets` / `rightApplets` qui empêchait l'affichage du `systray` (ou d'applets chargés asynchronement) lorsqu'il était seul dans une rangée.
+- **Applet Mises à jour** (`dev/MajApplet.qml`) : rupture de l'interblocage `visible` / `implicitWidth` avec `efface_vide`.
+- **Onglet Îlot dynamique** (`dev/OngletIlot.qml`) : déplacement de *Titre média en cours* (`ilot_show_media`) dans le tiroir *Applets de l'îlot*.
+
+## [0.3.10.00] — 2026-11-16
+
+### Ajouté
+- **Onglet « Îlot dynamique » dans `config_panel.qml`** (`dev/OngletIlot.qml`) : gestion dédiée de l'îlot dynamique, sélecteurs à 4 états (**Masqué / Repos / Étendu / Les deux**) pour les indicateurs de la pilule et les applets de l'îlot (`dev/core/config_manager.py`, `dev/Theme.qml`, `dev/AppletRow.qml`).
+- **Météo inline animée dans l'îlot dynamique** (`dev/DynamicIsland.qml`, `dev/Applet.qml`) : au clic sur l'applet météo, l'îlot s'étend avec animation pour afficher les relevés du jour et les prévisions sur 5 jours (aligné sur `widgets/meteo.qml`).
+- **Panneau étendu de l'îlot** :
+  - Bouton chevron animé pour rétracter/étendre le mini lecteur musique dans `dev/IslandTabControles.qml`.
+  - Affichage par défaut du calendrier sur l'onglet **Alertes & Tâches** avec chevron animé pour le rétracter/afficher (`dev/IslandPanel.qml`, `dev/IslandSidePanel.qml`, `dev/Theme.qml`), et suppression des 3 prochains événements sous les tâches (`dev/IslandTabAlertes.qml`).
+  - Bouton visualiseur audio à 3 états cycliques (**Barres / Ondes / Éteint**) avec icône dynamique (`dev/IslandTabControles.qml`).
+  - Option *Uniquement s'il y a des mises à jour* pour l'applet `maj` (`dev/MajApplet.qml`, `dev/core/applets_catalogue.json`, `dev/OngletIlot.qml`).
+- **Which-key par submap Hyprland** (`dev/SubmapWhichKey.qml`, `dev/main.qml`, `dev/hypr_modular/general.lua`) : overlay deux colonnes listant les raccourcis du submap actif (`shell-whichkey`).
+
+### Modifié / Corrigé
+- **Navigation clavier (`submap aether-nav`)** (`dev/hypr_modular/binds.lua`, `dev/Theme.qml`) : prise en charge de `SUPER + I` et `SUPER + ALT + H`, correction des appels `hyprctl dispatch submap` et sortie automatique sur clic extérieur (`HyprlandFocusGrab`).
+- **Îlot dynamique** (`dev/DynamicIsland.qml`) : suppression de la collision avec l'applet `musique`, correction de la largeur étendue (`expandedWidth` / `fullContentRow`) pour supprimer l'espace excessif autour de l'heure, et masquage/clipping du contenu étendu tant que la pilule n'a pas fini son extension.
+- **Visualiseur audio & barre** (`dev/VisualiseurAudio.qml`, `dev/OngletBarres.qml`, `dev/config_panel.qml`) : réglages indépendants Barre / Îlot, couleur complémentaire, hauteur minimale à `14 px`, et restauration des toasts / icône silencieuse dans l'historique des notifications (`dev/notif_history.qml`, `dev/NotifService.qml`).
+
+## [0.3.9.00] — 2026-11-15
+
+### Ajouté
+
+- **Intégration Kanban / Planka — Onglet « Projets »** ([`dev/core/planka_service.py`](dev/core/planka_service.py), [`dev/core/planka_worker.py`](dev/core/planka_worker.py), [`dev/IlotProjets.qml`](dev/IlotProjets.qml), [`dev/IslandPanel.qml`](dev/IslandPanel.qml), [`dev/DynamicIsland.qml`](dev/DynamicIsland.qml), [`dev/OngletBarres.qml`](dev/OngletBarres.qml)) :
+  - **Service REST & cache** (`planka_service.py`) avec authentification `X-Api-Key`/Bearer, cache local (TTL 30 s), calcul des échéances (`<24h` orange, `<6h` rouge) et commandes CLI complètes.
+  - **Onglet « Projets »** (`columns-3`) avec onglets de colonnes cibles de drop, filtre `[Toutes | Mes cartes]`, champ d'ajout inline, pastilles d'échéance, boutons `[➔]`, Drag & Drop hybride et accordéon description + checklists.
+  - **Indicateur dynamique d'échéance** sur la pilule (compact et survol) et interrupteur `ilot_projets_actif` dans le panneau de configuration.
+  - **Worker IA** (`planka_worker.py`) avec toggles par colonne (`Inactif` / `IA auto` / `IA approb.`) et intégration `hermes_approbations.py`.
+
+### Modifié
+
+- **Bouton fermer du panneau étendu** ([`dev/IslandPanel.qml`](dev/IslandPanel.qml)) : croix seule réduite (`10 px`) sans fond carré.
+- **Tiroir « Quotas IA »** ([`dev/OngletDonnees.qml`](dev/OngletDonnees.qml), [`dev/config_panel.qml`](dev/config_panel.qml)) : renommage de « Accès API » en « Quotas IA ».
+
+## [0.3.8.00] — 2026-11-15
+
+### Ajouté
+
+- **Refonte de l'Îlot dynamique** ([`dev/DynamicIsland.qml`](dev/DynamicIsland.qml), [`dev/IslandPanel.qml`](dev/IslandPanel.qml), [`dev/IslandTabControles.qml`](dev/IslandTabControles.qml), [`dev/IslandTabMedia.qml`](dev/IslandTabMedia.qml), [`dev/IslandTabApparence.qml`](dev/IslandTabApparence.qml), [`dev/WorkspacesApplet.qml`](dev/WorkspacesApplet.qml), [`dev/VinylArt.qml`](dev/VinylArt.qml)) :
+  - **Workspaces en points & tiret** : affichage permanent à gauche de la pilule (maintenu au survol en mode étendu), un point par bureau et un tiret pour le bureau actif.
+  - **Indicateurs VPN et confidentialité** ([`dev/core/indicateurs_service.py`](dev/core/indicateurs_service.py)) : point VPN à droite (`bleu` connecté, `blanc` déconnecté, `jaune` erreur service) et point capture à gauche avant les workspaces (`rouge` capture vidéo/webcam, `orange` capture audio seule).
+  - **Rail d'onglets en bas** (surfaces plates pour les onglets inactifs), **mini lecteur audio** sur l'accueil avec pochette vinyle rotative ([`dev/VinylArt.qml`](dev/VinylArt.qml)), onglet **Affichage & Son** (écran principal et résolution), et curseur **Flou (Blur)** dans Apparence.
+- **Fond d'écran de `hyprlock`** ([`dev/OngletApparence.qml`](dev/OngletApparence.qml), [`dev/core/generate_rofi_theme.sh`](dev/core/generate_rofi_theme.sh), [`dev/hypr_modular/hyprlock.conf`](dev/hypr_modular/hyprlock.conf)) : choix couleur unie ou image via `SelecteurFichier.qml` (sans screencopy DMA-BUF).
+- **Capture d'écran immédiate (`SUPER + ALT + S`)** ([`dev/hypr_modular/binds.lua`](dev/hypr_modular/binds.lua), [`dev/core/screenshot.sh`](dev/core/screenshot.sh)) : capture immédiate de l'écran actif via `grim` sans perte de focus.
+- **Notification Hermes sur prise en charge** ([`dev/core/todo_applet.py`](dev/core/todo_applet.py), [`dev/core/todo_worker.py`](dev/core/todo_worker.py)) : notification bureau `notify-send` lors de `todo_applet.prendre()`.
+
+### Corrigé
+
+- **Bouton « Assistant clavier »** ([`dev/main.qml`](dev/main.qml)) : activation du `Loader` sur `Theme.showKeyboardOnboarding` même après `firstRunCompleted`.
+
+## [0.3.7.03] — 2026-11-13
+
+### Ajouté
+
+- **Installation multi-distribution, profil `laptop`/`desktop` et mode hors-ligne** ([`install.sh`](install.sh), [`dev/dependencies.txt`](dev/dependencies.txt), [`dev/core/deps_install.py`](dev/core/deps_install.py), [`dev/hypr_modular/hyprland.lua`](dev/hypr_modular/hyprland.lua), [`dev/core/config_manager.py`](dev/core/config_manager.py)) :
+  - Support complet de Debian/Ubuntu (`apt`, activation automatique de `universe`, correspondances APT et gestion hors-APT dans `~/.local/bin`), Arch (`pacman` + assistant AUR `yay`/`paru`) et Fedora (`dnf` + COPR), avec `--install-deps`.
+  - Détection automatique `laptop` / `desktop` (`/sys/class/power_supply/BAT*`, DMI `chassis_type`, forçable par `--laptop`/`--desktop`), portées `#: laptop` / `#: desktop`, activation conditionnelle de `power-profiles-daemon` et de `charge-limit`, et sélection automatique du profil matériel Hyprland.
+  - Récupération automatique des sources depuis GitHub si absentes ou plus récentes, et repli hors-ligne / clé USB avec rappel vers l'onglet « Apps & Alertes ».
+
+### Corrigé
+
+- **Mise à jour et relance depuis le panneau de configuration** ([`dev/core/maj_terminal.sh`](dev/core/maj_terminal.sh), [`dev/core/maj_shell.py`](dev/core/maj_shell.py), [`install.sh`](install.sh)) : exécution du terminal de mise à jour hors du CGroup de `quickshell.service` (`systemd-run --user --scope`), échappement sûr du pipe dans `maj_terminal.sh`, passage de la commande à `| bash` dans `maj_shell.py` et relance propre de `quickshell.service`.
+
+## [0.3.7.02] — 2026-11-13
+
+### Modifié
+
+- **Script unique d'installation et déploiement** ([`install.sh`](install.sh), [`README.md`](README.md), [`docs/README.md`](docs/README.md), [`dev/OngletEcrans.qml`](dev/OngletEcrans.qml), [`dev/sddm/setup.sh`](dev/sddm/setup.sh)) : fusion de `dev/deploy.sh` dans [`install.sh`](install.sh) à la racine du dépôt, suppression de `dev/deploy.sh` et mise à jour de la documentation (`| bash`, `./install.sh`).
+
 ## [0.3.7.01] — 2026-11-13
 
 ### Corrigé

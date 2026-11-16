@@ -73,6 +73,8 @@ Item {
         "memory": "\u{F035B}",
         "battery": "\u{F0079}",
         "power": "\u{F0425}",
+        "coffee": "\u{F0176}",
+        "speedometer": "\u{F04C5}",
         "restart": "\u{F0709}",
         "sleep": "\u{F0904}",
         "lock": "\u{F033E}",
@@ -99,6 +101,8 @@ Item {
         "next": "\u{F04AD}",
         "previous": "\u{F04AE}",
         "music": "\u{F075A}",
+        "columns-3": "\u{F0570}",
+        "robot": "\u{F06A9}",
         // marque + états dynamiques (wifi / batterie / volume / réseau)
         "arch": "\u{F08C7}",
         "wifi-none": "\u{F092D}",

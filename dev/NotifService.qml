@@ -29,7 +29,11 @@ Item {
     readonly property bool toastVisible: latestToast !== null
         && Theme.activePopup === ""
         && !Theme.notifHistoryVisible
+        && !Theme.islandPanelOpen
         && Theme.quietNotifApps.indexOf(latestToast ? latestToast.appName : "") < 0
+
+    onLatestToastChanged: Theme.notifToast = latestToast
+    onToastVisibleChanged: Theme.notifToastVisible = toastVisible
 
     function clampPopupX(item, relX, popupW) {
         const win = item ? item.QsWindow.window : null
@@ -39,18 +43,42 @@ Item {
         return absX - ix
     }
 
+    function isQuietApp(appName) {
+        return Boolean(appName && Theme.quietNotifApps.indexOf(appName) >= 0)
+    }
+
+    function pruneQuietNotifs() {
+        const list = service.notificationsList
+        if (!list || list.length === 0) return
+        const kept = []
+        let changed = false
+        for (let i = 0; i < list.length; i++) {
+            const e = list[i]
+            if (service.isQuietApp(e.appName)) {
+                changed = true
+                try { if (e.raw) e.raw.tracked = false } catch (err) {}
+                if (service.latestToast && service.latestToast.id === e.id)
+                    service.latestToast = null
+            } else {
+                kept.push(e)
+            }
+        }
+        if (changed) service.notificationsList = kept
+    }
+
+    Connections {
+        target: Theme
+        function onQuietNotifAppsChanged() {
+            service.pruneQuietNotifs()
+        }
+    }
+
     NotificationServer {
         id: notifServer
         keepOnReload: true
         actionsSupported: true
         persistenceSupported: true
         onNotification: notification => {
-            notification.tracked = true
-            try {
-                notification.closed.connect(function () {
-                    service.dropClosedNotif(notification)
-                })
-            } catch (e) {}
             const entry = {
                 id: notification.id,
                 appName: notification.appName || "Système",
@@ -60,6 +88,17 @@ Item {
                 actions: service.notifActionList(notification),
                 raw: notification
             }
+            service.requestNotifTarget(notification)
+            if (service.isQuietApp(entry.appName)) {
+                notification.tracked = false
+                return
+            }
+            notification.tracked = true
+            try {
+                notification.closed.connect(function () {
+                    service.dropClosedNotif(notification)
+                })
+            } catch (e) {}
             const rafraichir = function () { service.rafraichirEntree(notification) }
             const signaux = ["appNameChanged", "summaryChanged", "bodyChanged",
                              "actionsChanged", "hintsChanged", "desktopEntryChanged",
@@ -73,8 +112,7 @@ Item {
                 try { all[i].raw.tracked = false } catch (e) {}
             }
             service.notificationsList = all.slice(0, 30)
-            service.requestNotifTarget(notification)
-            if (!Theme.doNotDisturb && Theme.quietNotifApps.indexOf(entry.appName) < 0) {
+            if (!Theme.doNotDisturb) {
                 service.latestToast = entry
                 if (toastTimer.running) toastTimer.restart()
                 toastPeremption.restart()
@@ -123,7 +161,7 @@ Item {
         id: toastTimer
         interval: 4500
         repeat: false
-        running: service.toastVisible
+        running: service.toastVisible && !Theme.notifToastHovered
         onTriggered: service.latestToast = null
     }
 
@@ -372,7 +410,9 @@ Item {
             invoke: function (e, ident) { service.invokeNotifAction(e, ident) },
             actions: function (e) { return service.notifActions(e) },
             hasTarget: function (e) { return service.notifHasTarget(e) },
-            setQuiet: function (nom, muet) { service.setToastQuiet(nom, muet) }
+            setQuiet: function (nom, muet) { service.setToastQuiet(nom, muet) },
+            dismissToast: function () { service.latestToast = null },
+            quietToast: function () { service.quietToastSource() }
         })
 
         Theme.notifTargetsHook = function() {
@@ -439,7 +479,7 @@ Item {
         implicitWidth: 300
         implicitHeight: toastCol.implicitHeight + 20
         color: "transparent"
-        visible: service.toastVisible && service.anchorItem !== null
+        visible: Theme.barStyle !== "island" && service.toastVisible && service.anchorItem !== null
 
         Rectangle {
             anchors.fill: parent

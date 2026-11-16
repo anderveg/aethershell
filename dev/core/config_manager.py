@@ -177,6 +177,11 @@ def is_laptop_system():
     return bool(glob.glob("/sys/class/power_supply/BAT*"))
 
 
+def _distro_fichier():
+    """Retourne le profil matériel par défaut (portable -> fedora, tour -> arch)."""
+    return "fedora" if is_laptop_system() else "arch"
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # SECTION 3: KEYBOARD LAYOUT & FIRST-RUN ONBOARDING (input.lua & binds.lua)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -370,7 +375,7 @@ SHELL_BLUR_END = "-- END shell-blur"
 SHELL_BLUR_NAMESPACES = ("shell-bar", "shell-bar-bas", "shell-bar-cote-gauche",
                          "shell-bar-cote-droite", "shell-osd", "shell-config",
                          "shell-onboarding", "shell-spotlight",
-                         "shell-spotlight-rest", "shell-cheatsheet",
+                         "shell-spotlight-rest", "shell-cheatsheet", "shell-whichkey", "shell-overview",
                          "shell-tray-menu", "shell-shotbar",
                          "shell-menu-session", "shell-menu-widget",
                          # Les deux sélecteurs de fichiers : fenêtres de la taille
@@ -385,7 +390,7 @@ SHELL_BLUR_NAMESPACES = ("shell-bar", "shell-bar-bas", "shell-bar-cote-gauche",
 SHELL_BLUR_KEYS = ("shell_blur_enabled", "shell_blur_alpha", "shell_blur_popups")
 # Colors proposées au visualiseur : des jetons du thème, pas des valeurs libres —
 # une couleur en dur ne suivrait pas un changement de palette.
-VIZ_COULEURS = ("accent", "accentMuted", "fg", "warn", "success")
+VIZ_COULEURS = ("accent", "accentMuted", "complement", "fg", "warn", "success")
 
 # Positions prédéfinies de la capsule du lanceur (pas de position libre) :
 # bord haut/bas, centre ou tiers gauche/droit.
@@ -759,7 +764,9 @@ def update_style_var(key, value):
         data[key] = round(max(0.0, min(0.99, float(value))), 2)
     elif key == "viz_epaisseur":
         data[key] = round(max(0.5, min(4.0, float(value))), 1)
-    elif key == "viz_couleur" and str(value) in VIZ_COULEURS:
+    elif key in ("viz_couleur", "viz_couleur_island") and str(value) in VIZ_COULEURS:
+        data[key] = str(value)
+    elif key in ("viz_style_classic", "viz_style_island") and str(value) in ("onde", "barres"):
         data[key] = str(value)
     elif key == "bar_style" and str(value) in ("classic", "island"):
         data[key] = str(value)
@@ -770,7 +777,7 @@ def update_style_var(key, value):
     elif key == "cheatsheet_opacity":
         data[key] = round(max(0.2, min(1.0, float(value))), 2)
     elif key == "bar_height":
-        data[key] = max(28, min(60, int(float(value))))
+        data[key] = max(14, min(60, int(float(value))))
     elif key == "panel_anim_duration":
         data[key] = max(80, min(500, int(float(value))))
     elif key in ("bar_gaps_out_h", "bar_gaps_out_v", "bar_gaps_out"):
@@ -787,9 +794,18 @@ def update_style_var(key, value):
         subprocess.run(["hyprctl", "reload"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
         return True
     elif key in ("bar_bottom", "bar_left", "bar_right"):
-        # Barres supplémentaires : un booléen, écrit tel quel dans style_vars.
+        # Barres supplémentaires : booléens dans style_vars.
         data[key] = str(value).lower() in ("true", "1", "yes")
-    elif key == "show_config_button":
+    elif key in ("ilot_show_vpn", "ilot_show_capture", "ilot_show_media",
+                 "ilot_show_planka", "ilot_show_workspaces", "ilot_show_clock"):
+        v = str(value).strip().lower()
+        if v in ("off", "compact", "expanded", "both"):
+            data[key] = v
+        elif v in ("true", "1", "yes"):
+            data[key] = "both"
+        else:
+            data[key] = "off"
+    elif key in ("show_config_button", "maj_seulement_si_dispo"):
         if isinstance(value, bool):
             data[key] = value
         else:
@@ -837,6 +853,21 @@ def update_style_var(key, value):
         data[key] = str(value).lower() in ("true", "1", "yes")
     elif key == "first_run_completed":
         data[key] = str(value).lower() in ("true", "1", "yes")
+    elif key == "ilot_projets_actif":
+        data[key] = str(value).lower() in ("true", "1", "yes")
+    elif key == "lock_bg_mode" and str(value) in ("solid", "image"):
+        data[key] = str(value)
+    elif key == "lock_bg_color":
+        val_str = str(value).strip()
+        if not val_str:
+            data[key] = ""
+        else:
+            if not val_str.startswith("#"):
+                val_str = "#" + val_str
+            if re.match(r"^#[0-9a-fA-F]{6}$", val_str):
+                data[key] = val_str.lower()
+    elif key == "lock_bg_image":
+        data[key] = str(value).strip()
     elif key in ("user_location_ville", "user_location_tz"):
         # Localisation de l'utilisateur : ville affichée et fuseau. Le fuseau
         # n'est pas validé ici (liste mouvante) mais reste une chaîne courte.
@@ -938,6 +969,8 @@ def get_primary_monitor(hostname=None):
     if not hostname:
         hostname = get_hostname()
     hw_path = os.path.join(HYPR_DIR, f"hardware-{hostname}.lua")
+    if not os.path.exists(hw_path):
+        hw_path = os.path.join(HYPR_DIR, "hardware-" + _distro_fichier() + ".lua")
     if os.path.exists(hw_path):
         try:
             with open(hw_path, "r") as f:
@@ -1554,6 +1587,43 @@ def set_secret_from_file(chemin):
     return {"ok": ok, "section": section, "nom": nom, "tail": valeur[-4:] if ok else ""}
 
 
+def planka_test():
+    """Teste la connexion au serveur Planka à l'aide de core/secrets.json."""
+    import urllib.error
+    import urllib.request
+
+    secrets = lire_secrets().get("planka")
+    if not isinstance(secrets, dict):
+        return {"ok": False, "message": "URL ou jeton API manquant dans core/secrets.json"}
+    url = str(secrets.get("url") or "").strip().rstrip("/")
+    api_key = str(secrets.get("api_key") or "").strip()
+    if not url or not api_key:
+        return {"ok": False, "message": "Renseigner l'URL et le jeton API d'abord"}
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+
+    req = urllib.request.Request(
+        f"{url}/api/users/me",
+        headers={"X-Api-Key": api_key, "Accept": "application/json"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            body = json.loads(resp.read().decode("utf-8", errors="replace"))
+            item = body.get("item") if isinstance(body, dict) else None
+            nom = ""
+            if isinstance(item, dict):
+                nom = str(item.get("username") or item.get("name") or item.get("email") or "").strip()
+            return {
+                "ok": True,
+                "message": f"Connecté ({nom})" if nom else "Connexion réussie (HTTP 200)",
+            }
+    except urllib.error.HTTPError as err:
+        return {"ok": False, "message": f"Refusé (HTTP {err.code})"}
+    except Exception as err:
+        return {"ok": False, "message": f"Injoignable ({err})"}
+
+
 def load_notif_targets():
     try:
         with open(NOTIF_TARGETS_FILE, encoding="utf-8") as fh:
@@ -1765,7 +1835,7 @@ def sync_programs_lua(app_data):
 # valide. Ajouter un fournisseur LLM passe par core/llm_providers.json.
 WIDGET_TYPES = ("horloge", "date", "meteo", "combo", "musique", "systeme",
                 "reseau", "disques", "homelab", "hermes", "usb", "todo",
-                "presse_papiers",
+                "presse_papiers", "notes", "sticker",
                 "deepseek", "ollama", "antigravity", "comptes")
 WIDGET_DEFAULT_OPACITY = 0.35
 
@@ -1842,6 +1912,9 @@ def widget_set(wid, key, value):
             w[key] = str(value)
         elif key == "id":
             w[key] = str(value)
+        elif key == "style":
+            v = str(value).strip().lower()
+            w["style"] = "transparent" if v == "transparent" else "glass"
         else:
             # Tout le reste va dans options (secondes, ville, fichiers…). Une
             # valeur JSON (liste des fichiers suivis) est rangée telle quelle,
@@ -1899,6 +1972,7 @@ def get_full_config_state():
         "kb_layout": kb,
         "workspace_keys": WORKSPACE_KEYS_BY_LAYOUT.get(kb, WORKSPACE_KEYS_BY_LAYOUT["us"]),
         "first_run_completed": bool(style_data.get("first_run_completed", False)),
+        "ilot_projets_actif": bool(style_data.get("ilot_projets_actif", True)),
         "show_config_button": bool(style_data.get("show_config_button", True)),
         "bar_height": int(style_data.get("bar_height", 40)),
         "bar_gaps_out": int(style_data.get("bar_gaps_out", 8)),
@@ -1920,6 +1994,9 @@ def get_full_config_state():
         "viz_lissage": float(style_data.get("viz_lissage", 0.2)),
         "viz_epaisseur": float(style_data.get("viz_epaisseur", 1.4)),
         "viz_couleur": str(style_data.get("viz_couleur", "accent")),
+        "viz_couleur_island": str(style_data.get("viz_couleur_island", "complement")),
+        "viz_style_classic": str(style_data.get("viz_style_classic", "onde")),
+        "viz_style_island": str(style_data.get("viz_style_island", "barres")),
         "hypr_rounding": get_hypr_rounding(),
         "hypr_rounding_power": get_hypr_rounding_power(),
         "api_keys": resume_secrets(),
@@ -1928,6 +2005,9 @@ def get_full_config_state():
         "llm_providers": list(llm_providers.charger().values()),
         "wallpaper_dir": get_wallpaper_dir(),
         "screenshots_dir": get_screenshots_dir(),
+        "lock_bg_mode": str(style_data.get("lock_bg_mode", "solid")),
+        "lock_bg_color": str(style_data.get("lock_bg_color", "")),
+        "lock_bg_image": str(style_data.get("lock_bg_image", "")),
         "matugen_scheme": style_data.get("matugen_scheme", "scheme-tonal-spot"),
         "matugen_contrast": float(style_data.get("matugen_contrast", 0)),
         "blur_enabled": bool(style_data.get("blur_enabled", True)),
@@ -1972,6 +2052,78 @@ def get_full_config_state():
     }
 
 
+def get_diag_info(log_source="quickshell"):
+    """État des services systemd utilisateur, journaux récents et backups HQ."""
+    services = []
+    for unit in ("quickshell.service", "hermes-approbations.service", "polkit-agent.service"):
+        res = subprocess.run(
+            ["systemctl", "--user", "is-active", unit],
+            capture_output=True, text=True, check=False,
+        )
+        state = (res.stdout or res.stderr or "unknown").strip().splitlines()[0] if (res.stdout or res.stderr) else "unknown"
+        services.append({"name": unit, "state": state, "active": state == "active"})
+
+    logs = []
+    if log_source == "notifications":
+        log_path = os.path.join(
+            os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"),
+            "quickshell", "notifications.log",
+        )
+        if os.path.isfile(log_path):
+            try:
+                with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
+                    logs = [l.rstrip("\n") for l in fh.readlines()[-30:]]
+            except Exception:
+                logs = ["Impossible de lire notifications.log"]
+        else:
+            logs = ["Aucun journal de notifications pour l'instant."]
+    else:
+        jres = subprocess.run(
+            ["journalctl", "--user", "-u", "quickshell.service", "-n", "30", "--no-pager", "-o", "short"],
+            capture_output=True, text=True, check=False,
+        )
+        logs = [l for l in (jres.stdout or "").splitlines() if l.strip()]
+        if not logs:
+            logs = ["Aucune entrée récente pour quickshell.service."]
+
+    backups_dir = os.path.expanduser("~/.config/backups_env")
+    backups = []
+    if os.path.isdir(backups_dir):
+        try:
+            entries = sorted(
+                (f for f in os.listdir(backups_dir) if f.startswith("backup_") and f.endswith(".tar.gz")),
+                reverse=True,
+            )
+            for fname in entries[:10]:
+                fpath = os.path.join(backups_dir, fname)
+                if os.path.isfile(fpath):
+                    st = os.stat(fpath)
+                    backups.append({
+                        "name": fname,
+                        "size_kb": max(1, round(st.st_size / 1024)),
+                    })
+        except Exception:
+            pass
+
+    return {"ok": True, "services": services, "logs": logs, "backups": backups, "log_source": log_source}
+
+
+def restore_hq_backup(name):
+    """Restaure un snapshot HQ dans ~/.config après validation stricte du nom."""
+    fname = os.path.basename(str(name or "").strip())
+    if not (fname.startswith("backup_") and fname.endswith(".tar.gz")):
+        return {"ok": False, "message": "Nom d'archive invalide"}
+    backups_dir = os.path.expanduser("~/.config/backups_env")
+    fpath = os.path.join(backups_dir, fname)
+    if not os.path.isfile(fpath):
+        return {"ok": False, "message": f"Archive introuvable : {fname}"}
+    target_dir = os.path.expanduser("~/.config")
+    res = subprocess.run(["tar", "-xzf", fpath, "-C", target_dir], capture_output=True, text=True, check=False)
+    if res.returncode != 0:
+        return {"ok": False, "message": (res.stderr or "Échec tar").strip()}
+    return {"ok": True, "message": f"Restauré : {fname}"}
+
+
 if __name__ == "__main__":
     action = sys.argv[1] if len(sys.argv) > 1 else "state"
     # Une commande = une seule section critique sur style_vars.json : lecture,
@@ -1980,7 +2132,7 @@ if __name__ == "__main__":
     # panneau l'appelle après chaque commande, et il interroge le compositeur.
     # Aucun sous-processus lancé ici n'écrit style_vars.json (seulement
     # hyprctl/systemctl), donc pas de blocage en boucle.
-    _verrou_style = None if action == "state" else verrou_etat.prendre(STYLE_FILE)
+    _verrou_style = None if action in ("state", "diag_info") else verrou_etat.prendre(STYLE_FILE)
     if action == "state":
         print(json.dumps(get_full_config_state()))
     elif action == "kb_layout" and len(sys.argv) > 2:
@@ -2022,6 +2174,8 @@ if __name__ == "__main__":
         print(json.dumps(get_full_config_state()))
     elif action == "api_key_set_file" and len(sys.argv) > 2:
         print(json.dumps(set_secret_from_file(sys.argv[2]), ensure_ascii=False))
+    elif action == "planka_test":
+        print(json.dumps(planka_test(), ensure_ascii=False))
     elif action == "complete_first_run":
         complete_first_run()
         print(json.dumps(get_full_config_state()))
@@ -2111,5 +2265,23 @@ if __name__ == "__main__":
     elif action == "battery" and len(sys.argv) > 2:
         subprocess.run(["python3", SYSTEM_SERVICE, "limit", sys.argv[2]], check=False)
         print(json.dumps(get_full_config_state()))
+    elif action == "ilot_applet_mode" and len(sys.argv) > 3:
+        aid = str(sys.argv[2]).strip()
+        mode = str(sys.argv[3]).strip().lower()
+        if mode not in ("off", "compact", "expanded", "both"):
+            mode = "off"
+        data = load_json(STYLE_FILE)
+        modes = data.get("ilot_applets_mode")
+        if not isinstance(modes, dict):
+            modes = {}
+        modes[aid] = mode
+        data["ilot_applets_mode"] = modes
+        save_json(STYLE_FILE, data)
+        print(json.dumps(get_full_config_state()))
+    elif action == "diag_info":
+        src = sys.argv[2] if len(sys.argv) > 2 else "quickshell"
+        print(json.dumps(get_diag_info(src), ensure_ascii=False))
+    elif action == "diag_restore" and len(sys.argv) > 2:
+        print(json.dumps(restore_hq_backup(sys.argv[2]), ensure_ascii=False))
     else:
         print(json.dumps(get_full_config_state()))

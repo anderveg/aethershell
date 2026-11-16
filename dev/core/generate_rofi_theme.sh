@@ -278,9 +278,50 @@ if [ -d "$HYPRLOCK_DIR" ]; then
 \$error = rgb(${ERROR_NH})
 \$warn = rgb(${WARN_NH})
 EOF
+    HYPRLOCK_BG="$HYPRLOCK_DIR/hyprlock-bg.conf"
+    python3 - "$STYLE_VARS" "$HYPRLOCK_BG" << 'EOF'
+import json, os, sys
+
+style_path, out_path = sys.argv[1], sys.argv[2]
+with open(style_path, "r") as f:
+    d = json.load(f)
+
+mode = str(d.get("lock_bg_mode", "solid") or "solid").strip()
+color_raw = str(d.get("lock_bg_color", "") or "").strip()
+img_raw = os.path.expanduser(str(d.get("lock_bg_image", "") or "").strip())
+
+color_line = "    color = $bg"
+if color_raw:
+    c = color_raw.lstrip("#")
+    if len(c) == 6:
+        color_line = f"    color = rgb({c})"
+
+lines = [
+    "# Généré par core/generate_rofi_theme.sh depuis style_vars.json — ne pas éditer.",
+    "# Lu par hyprlock.conf : source = ~/.config/hypr/hyprlock-bg.conf",
+    "",
+    "background {",
+    "    monitor =",
+    color_line,
+]
+if mode == "image" and img_raw and os.path.isfile(img_raw):
+    lines.append(f"    path = {img_raw}")
+lines.extend([
+    "    blur_passes = 0",
+    "}",
+    "",
+])
+with open(out_path, "w") as f:
+    f.write("\n".join(lines))
+EOF
 fi
 
 # 5. Synchronise la palette des terminaux (OSC universel + Ghostty, Kitty, Alacritty, Foot)
 if [ -f "$SCRIPT_DIR/generate_terminal_theme.py" ]; then
     python3 "$SCRIPT_DIR/generate_terminal_theme.py" >/dev/null 2>&1 || true
+fi
+
+# 6. Synchronise la palette vers GTK 3/4 et Qt5ct/Qt6ct
+if [ -f "$SCRIPT_DIR/sync_apps_theme.py" ]; then
+    python3 "$SCRIPT_DIR/sync_apps_theme.py" >/dev/null 2>&1 || true
 fi
