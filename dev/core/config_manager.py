@@ -796,8 +796,8 @@ def update_style_var(key, value):
     elif key in ("bar_bottom", "bar_left", "bar_right"):
         # Barres supplémentaires : booléens dans style_vars.
         data[key] = str(value).lower() in ("true", "1", "yes")
-    elif key in ("ilot_show_vpn", "ilot_show_capture", "ilot_show_media",
-                 "ilot_show_planka", "ilot_show_workspaces", "ilot_show_clock"):
+    elif key in ("ilot_show_vpn", "ilot_show_capture", "ilot_show_live_activity",
+                 "ilot_show_media", "ilot_show_planka", "ilot_show_workspaces", "ilot_show_clock"):
         v = str(value).strip().lower()
         if v in ("off", "compact", "expanded", "both"):
             data[key] = v
@@ -810,6 +810,9 @@ def update_style_var(key, value):
             data[key] = value
         else:
             data[key] = str(value).lower() in ("true", "1", "yes")
+    elif key == "maj_terminal_mode":
+        v = str(value).strip().lower()
+        data[key] = "tiling" if v in ("tiling", "tile") else "float"
     elif key == "matugen_scheme" and str(value) in MATUGEN_SCHEMES:
         data["matugen_scheme"] = str(value)
     elif key == "matugen_contrast":
@@ -2352,6 +2355,33 @@ if __name__ == "__main__":
             modes = {}
         modes[aid] = mode
         data["ilot_applets_mode"] = modes
+        save_json(STYLE_FILE, data)
+        print(json.dumps(get_full_config_state()))
+    elif action == "ilot_applet_move" and len(sys.argv) > 3:
+        aid = str(sys.argv[2]).strip()
+        direction = str(sys.argv[3]).strip().lower()
+        default_order = [
+            "systray", "luminosite", "batterie", "minimise", "volume",
+            "reseau", "notifications", "maj", "todo", "meteo",
+            "presse-papiers", "usb",
+        ]
+        data = load_json(STYLE_FILE)
+        order = data.get("ilot_applets_order")
+        if not isinstance(order, list) or not order:
+            order = list(default_order)
+        else:
+            order = [str(x) for x in order]
+            for x in default_order:
+                if x not in order:
+                    order.append(x)
+        if aid and aid not in order:
+            order.append(aid)
+        if aid in order:
+            idx = order.index(aid)
+            nxt = idx - 1 if direction in ("left", "gauche", "up", "monter") else idx + 1
+            if 0 <= nxt < len(order):
+                order[idx], order[nxt] = order[nxt], order[idx]
+        data["ilot_applets_order"] = order
         save_json(STYLE_FILE, data)
         print(json.dumps(get_full_config_state()))
     elif action == "diag_info":

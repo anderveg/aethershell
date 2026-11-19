@@ -21,20 +21,23 @@ Item {
     property string diskSummary: "--"
     property int diskPct: 0
 
-    property var wifiNetworks: []
-    property bool scanning: false
+    readonly property var wifiNetworks: root.wifiEnabled ? SystemServices.wifiNetworks : []
+    readonly property bool wifiEnabled: SystemServices.wifiEnabled
+    readonly property bool scanning: SystemServices.wifiScanning
     property string passwordSsid: ""
     property string pendingConnectSsid: ""
     property string wifiStatusMsg: ""
     property bool wifiConnecting: false
-    property bool btPresent: false
-    property bool btOn: false
-    property var btDevices: []
-    property int btConnectedCount: 0
-    property bool btBusy: false
+    readonly property bool qrAvailable: SystemServices.qrWifiAvailable
+    property bool qrScanning: false
+    readonly property bool btPresent: SystemServices.btPresent
+    readonly property bool btOn: SystemServices.btPowered
+    readonly property var btDevices: SystemServices.btDevices
+    readonly property int btConnectedCount: SystemServices.btConnectedCount
+    readonly property bool btBusy: SystemServices.btBusy
     property string homelabLine: ""
 
-    readonly property var sysInfo: Theme.systemInfo || ({})
+    readonly property var sysInfo: SystemServices.systemInfo || ({})
     readonly property var wifiInfo: sysInfo.wifi || ({})
     readonly property var batInfo: sysInfo.battery || ({})
     readonly property bool isLaptop: Boolean(sysInfo.has_battery || (batInfo && batInfo.present))
@@ -102,36 +105,58 @@ Item {
     }
 
     Connections {
-        target: Theme
+        target: SystemServices
         function onSystemeDataChanged() {
-            if (root.visible && Theme.islandPanelOpen && Theme.islandPanelTab === 2 && Theme.metriquesActif)
-                root.appliquerSysteme(Theme.systemeData)
+            if (root.visible && Theme.islandPanelOpen && Theme.islandPanelTab === 2 && SystemServices.metriquesActif)
+                root.appliquerSysteme(SystemServices.systemeData)
         }
     }
 
     function refreshTelemetry() {
-        if (Theme.metriquesActif && Theme.systemeData && Theme.systemeData.ok) {
-            root.appliquerSysteme(Theme.systemeData)
+        if (SystemServices.metriquesActif && SystemServices.systemeData && SystemServices.systemeData.ok) {
+            root.appliquerSysteme(SystemServices.systemeData)
         } else if (!sysStatsProc.running) {
             sysStatsProc.running = true
         }
         if (!diskStatsProc.running) diskStatsProc.running = true
         if (!homelabProc.running) homelabProc.running = true
-        if (!btStateProc.running) btStateProc.running = true
-        Theme.rafraichirSystemInfo()
+        SystemServices.refreshBluetooth()
+        SystemServices.checkQrWifi()
+        SystemServices.checkWifiRadio()
+        SystemServices.rafraichirSystemInfo()
+        if (root.wifiEnabled && SystemServices.wifiNetworks.length === 0) {
+            SystemServices.scanWifi()
+        }
+        if (Theme.islandSystemeTarget === "wifi") {
+            scrollWifiTimer.restart()
+        }
+    }
+
+    Timer {
+        id: scrollWifiTimer
+        interval: 40
+        repeat: false
+        onTriggered: {
+            if (Theme.islandSystemeTarget === "wifi") {
+                Theme.islandSystemeTarget = ""
+                sysFlick.contentY = Math.min(reseauHeader.y, Math.max(0, sysFlick.contentHeight - sysFlick.height))
+            }
+        }
+    }
+
+    Connections {
+        target: Theme
+        function onIslandSystemeTargetChanged() {
+            if (Theme.islandSystemeTarget === "wifi") scrollWifiTimer.restart()
+        }
     }
 
     function btCommand(args) {
-        if (btActionProc.running) return
-        root.btBusy = true
-        btActionProc.command = ["python3", Quickshell.shellPath("core/bluetooth_service.py")].concat(args)
-        btActionProc.running = true
+        SystemServices.btCommand(args)
     }
 
     function scanWifi() {
-        if (wifiScanProc.running) return
-        scanning = true
-        wifiScanProc.running = true
+        SystemServices.scanWifi()
     }
 
     Component.onCompleted: refreshTelemetry()
@@ -183,22 +208,6 @@ Item {
     }
 
     Process {
-        id: wifiScanProc
-        command: ["python3", Quickshell.shellPath("core/system_service.py"), "wifi"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                root.scanning = false
-                try {
-                    let arr = JSON.parse(text.trim())
-                    root.wifiNetworks = arr.slice(0, 4)
-                } catch (e) {
-                    root.wifiNetworks = []
-                }
-            }
-        }
-    }
-
-    Process {
         id: wifiConnectProc
         stdout: StdioCollector {
             onStreamFinished: {
@@ -217,46 +226,70 @@ Item {
                     Theme.islandNeedsKeyboard = false
                     root.wifiStatusMsg = ""
                     wifiPassInput.text = ""
-                    if (wifiScanProc.running) wifiScanProc.running = false
-                    wifiScanProc.command = ["python3", Quickshell.shellPath("core/system_service.py"), "wifi", "--no-rescan"]
-                    wifiScanProc.running = true
+                    SystemServices.scanWifi()
                 } else {
-                    root.passwordSsid = ssid
-                    Theme.islandNeedsKeyboard = true
-                    wifiPassInput.forceActiveFocus()
-                    root.wifiStatusMsg = msg !== "" ? msg : "Clé requise ou échec de connexion"
+                    const net = root.wifiNetworks.find(n => String(n.ssid || "") === ssid)
+                    const isKnown = Boolean(net && net.known)
+                    if (!isKnown) {
+                        root.passwordSsid = ssid
+                        Theme.islandNeedsKeyboard = true
+                        wifiPassInput.forceActiveFocus()
+                    }
+                    root.wifiStatusMsg = msg !== "" ? msg : (isKnown ? "Échec de connexion" : "Clé requise ou échec de connexion")
+                }
+            }
+        }
+    }
+
+    function pasteWifiKey() {
+        if (!pasteProc.running) pasteProc.running = true
+    }
+
+    Process {
+        id: pasteProc
+        command: ["wl-paste", "--no-newline"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const clip = text.replace(/[\r\n]+$/, "")
+                if (clip === "") return
+                if (wifiPassInput.selectedText !== "") {
+                    wifiPassInput.remove(wifiPassInput.selectionStart, wifiPassInput.selectionEnd)
+                }
+                wifiPassInput.insert(wifiPassInput.cursorPosition, clip)
+            }
+        }
+    }
+
+    Process {
+        id: qrScanProc
+        command: ["python3", Quickshell.shellPath("core/wifi_qr_scan.py"), "scan"]
+        property string targetSsid: ""
+        stdout: StdioCollector {
+            onStreamFinished: {
+                root.qrScanning = false
+                try {
+                    let d = JSON.parse(text.trim() || "{}")
+                    if (d.ok) {
+                        let pwd = String(d.password || "")
+                        if (pwd !== "") {
+                            wifiPassInput.text = pwd
+                            root.connectWifi(qrScanProc.targetSsid || String(d.ssid || ""), pwd)
+                        } else {
+                            root.wifiStatusMsg = "QR code sans clé Wi-Fi"
+                        }
+                    } else {
+                        root.wifiStatusMsg = String(d.error || "Scan annulé")
+                    }
+                } catch (e) {
+                    root.wifiStatusMsg = "Lecture QR impossible"
                 }
             }
         }
     }
 
     Process {
-        id: btStateProc
-        command: ["python3", Quickshell.shellPath("core/bluetooth_service.py"), "etat"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    let d = JSON.parse(text.trim())
-                    root.btPresent = d.present === true
-                    root.btOn = d.allume === true
-                    root.btDevices = Array.isArray(d.appaires) ? d.appaires : []
-                    root.btConnectedCount = Array.isArray(d.connectes) ? d.connectes.length : 0
-                } catch (e) {}
-            }
-        }
-    }
-
-    Process {
-        id: btActionProc
-        onExited: {
-            root.btBusy = false
-            if (!btStateProc.running) btStateProc.running = true
-        }
-    }
-
-    Process {
         id: batLimitProc
-        onExited: Theme.rafraichirSystemInfo()
+        onExited: SystemServices.rafraichirSystemInfo()
     }
 
     Process {
@@ -412,6 +445,7 @@ Item {
         }
 
         Flickable {
+            id: sysFlick
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
@@ -456,6 +490,7 @@ Item {
         }
 
         Text {
+            id: reseauHeader
             text: "RÉSEAU"
             font.family: Theme.fontUi
             font.pixelSize: Theme.textXs
@@ -519,6 +554,35 @@ Item {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
                             onClicked: root.scanWifi()
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.preferredHeight: 24
+                        Layout.preferredWidth: wifiPowerLbl.implicitWidth + 14
+                        radius: 7
+                        color: root.wifiEnabled
+                            ? Qt.alpha(Theme.accent, 0.22)
+                            : Qt.alpha(Theme.error, 0.18)
+                        border.width: 1
+                        border.color: root.wifiEnabled
+                            ? Qt.alpha(Theme.accent, 0.55)
+                            : Qt.alpha(Theme.error, 0.45)
+
+                        Text {
+                            id: wifiPowerLbl
+                            anchors.centerIn: parent
+                            text: root.wifiEnabled ? "Wi-Fi ON" : "Wi-Fi OFF"
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.textXs
+                            font.weight: Font.DemiBold
+                            color: root.wifiEnabled ? Theme.accent : Theme.error
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: SystemServices.toggleWifiRadio()
                         }
                     }
                 }
@@ -646,6 +710,13 @@ Item {
                             echoMode: TextInput.Password
                             clip: true
                             selectByMouse: true
+                            onActiveFocusChanged: if (activeFocus) Theme.islandNeedsKeyboard = true
+                            Keys.onPressed: event => {
+                                if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_V) {
+                                    event.accepted = true
+                                    root.pasteWifiKey()
+                                }
+                            }
                             Keys.onReturnPressed: root.connectWifi(root.passwordSsid, text)
                             Keys.onEnterPressed: root.connectWifi(root.passwordSsid, text)
                             Keys.onEscapePressed: {
@@ -660,6 +731,33 @@ Item {
                                 font.family: Theme.fontUi
                                 font.pixelSize: Theme.textXs
                                 color: Qt.alpha(Theme.fg, 0.45)
+                            }
+                        }
+
+                        Rectangle {
+                            visible: root.qrAvailable
+                            Layout.preferredHeight: 22
+                            Layout.preferredWidth: 26
+                            radius: 5
+                            color: qrIslandMa.containsMouse || root.qrScanning ? Qt.alpha(Theme.accent, 0.25) : Qt.alpha(Theme.fg, 0.1)
+                            Icon {
+                                anchors.centerIn: parent
+                                glyph: "qrcode"
+                                size: 12
+                                color: root.qrScanning ? Theme.accent : Theme.fg
+                            }
+                            MouseArea {
+                                id: qrIslandMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (qrScanProc.running) return
+                                    root.qrScanning = true
+                                    root.wifiStatusMsg = "Scan QR en cours (webcam)…"
+                                    qrScanProc.targetSsid = root.passwordSsid
+                                    qrScanProc.running = true
+                                }
                             }
                         }
 

@@ -17,6 +17,8 @@ import Quickshell.Io
 Item {
     id: root
     property var options: ({})
+    property bool ouvert: false
+    onOuvertChanged: if (ouvert) refresh(false)
 
     // Échelle du texte, réglée par widget depuis le panneau (options.text_scale,
     // en pourcentage). 100 = taille du thème ; les widgets de compte LLM partent
@@ -31,8 +33,8 @@ Item {
 
     property var meteoLocal: ({})
     property bool loadedLocal: false
-    readonly property var meteo: root.cityOption === "" ? Theme.meteoData : meteoLocal
-    readonly property bool loaded: root.cityOption === "" ? Theme.meteoLoaded : loadedLocal
+    readonly property var meteo: root.cityOption === "" ? SystemServices.meteoData : meteoLocal
+    readonly property bool loaded: root.cityOption === "" ? SystemServices.meteoLoaded : loadedLocal
 
     readonly property bool ok: loaded && meteo && meteo.ok === true
     // Ville propre au widget (`widget_set meteo-1 city Lyon`) ; sinon le service
@@ -50,7 +52,7 @@ Item {
 
     function refresh(force) {
         if (root.cityOption === "") {
-            Theme.rafraichirMeteo(force)
+            SystemServices.rafraichirMeteo(force)
             return
         }
         const args = ["python3", Quickshell.shellPath("core/weather_service.py"),

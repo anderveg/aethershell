@@ -3,26 +3,8 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 
-// ────────────────────────────────────────────────────────────────────────────
-// TIROIR DE L'HISTORIQUE DES NOTIFICATIONS
-// ────────────────────────────────────────────────────────────────────────────
-// Surface indépendante du petit panneau de notifications : celui-ci montre les
-// notifications courantes (avec toast et boutons d'action), ce tiroir garde la
-// trace de TOUT ce qui est arrivé, y compris ce qui a été effacé du panneau ou
-// fermé par l'application émettrice.
-//
-// Source : `~/.cache/quickshell/notifications-history.jsonl`, écrit par
-// core/notif_target.py (une ligne par notification, la plus récente en fin de
-// fichier, plafond 200 tenu par core/notif_history.py).
-//
-// Un clic sur le titre rouvre la cible déjà résolue à la réception — la
-// notification peut être morte depuis longtemps, la commande est figée dans
-// l'entrée. Une cible de type « action » n'est pas rouvrable (il faudrait le
-// client) : son titre reste du texte.
-//
-// Le tiroir utilise `SurfaceFloutee` (teinte + bordure) sur une fenêtre plein
-// écran portant le capteur de clic extérieur.
-// ────────────────────────────────────────────────────────────────────────────
+// Tiroir de l'historique des notifications (`~/.cache/quickshell/notifications-history.jsonl`,
+// plafond 200 via `core/notif_history.py`, cibles figées via `core/notif_target.py`).
 Item {
     id: root
 
@@ -122,9 +104,9 @@ Item {
     // Bascule immédiate à l'écran, écriture derrière : attendre la réponse du
     // script rendrait le clic mou, alors que l'effet est purement local.
     function basculerDnd() {
-        Theme.doNotDisturb = !Theme.doNotDisturb
+        ShellState.doNotDisturb = !ShellState.doNotDisturb
         dndProc.command = ["python3", Quickshell.shellPath("core/config_manager.py"),
-                           "style", "do_not_disturb", Theme.doNotDisturb ? "true" : "false"]
+                           "style", "do_not_disturb", ShellState.doNotDisturb ? "true" : "false"]
         dndProc.running = true
     }
 
@@ -203,7 +185,7 @@ Item {
         id: historyWindow
         // La surface reste montée tant que le tiroir n'est pas complètement sorti :
         // sinon elle se démapte au premier changement d'état et coupe l'animation.
-        visible: Theme.notifHistoryVisible || historyWindow.reveal > 0
+        visible: ShellState.notifHistoryVisible || historyWindow.reveal > 0
         anchors { top: true; bottom: true; left: true; right: true }
         exclusionMode: ExclusionMode.Ignore
         color: "transparent"
@@ -212,7 +194,7 @@ Item {
         // revient tout de suite à l'application, alors que le tiroir finit de
         // sortir. (Le passage à None ne recrée pas la couche : l'animation de
         // sortie avait été coupée par la course `visible`/timer, pas par ceci.)
-        WlrLayershell.keyboardFocus: Theme.notifHistoryVisible
+        WlrLayershell.keyboardFocus: ShellState.notifHistoryVisible
             ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
         WlrLayershell.namespace: "shell-notif-history"
 
@@ -232,9 +214,9 @@ Item {
         }
 
         Connections {
-            target: Theme
+            target: ShellState
             function onNotifHistoryVisibleChanged() {
-                if (Theme.notifHistoryVisible) {
+                if (ShellState.notifHistoryVisible) {
                     root.selectedRow = -1
                     root.openedAt = Date.now()
                     Theme.activePopup = ""      // le panneau de notifications s'efface
@@ -250,8 +232,8 @@ Item {
         Item {
             id: keyCatcher
             anchors.fill: parent
-            focus: Theme.notifHistoryVisible
-            Keys.onEscapePressed: Theme.notifHistoryVisible = false
+            focus: ShellState.notifHistoryVisible
+            Keys.onEscapePressed: ShellState.notifHistoryVisible = false
             Keys.onUpPressed: root.moveSelection(-1)
             Keys.onDownPressed: root.moveSelection(1)
             Keys.onReturnPressed: root.activateSelection()
@@ -266,7 +248,7 @@ Item {
                 // (icône de l'en-tête du panneau) arrive parfois après le map de
                 // cette surface plein écran, et passait pour un clic extérieur.
                 if (Date.now() - root.openedAt < 450) return
-                Theme.notifHistoryVisible = false
+                ShellState.notifHistoryVisible = false
             }
         }
 
@@ -354,9 +336,9 @@ Item {
                             width: dndRow.implicitWidth + 14
                             height: 20
                             radius: 10
-                            color: Theme.doNotDisturb ? Qt.alpha(Theme.accent, 0.22) : Qt.alpha(Theme.fg, 0.07)
+                            color: ShellState.doNotDisturb ? Qt.alpha(Theme.accent, 0.22) : Qt.alpha(Theme.fg, 0.07)
                             border.width: 1
-                            border.color: Theme.doNotDisturb ? Theme.accent : "transparent"
+                            border.color: ShellState.doNotDisturb ? Theme.accent : "transparent"
 
                             Row {
                                 id: dndRow
@@ -365,15 +347,15 @@ Item {
 
                                 Icon {
                                     anchors.verticalCenter: parent.verticalCenter
-                                    glyph: Theme.doNotDisturb ? "bell-off" : "bell"
+                                    glyph: ShellState.doNotDisturb ? "bell-off" : "bell"
                                     size: 11
-                                    color: Theme.doNotDisturb ? Theme.accent : Qt.alpha(Theme.fg, 0.6)
+                                    color: ShellState.doNotDisturb ? Theme.accent : Qt.alpha(Theme.fg, 0.6)
                                 }
 
                                 Text {
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: "Ne pas déranger"
-                                    color: Theme.doNotDisturb ? Theme.accent : Qt.alpha(Theme.fg, 0.6)
+                                    color: ShellState.doNotDisturb ? Theme.accent : Qt.alpha(Theme.fg, 0.6)
                                     font.pixelSize: Theme.textXs
                                 }
                             }
@@ -521,7 +503,7 @@ Item {
                                         Icon {
                                             id: histQuietIcon
                                             readonly property string appName: String(rowLoader.modelData.entry.app || "")
-                                            visible: appName !== "" && Theme.quietNotifApps.indexOf(appName) >= 0
+                                            visible: appName !== "" && ShellState.quietNotifApps.indexOf(appName) >= 0
                                             anchors.right: histCloseIcon.left
                                             anchors.rightMargin: 10
                                             anchors.verticalCenter: parent.verticalCenter
@@ -537,8 +519,8 @@ Item {
                                                 hoverEnabled: true
                                                 cursorShape: Qt.PointingHandCursor
                                                 onClicked: {
-                                                    if (Theme.notifOps && Theme.notifOps.setQuiet) {
-                                                        Theme.notifOps.setQuiet(histQuietIcon.appName, false)
+                                                    if (ShellState.notifOps && ShellState.notifOps.setQuiet) {
+                                                        ShellState.notifOps.setQuiet(histQuietIcon.appName, false)
                                                     }
                                                 }
                                             }

@@ -22,15 +22,15 @@ Item {
     property string mediaTitle: ""
     property bool isMediaActive: false
 
-    readonly property var sysInfo: Theme.systemInfo || ({})
+    readonly property var sysInfo: SystemServices.systemInfo || ({})
     readonly property var batInfo: sysInfo.battery || ({})
     readonly property bool isLaptop: Boolean(sysInfo.has_battery || (batInfo && batInfo.present))
 
     readonly property var tabsModel: {
         let base = [
-            { idx: 0, glyph: "widgets", label: "Contrôles", src: "IslandTabControles.qml" },
-            { idx: 1, glyph: "bell",    label: "Alertes",   src: "IslandTabAlertes.qml" },
-            { idx: 2, glyph: "cog",     label: "Système",   src: "IslandTabSysteme.qml" },
+            { idx: 0, glyph: "widgets", label: "Contrôles",    src: "IslandTabControles.qml" },
+            { idx: 1, glyph: "bell",    label: "Productivité", src: "IslandTabAlertes.qml" },
+            { idx: 2, glyph: "cog",     label: "Système",      src: "IslandTabSysteme.qml" },
             { idx: 3, glyph: "palette", label: "Apparence", src: "IslandTabApparence.qml" }
         ]
         if (Theme.ilotProjetsActif) {
@@ -148,7 +148,7 @@ Item {
     }
 
     Component.onCompleted: {
-        Theme.islandNavHook = root.handleNav
+        ShellState.islandNavHook = root.handleNav
     }
 
     RowLayout {
@@ -220,7 +220,7 @@ Item {
                 }
 
                 Text {
-                    text: Theme.notifCount + " alerte" + (Theme.notifCount > 1 ? "s" : "") + (Theme.doNotDisturb ? " · N.P.D." : "")
+                    text: ShellState.notifCount + " alerte" + (ShellState.notifCount > 1 ? "s" : "") + (ShellState.doNotDisturb ? " · N.P.D." : "")
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.textXs
                     color: Qt.alpha(Theme.fg, 0.65)

@@ -58,3 +58,20 @@ IslandTabApparence 1.0 IslandTabApparence.qml
 IlotProjets 1.0 IlotProjets.qml
 VinylArt 1.0 VinylArt.qml
 NotifService 1.0 NotifService.qml
+ConfigSwitch 1.0 ConfigSwitch.qml
+ConfigSegmented 1.0 ConfigSegmented.qml
+singleton SystemServices 1.0 SystemServices.qml
+singleton LauncherEngine 1.0 LauncherEngine.qml
+singleton ShellState 1.0 ShellState.qml
+WidgetPressePapiers 1.0 widgets/presse_papiers.qml
+WidgetMeteo 1.0 widgets/meteo.qml
+WidgetDisques 1.0 widgets/disques.qml
+WidgetHomelab 1.0 widgets/homelab.qml
+ScreenshotOverlay 1.0 ScreenshotOverlay.qml
+DesktopWidgetsLayer 1.0 DesktopWidgetsLayer.qml
+FullscreenOverlay 1.0 FullscreenOverlay.qml
+IslandThemePicker 1.0 IslandThemePicker.qml
+IslandWallpaperPicker 1.0 IslandWallpaperPicker.qml
+IslandNotesDrawer 1.0 IslandNotesDrawer.qml
+IslandLiveActivityDrawer 1.0 IslandLiveActivityDrawer.qml
+IslandLauncherDrawer 1.0 IslandLauncherDrawer.qml

@@ -28,8 +28,8 @@ Item {
         return 1.0
     }
 
-    property var etat: ({})
-    property bool charge: false
+    readonly property var etat: SystemServices.hermesData
+    readonly property bool charge: SystemServices.hermesCharge
 
     readonly property var lignes: {
         const l = root.etat.sessions || []
@@ -38,24 +38,10 @@ Item {
         return vivantes.concat(autres).slice(0, 3)
     }
 
-    function jeton(n) {
-        n = Number(n) || 0
-        if (n >= 1e6) return (n / 1e6).toFixed(1).replace(".", ",") + " M"
-        if (n >= 1e3) return Math.round(n / 1e3) + " k"
-        return String(n)
-    }
+    function jeton(n) { return SystemServices.formatTokens(n) }
+    function duree(s) { return SystemServices.formatDuration(s) }
 
-    function duree(s) {
-        s = Number(s) || 0
-        if (s >= 3600) return Math.round(s / 3600) + " h"
-        if (s >= 60) return Math.round(s / 60) + " min"
-        return s + " s"
-    }
-
-    function rafraichir() {
-        proc.running = false
-        proc.running = true
-    }
+    function rafraichir() { SystemServices.rafraichirHermes() }
 
     function actionner(cmd, libelle) {
         actionStatus = libelle ? libelle + "…" : "Action en cours…"
@@ -75,22 +61,6 @@ Item {
         running: true
         repeat: true
         onTriggered: root.rafraichir()
-    }
-
-    Process {
-        id: proc
-        command: ["python3", Quickshell.shellPath("core/hermes_applet.py")]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    const d = JSON.parse(text.trim())
-                    root.etat = (d.detail || ({})).hermes || ({})
-                } catch (e) {
-                    root.etat = ({})
-                }
-                root.charge = true
-            }
-        }
     }
 
     Process {

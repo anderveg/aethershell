@@ -12,7 +12,6 @@ import Quickshell.Hyprland
 //   • Exposes global design tokens (palette, corner radii, opacities, heights)
 //   • Injects dynamic styling live into Hyprland via hyprctl eval (borders, blur, rounding)
 //   • Manages cross-island popups (ensuring mutual exclusivity)
-//   • Hosts the IPC interface ("shell") for external CLI commands and keybinds
 // ════════════════════════════════════════════════════════════════════════════
 
 QtObject {
@@ -77,59 +76,46 @@ QtObject {
     property bool widgetsEditMode: false
     property bool widgetsBureauVisibles: true
     property bool widgetsSnapGrid: true
-    function setSubmap(name) {
-        if (Hyprland.usingLua) {
-            Hyprland.dispatch('hl.dsp.submap("' + name + '")')
-        } else {
-            Hyprland.dispatch("submap " + name)
-        }
-    }
-
-    property var wallpaperNavHook: null
-    property var themeNavHook: null
     onWallpaperPickerOpenChanged: {
         if (wallpaperPickerOpen) {
-            setSubmap("aether-wp")
+            ShellState.setSubmap("aether-wp")
         } else {
-            setSubmap("reset")
+            ShellState.setSubmap("reset")
         }
     }
     onThemePickerOpenChanged: {
         if (themePickerOpen) {
-            setSubmap("aether-theme")
+            ShellState.setSubmap("aether-theme")
         } else {
-            setSubmap("reset")
+            ShellState.setSubmap("reset")
         }
     }
     property int islandPanelTab: 0
+    property string islandSystemeTarget: ""
     property string islandSidePanel: ""
     property bool islandCalendarRetracted: false
     property int todoRev: 0
     property bool islandNeedsKeyboard: false
     property bool islandNavActive: false
-    property var islandNavHook: null
-    property string activeSubmap: ""
-    property bool caffeineActif: false
-    property Process caffeineProc: Process {
-        command: ["systemd-inhibit", "--what=idle", "--who=AetherShell", "--why=Mode Caffeine", "sleep", "infinity"]
-        running: root.caffeineActif
-    }
     onIslandNavActiveChanged: {
         if (!islandNavActive) {
-            setSubmap("reset")
+            ShellState.setSubmap("reset")
         }
     }
     property int panelAnimDuration: 240
     property bool ilotProjetsActif: true
     property string ilotShowVpn: "both"
     property string ilotShowCapture: "both"
+    property string ilotShowLiveActivity: "both"
     property string ilotShowMedia: "compact"
     property string ilotShowPlanka: "both"
     property string ilotShowWorkspaces: "both"
     property string ilotShowClock: "both"
     property var ilotAppletsMode: ({})
+    property var ilotAppletsOrder: []
     property int ilotAppletsRev: 0
     property bool majSeulementSiDispo: false
+    property string majTerminalMode: "float"
 
     function normIlotMode(val, defVal) {
         if (val === true) return defVal || "both"
@@ -231,10 +217,6 @@ QtObject {
     // PROPOSITION_widgets.md), pas une position libre. Les marges sont calculées
     // dans main.qml à partir de cette clé et de la largeur de la capsule.
     property string launcherPosition: "bas-centre"
-    // Widgets de bureau (core/widgets.json) : liste de dicts
-    // { id, type, workspace, x, y, enabled, options }. main.qml en fait une
-    // surface par entrée.
-    property var widgets: []
     property string primaryMonitor: ""
     property string wallpaperDir: "$HOME/Images/wallpapers/"
     property string screenshotsDir: "$HOME/Images/Screenshots/"
@@ -370,25 +352,6 @@ QtObject {
     property int depthMaskAdouci: 8
 
     // ────────────────────────────────────────────────────────────────────────
-    // SECTION 4: OSD (ON-SCREEN DISPLAY) STATE & CONTROLLER
-    // ────────────────────────────────────────────────────────────────────────
-    property bool osdVisible: false
-    property string osdKind: ""     // "volume" | "brightness" | "mute"
-    property real osdValue: 0       // 0..100
-    property Timer osdTimer: Timer {
-        interval: 1600
-        repeat: false
-        onTriggered: root.osdVisible = false
-    }
-    function showOsd(kind, value) {
-        root.osdKind = kind
-        root.osdValue = Math.max(0, Math.min(100, value))
-        root.osdVisible = true
-        root.osdTimer.restart()
-        if (kind === "volume") root.volumeUpdated()
-    }
-    signal volumeUpdated()
-
     // ────────────────────────────────────────────────────────────────────────
     // SECTION 5: POPUP COORDINATION ACROSS ISLANDS
     // ────────────────────────────────────────────────────────────────────────
@@ -432,106 +395,8 @@ QtObject {
     onSpotlightVisibleChanged: {
         if (spotlightVisible) spotlightOpenedAt = Date.now()
     }
-    // Compte des notifications en cours : publié par l'îlot droit (qui possède
-    // le serveur) pour que l'applet de la cloche puisse l'afficher.
-    property int notifCount: 0
-    // Clés des panneaux : celles des îlots ("calendar", "media", "notifications")
-    // et celles des applets ("applet:<id>", rendues par le composant lui-même).
     property string activePopup: ""
-    // Clic milieu sur un applet : nom de la section du panneau à déplier.
-    // Consommé (et remis à vide) par config_panel.qml à l'ouverture.
     property string configTarget: ""
-
-    // Applications dont les notifications n'apparaissent pas en toast (elles vont
-    // directement au centre). Alimentée par core/style_vars.json.
-    property var quietNotifApps: []
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // CONTEXTES DE TRAVAIL (manuels : îlot, commande `as contexte`, IPC)
-    // ──────────────────────────────────────────────────────────────────────────
-    property string activeContext: "normal"
-    readonly property var workContexts: [
-        { id: "normal",  label: "Normal",       desc: "DND off · Équilibré · Widgets visibles",           icon: "widgets",       dnd: false, caffeine: false, power: "balanced",    night: false, nightTemp: 4500, widgets: true },
-        { id: "focus",   label: "Focus / Code", desc: "DND on · Caffeine · Performance · Widgets masqués", icon: "cog",           dnd: true,  caffeine: true,  power: "performance", night: false, nightTemp: 4500, widgets: false },
-        { id: "reunion", label: "Réunion",      desc: "DND on · Caffeine · Équilibré · Widgets masqués",   icon: "bell-off",      dnd: true,  caffeine: true,  power: "balanced",    night: false, nightTemp: 4500, widgets: false },
-        { id: "detente", label: "Détente",      desc: "DND off · Nuit 3800K · Éco · Widgets visibles",     icon: "weather-night", dnd: false, caffeine: false, power: "power-saver", night: true,  nightTemp: 3800, widgets: true }
-    ]
-
-    function applyContext(ctxId) {
-        const q = String(ctxId || "").trim().toLowerCase()
-        const aliasMap = { "code": "focus", "travail": "focus", "meeting": "reunion", "relax": "detente" }
-        const key = aliasMap[q] || q
-        let found = null
-        for (let i = 0; i < root.workContexts.length; i++) {
-            if (root.workContexts[i].id === key) {
-                found = root.workContexts[i]
-                break
-            }
-        }
-        if (!found) return false
-        root.activeContext = found.id
-        root.doNotDisturb = found.dnd
-        root.caffeineActif = found.caffeine
-        root.widgetsBureauVisibles = found.widgets
-        Quickshell.execDetached(["python3", Quickshell.shellPath("core/config_manager.py"), "style", "do_not_disturb", found.dnd ? "true" : "false"])
-        Quickshell.execDetached(["powerprofilesctl", "set", found.power])
-        if (found.night) {
-            Quickshell.execDetached(["python3", Quickshell.shellPath("core/nuit_service.py"), "temperature", String(found.nightTemp)])
-            Quickshell.execDetached(["python3", Quickshell.shellPath("core/nuit_service.py"), "activer"])
-        } else {
-            Quickshell.execDetached(["python3", Quickshell.shellPath("core/nuit_service.py"), "desactiver"])
-        }
-        return true
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // LIVE ACTIVITY (Îlot dynamique : minuteur, enregistrement, téléchargements, IPC)
-    // ──────────────────────────────────────────────────────────────────────────
-    property var ipcActivities: []
-    property int timerTotalSec: 0
-    property int timerRemainingSec: 0
-    property bool timerRunning: false
-    property bool timerPaused: false
-    property string timerLabel: "Minuteur"
-
-    property Timer liveTimerTick: Timer {
-        interval: 1000
-        repeat: true
-        running: root.timerRunning && !root.timerPaused
-        onTriggered: {
-            if (root.timerRemainingSec > 1) {
-                root.timerRemainingSec -= 1
-            } else {
-                const lbl = root.timerLabel || "Minuteur"
-                root.timerRunning = false
-                root.timerPaused = false
-                root.timerRemainingSec = 0
-                root.timerTotalSec = 0
-                Quickshell.execDetached(["notify-send", "-a", "AetherShell", lbl + " terminé", "Le décompte est arrivé à 0."])
-            }
-        }
-    }
-
-    function startTimer(minutes, label) {
-        const mins = Math.max(1, Math.round(Number(minutes) || 0))
-        root.timerTotalSec = mins * 60
-        root.timerRemainingSec = mins * 60
-        root.timerLabel = (label && String(label).trim() !== "") ? String(label).trim() : ("Minuteur " + mins + "m")
-        root.timerPaused = false
-        root.timerRunning = true
-    }
-
-    function togglePauseTimer() {
-        if (!root.timerRunning) return
-        root.timerPaused = !root.timerPaused
-    }
-
-    function stopTimer() {
-        root.timerRunning = false
-        root.timerPaused = false
-        root.timerRemainingSec = 0
-        root.timerTotalSec = 0
-    }
 
     function toggleLiveActivity() {
         if (root.barStyle !== "island") return
@@ -543,64 +408,6 @@ QtObject {
         root.islandNotesOpen = false
         root.islandLiveActivityOpen = !root.islandLiveActivityOpen
     }
-
-    function handleLiveActivity(action, actId, title, progress) {
-        const a = String(action || "").toLowerCase()
-        const id = String(actId || "").trim()
-        if (a === "clear") {
-            root.ipcActivities = []
-            return "ok"
-        }
-        if (!id) return "missing_id"
-        const list = root.ipcActivities.slice()
-        const idx = list.findIndex(x => x && x.id === id)
-        if (a === "stop" || a === "remove" || a === "done") {
-            if (idx >= 0) {
-                list.splice(idx, 1)
-                root.ipcActivities = list
-            }
-            return "ok"
-        }
-        const p = (progress !== undefined && progress !== null) ? Number(progress) : -1
-        const prog = isNaN(p) ? -1 : (p < 0 ? -1 : Math.max(0, Math.min(100, Math.round(p))))
-        if (a === "start" || (a === "update" && idx < 0)) {
-            const item = {
-                id: id,
-                title: String(title || id),
-                progress: prog,
-                startedAt: Date.now()
-            }
-            if (idx >= 0) list[idx] = item
-            else list.push(item)
-            root.ipcActivities = list
-            return "ok"
-        }
-        if (a === "update" && idx >= 0) {
-            const cur = list[idx]
-            list[idx] = {
-                id: id,
-                title: (title !== undefined && String(title) !== "") ? String(title) : cur.title,
-                progress: prog,
-                startedAt: cur.startedAt || Date.now()
-            }
-            root.ipcActivities = list
-            return "ok"
-        }
-        return "unknown_action"
-    }
-    // « Ne pas déranger » : les notifications continuent d'arriver dans
-    // l'historique, mais aucun toast ne s'affiche. Réglé depuis le centre de
-    // notifications, mémorisé dans style_vars.json (do_not_disturb).
-    property bool doNotDisturb: false
-    // Pont vers le centre de notifications : l'îlot droit possède le serveur, la
-    // liste et les actions ; l'applet possède le panneau (pour s'ancrer à la
-    // cloche). Ces trois propriétés sont la seule surface d'échange.
-    property var notifList: []
-    property var notifArchive: []
-    property var notifOps: ({})
-    property var notifToast: null
-    property bool notifToastVisible: false
-    property bool notifToastHovered: false
 
     // Ouvre le panneau de configuration sur une section précise. Le clic milieu
     // d'un applet passe par ici (`Theme.openConfigSection`), comme l'IPC : une
@@ -682,12 +489,7 @@ QtObject {
         if (barre === "bas") return -(popupH + 6)
         if (barre === "cote-gauche" || barre === "cote-droite")
             return -Math.round((popupH - (item ? item.height : 0)) / 2)
-        // Les popups d'applet se posent sous la barre, au niveau du centre de
-        // notifications : `barHeight + 6` laissait un vide de treize pixels entre
-        // le bas de l'îlot et le panneau, et tous les popups paraissaient « trop
-        // bas » par rapport au centre.
-        // Les popups d'applet se posent 6 px sous la barre. La marge est un seul
-        // point pour toutes les surfaces : la changer les déplace toutes ensemble.
+        // Les popups d'applet se posent 6 px sous la barre.
         return barHeight + 6
     }
 
@@ -820,12 +622,13 @@ QtObject {
         if (typeof data.lock_bg_mode === "string") root.lockBgMode = data.lock_bg_mode
         if (typeof data.lock_bg_color === "string") root.lockBgColor = data.lock_bg_color
         if (typeof data.lock_bg_image === "string") root.lockBgImage = data.lock_bg_image
-        if (Array.isArray(data.quiet_notif_apps)) root.quietNotifApps = data.quiet_notif_apps
-        if (typeof data.do_not_disturb === "boolean") root.doNotDisturb = data.do_not_disturb
+        if (Array.isArray(data.quiet_notif_apps)) ShellState.quietNotifApps = data.quiet_notif_apps
+        if (typeof data.do_not_disturb === "boolean") ShellState.doNotDisturb = data.do_not_disturb
         if (typeof data.launch_history === "boolean") root.launchHistory = data.launch_history
         if (typeof data.ilot_projets_actif === "boolean") root.ilotProjetsActif = data.ilot_projets_actif
         if (data.ilot_show_vpn !== undefined) root.ilotShowVpn = root.normIlotMode(data.ilot_show_vpn, "both")
         if (data.ilot_show_capture !== undefined) root.ilotShowCapture = root.normIlotMode(data.ilot_show_capture, "both")
+        if (data.ilot_show_live_activity !== undefined) root.ilotShowLiveActivity = root.normIlotMode(data.ilot_show_live_activity, "both")
         if (data.ilot_show_media !== undefined) root.ilotShowMedia = root.normIlotMode(data.ilot_show_media, "compact")
         if (data.ilot_show_planka !== undefined) root.ilotShowPlanka = root.normIlotMode(data.ilot_show_planka, "both")
         if (data.ilot_show_workspaces !== undefined) root.ilotShowWorkspaces = root.normIlotMode(data.ilot_show_workspaces, "both")
@@ -834,7 +637,14 @@ QtObject {
             root.ilotAppletsMode = data.ilot_applets_mode
             root.ilotAppletsRev++
         }
+        if (Array.isArray(data.ilot_applets_order)) {
+            root.ilotAppletsOrder = data.ilot_applets_order
+            root.ilotAppletsRev++
+        }
         if (typeof data.maj_seulement_si_dispo === "boolean") root.majSeulementSiDispo = data.maj_seulement_si_dispo
+        if (typeof data.maj_terminal_mode === "string") {
+            root.majTerminalMode = (data.maj_terminal_mode === "tiling") ? "tiling" : "float"
+        }
         if (typeof data.idle_suspend_timeout === "number") root.idleSuspendTimeout = Math.max(0, Math.round(data.idle_suspend_timeout))
         if (typeof data.first_run_completed === "boolean") {
             root.firstRunCompleted = data.first_run_completed
@@ -931,834 +741,4 @@ QtObject {
         }
     }
 
-    // Widgets de bureau : fichier d'état séparé, surveillé comme style_vars.
-    // Sans ce FileView, une entrée ajoutée par le panneau n'atteindrait jamais
-    // le rendu (le shell ne relit pas les fichiers qu'il ne surveille pas).
-    property FileView widgetsFile: FileView {
-        path: Quickshell.shellPath("core/widgets.json")
-        watchChanges: true
-        printErrors: false
-        onFileChanged: reload()
-        onLoaded: {
-            try {
-                const parsed = JSON.parse(text())
-                root.widgets = Array.isArray(parsed.widgets) ? parsed.widgets : []
-            } catch (e) {
-                console.warn("Theme.qml: Failed to parse core/widgets.json:", e)
-            }
-        }
-    }
-
-    // ────────────────────────────────────────────────────────────────────────
-    // Registre des applets de barre (bar_applets.json + applets_catalogue.json)
-    // ────────────────────────────────────────────────────────────────────────
-    // Centralisé ici en pur JS pour éliminer les 22 FileView et les dizaines de
-    // processus concurrents `bar_applets.py resoudre`.
-    property var barAppletsCatalogue: []
-    property var barAppletsActifs: ({})
-    property int barAppletsRev: 0
-
-    readonly property var barAnciens: ({
-        "gauche": "haut:debut", "centre": "haut:milieu", "droite": "haut:fin",
-        "haut-gauche": "haut:debut", "haut-centre": "haut:milieu", "haut-droite": "haut:fin",
-        "bas": "bas:milieu",
-        "cote-gauche": "cote-gauche:milieu",
-        "cote-droite": "cote-droite:milieu"
-    })
-
-    property FileView appletsCatalogueFile: FileView {
-        path: Quickshell.shellPath("core/applets_catalogue.json")
-        watchChanges: false
-        printErrors: false
-        onLoaded: {
-            try {
-                const d = JSON.parse(text())
-                root.barAppletsCatalogue = (d && Array.isArray(d.applets)) ? d.applets : []
-                root.barAppletsRev++
-            } catch (e) {
-                root.barAppletsCatalogue = []
-            }
-        }
-    }
-
-    property FileView barAppletsFile: FileView {
-        path: Quickshell.shellPath("core/bar_applets.json")
-        watchChanges: true
-        printErrors: false
-        onFileChanged: reload()
-        onLoaded: {
-            try {
-                const d = JSON.parse(text())
-                const rawActifs = (d && typeof d.actifs === "object" && d.actifs) ? d.actifs : ({})
-                const normActifs = ({})
-                for (const cle in rawActifs) {
-                    const item = Object.assign({}, rawActifs[cle])
-                    if (item.ile && root.barAnciens[item.ile]) {
-                        item.ile = root.barAnciens[item.ile]
-                    }
-                    normActifs[cle] = item
-                }
-                root.barAppletsActifs = normActifs
-                root.barAppletsRev++
-            } catch (e) {
-                root.barAppletsActifs = ({})
-            }
-        }
-    }
-
-    function appletsPourIle(ile) {
-        const _ = root.barAppletsRev
-        if (!ile || !root.barAppletsCatalogue.length) return []
-        const cible = root.barAnciens[ile] || ile
-        const liste = []
-        for (let i = 0; i < root.barAppletsCatalogue.length; i++) {
-            const cat = root.barAppletsCatalogue[i]
-            if (!cat || !cat.id || cat.fixe) continue
-            const choix = root.barAppletsActifs[cat.id]
-            if (!choix) continue
-
-            let itemIle = String(choix.ile || cat.ile || "haut:fin")
-            itemIle = root.barAnciens[itemIle] || itemIle
-            if (itemIle !== cible) continue
-
-            const entree = Object.assign({}, cat)
-            entree.actif = true
-            entree.ile = itemIle
-            const ordre = parseInt(choix.ordre, 10)
-            entree.ordre = isNaN(ordre) ? (cat.ordre || 100) : ordre
-            const echelle = parseInt(choix.text_scale, 10)
-            entree.text_scale = isNaN(echelle) ? 100 : Math.max(60, Math.min(160, echelle))
-            entree.options = choix.options || ({})
-            liste.push(entree)
-        }
-
-        liste.sort(function(a, b) {
-            const oa = (typeof a.ordre === "number") ? a.ordre : 100
-            const ob = (typeof b.ordre === "number") ? b.ordre : 100
-            if (oa !== ob) return oa - ob
-            return String(a.id || "").localeCompare(String(b.id || ""))
-        })
-        return liste
-    }
-
-    function appletsPourIlot(state, side) {
-        const _ = root.barAppletsRev + root.ilotAppletsRev
-        if (!root.barAppletsCatalogue.length) return []
-        const liste = []
-        for (let i = 0; i < root.barAppletsCatalogue.length; i++) {
-            const cat = root.barAppletsCatalogue[i]
-            if (!cat || !cat.id || cat.fixe) continue
-            if (cat.id === "visualiseur" || cat.id === "workspaces" || cat.id === "horloge" || cat.id === "musique") continue
-            const mode = root.ilotAppletModeFor(cat.id)
-            if (!root.ilotVisibleIn(mode, state)) continue
-
-            const choix = root.barAppletsActifs[cat.id] || ({})
-            let itemIle = String(choix.ile || cat.ile || "haut:fin")
-            itemIle = root.barAnciens[itemIle] || itemIle
-            if (side === "left" && itemIle !== "haut:debut") continue
-            if (side === "right" && itemIle === "haut:debut") continue
-
-            const entree = Object.assign({}, cat)
-            entree.actif = true
-            entree.ile = itemIle
-            const ordre = parseInt(choix.ordre, 10)
-            entree.ordre = isNaN(ordre) ? (cat.ordre || 100) : ordre
-            const echelle = parseInt(choix.text_scale, 10)
-            entree.text_scale = isNaN(echelle) ? 100 : Math.max(60, Math.min(160, echelle))
-            entree.options = choix.options || ({})
-            liste.push(entree)
-        }
-        liste.sort(function(a, b) {
-            const oa = (typeof a.ordre === "number") ? a.ordre : 100
-            const ob = (typeof b.ordre === "number") ? b.ordre : 100
-            if (oa !== ob) return oa - ob
-            return String(a.id || "").localeCompare(String(b.id || ""))
-        })
-        return liste
-    }
-
-    // ────────────────────────────────────────────────────────────────────────
-    // État système partagé (core/system_service.py info)
-    // ────────────────────────────────────────────────────────────────────────
-    // Centralisé ici avec un unique polling cadencé (10s) pour alimenter
-    // ReseauApplet, LuminositeApplet, GestionEnergieApplet et island_right
-    // sans multiplier les forks concurrents de python3.
-    property var systemInfo: ({})
-    property bool systemInfoPret: false
-
-    property Process systemInfoProc: Process {
-        command: ["python3", Quickshell.shellPath("core/system_service.py"), "info"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    const d = JSON.parse(text.trim())
-                    if (d && typeof d === "object") {
-                        root.systemInfo = d
-                        root.systemInfoPret = true
-                    }
-                } catch (e) {}
-            }
-        }
-    }
-
-    function rafraichirSystemInfo() {
-        if (systemInfoProc.running) return
-        systemInfoProc.running = true
-    }
-
-    property Timer systemInfoTimer: Timer {
-        interval: 10000
-        repeat: true
-        running: true
-        triggeredOnStart: true
-        onTriggered: root.rafraichirSystemInfo()
-    }
-
-    // ────────────────────────────────────────────────────────────────────────
-    // Fond d'écran courant partagé (awww query)
-    // ────────────────────────────────────────────────────────────────────────
-    // Sonde partagée pour `FondProfondeur`, déclenchée uniquement quand actif.
-    property string wallpaperCourant: ""
-    property double wallpaperLockUntil: 0
-
-    function setWallpaperCourant(path) {
-        if (!path) return
-        root.wallpaperLockUntil = Date.now() + 4500
-        root.wallpaperCourant = String(path)
-    }
-
-    property Process wallpaperSondeProc: Process {
-        command: ["awww", "query"]
-        running: root.depthWallpaper || root.depthMask
-        stdout: StdioCollector {
-            onStreamFinished: {
-                if (Date.now() < root.wallpaperLockUntil) return
-                const m = String(text).match(/currently displaying:.*?(?:image|video):\s*(\S+)/)
-                if (m) root.wallpaperCourant = m[1]
-            }
-        }
-    }
-
-    function rafraichirWallpaper() {
-        if (Date.now() < root.wallpaperLockUntil) return
-        if (!wallpaperSondeProc.running) wallpaperSondeProc.running = true
-    }
-
-    property Timer wallpaperSondeTimer: Timer {
-        interval: 2500
-        repeat: true
-        running: root.depthWallpaper || root.depthMask
-        triggeredOnStart: true
-        onTriggered: root.rafraichirWallpaper()
-    }
-
-    // ────────────────────────────────────────────────────────────────────────
-    // Météo partagée (weather_service.py — évite 3 sondes concurrentes)
-    // ────────────────────────────────────────────────────────────────────────
-    property var meteoData: ({})
-    property string meteoStatut: ""
-    property bool meteoLoaded: false
-    property bool meteoActif: false
-
-    property Process meteoProc: Process {
-        command: ["python3", Quickshell.shellPath("core/weather_service.py")]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                root.meteoLoaded = true
-                try {
-                    const d = JSON.parse(String(text).trim())
-                    if (d && d.ok) {
-                        root.meteoData = d
-                        root.meteoStatut = ""
-                    } else {
-                        root.meteoData = ({})
-                        root.meteoStatut = String((d && d.error) || "météo indisponible")
-                    }
-                } catch (e) {
-                    root.meteoData = ({})
-                    root.meteoStatut = "réponse météo illisible"
-                }
-            }
-        }
-    }
-
-    function rafraichirMeteo(force) {
-        meteoActif = true
-        if (meteoProc.running) return
-        const args = ["python3", Quickshell.shellPath("core/weather_service.py")]
-        if (force) args.push("--force")
-        meteoProc.command = args
-        meteoProc.running = true
-    }
-
-    property Timer meteoTimer: Timer {
-        interval: 600000
-        repeat: true
-        running: root.meteoActif
-        onTriggered: root.rafraichirMeteo(false)
-    }
-
-    // ────────────────────────────────────────────────────────────────────────
-    // Démon de métriques partagé (P1 : supprime les lancements python3 2s/3s)
-    // ────────────────────────────────────────────────────────────────────────
-    property var systemeData: ({})
-    property bool systemeCharge: false
-    property var reseauData: ({})
-    property bool reseauCharge: false
-    property bool metriquesActif: false
-
-    property Process metriquesDaemonProc: Process {
-        running: root.metriquesActif
-        command: ["python3", Quickshell.shellPath("core/metriques_daemon.py"), "2"]
-        stdout: SplitParser {
-            onRead: line => {
-                const s = String(line || "").trim()
-                if (!s) return
-                try {
-                    const d = JSON.parse(s)
-                    if (d && d.systeme) {
-                        root.systemeData = d.systeme
-                        root.systemeCharge = true
-                    }
-                    if (d && d.reseau) {
-                        root.reseauData = d.reseau
-                        root.reseauCharge = true
-                    }
-                } catch (e) {}
-            }
-        }
-    }
-
-    property Timer metriquesGardeTimer: Timer {
-        interval: 10000
-        repeat: true
-        running: root.metriquesActif && !root.metriquesDaemonProc.running
-        onTriggered: root.metriquesDaemonProc.running = true
-    }
-
-    // ────────────────────────────────────────────────────────────────────────
-    // Icônes de remplacement pour les items du systray
-    // ────────────────────────────────────────────────────────────────────────
-    // Certains items SNI ne publient aucune image (IconPixmap vide, IconName
-    // vide) : le shell dessinait alors un pixmap illisible — le rectangle bruité
-    // qu'on voyait pour le moniteur de casque. On peut leur associer une icône par
-    // leur propriété Id, ici ou avec un chemin absolu.
-    property var trayIconMap: ({})
-
-    property FileView trayIconsFile: FileView {
-        path: Quickshell.shellPath("core/tray_icons.json")
-        watchChanges: true
-        printErrors: false
-        onFileChanged: reload()
-        onLoaded: {
-            try {
-                const parsed = JSON.parse(text())
-                root.trayIconMap = (parsed && typeof parsed === "object") ? parsed : ({})
-            } catch (e) {
-                root.trayIconMap = ({})
-            }
-        }
-    }
-
-    // Rendu d'URL : chemin absolu tel quel, sinon relatif à assets/tray/.
-    // Chaîne vide = pas de correspondance, l'appelant garde l'icône de l'item.
-    function trayIconFor(itemId) {
-        if (!itemId) return ""
-        const entry = (root.trayIconMap || ({}))[itemId]
-        if (!entry) return ""
-        const value = (typeof entry === "string") ? entry : (entry.icon || "")
-        if (!value) return ""
-        if (value.charAt(0) === "/")
-            return "file://" + value
-        return "file://" + Quickshell.shellPath("assets/tray/" + value)
-    }
-
-    // ────────────────────────────────────────────────────────────────────────
-    // Variables d'application (core/app_vars.json)
-    // ────────────────────────────────────────────────────────────────────────
-    // Mêmes valeurs que les raccourcis Hyprland (programs.lua), réglables dans
-    // l'onglet Applications du panneau. `program("Music")` -> "strawberry".
-    property var appVars: ({})
-
-    property FileView appVarsFile: FileView {
-        path: Quickshell.shellPath("core/app_vars.json")
-        watchChanges: true
-        printErrors: false
-        onFileChanged: reload()
-        onLoaded: {
-            try {
-                const parsed = JSON.parse(text())
-                root.appVars = (parsed && typeof parsed === "object") ? parsed : ({})
-            } catch (e) {
-                root.appVars = ({})
-            }
-        }
-    }
-
-    function program(name) {
-        return (root.appVars && root.appVars[name]) ? String(root.appVars[name]) : ""
-    }
-
-    // ────────────────────────────────────────────────────────────────────────
-    // SECTION 7bis: FENÊTRES MINIMISÉES
-    // ────────────────────────────────────────────────────────────────────────
-    // Hyprland 0.57 n'a pas de « minimiser » : la fenêtre au focus part sur un
-    // workspace spécial, invisible, et le rappel la renvoie sur le bureau
-    // **courant**. Aucun bureau d'origine n'est mémorisé — c'est ce qui évite
-    // un cache à nettoyer et les entrées fantômes d'une fenêtre fermée : la
-    // liste des fenêtres est lue vivante sur les toplevels, seul l'ordre des
-    // minimisations de la session est tenu (il ne sert qu'au raccourci
-    // « rappeler la dernière »).
-    readonly property string workspaceMinimise: "special:minimized"
-    property var ordreMinimisees: []
-
-    // Les adresses de fenêtre n'ont pas la même forme selon la source :
-    // `hyprctl` écrit `0x559d…`, `Hyprland.activeToplevel.address` écrit
-    // `559d…`. Une seule forme pour comparer (`cleAdresse`), une seule pour le
-    // sélecteur de dispatch (`0x…`, sans quoi le dispatch répond « ok » sans
-    // rien déplacer — mesuré : fenêtre immobile et aucune erreur).
-    function cleAdresse(adresse) {
-        let a = String(adresse || "").toLowerCase()
-        if (a.indexOf("0x") === 0) a = a.substring(2)
-        return a
-    }
-
-    function selecteurAdresse(adresse) {
-        const a = root.cleAdresse(adresse)
-        return a === "" ? "" : "address:0x" + a
-    }
-
-    // Une fenêtre est-elle « de côté » ? La source qui fait foi est l'objet
-    // `workspace` du toplevel : sur le workspace spécial, Quickshell le publie
-    // avec le nom complet et un identifiant négatif (mesuré : -1).
-    //
-    // **Pas `lastIpcObject` en premier** : cette carte brute retarde sur l'objet
-    // — une fenêtre rappelée y restait sur `special:minimized` et l'icône ne
-    // quittait jamais la barre (mesuré, rafraîchissement forcé compris). Elle ne
-    // sert que de repli quand l'objet manque.
-    function estMinimisee(fenetre) {
-        if (!fenetre) return false
-        const espace = fenetre.workspace
-        if (espace) {
-            const nom = String(espace.name || "")
-            if (nom === root.workspaceMinimise || nom === "minimized") return true
-            if (Number(espace.id) > 0) return false
-        }
-        const brut = fenetre.lastIpcObject
-        const bws = brut ? brut.workspace : null
-        return Boolean(bws) && String(bws.name || "") === root.workspaceMinimise
-    }
-
-    // Fenêtres actuellement mises de côté, de la plus ancienne à la plus
-    // récente. Ce qui est arrivé là par un autre chemin que ce geste se range à
-    // la fin.
-    function fenetresMinimisees() {
-        const out = []
-        const tops = Hyprland.toplevels ? Hyprland.toplevels.values : []
-        for (let i = 0; i < tops.length; i++) {
-            const t = tops[i]
-            if (t && t.address && root.estMinimisee(t)) out.push(t)
-        }
-        const rang = function (adresse) {
-            const i = root.ordreMinimisees.indexOf(root.cleAdresse(adresse))
-            return i < 0 ? 1000 : i
-        }
-        out.sort(function (a, b) { return rang(a.address) - rang(b.address) })
-        return out
-    }
-
-    // Bureau normal visible : celui du moniteur au focus. Un workspace spécial
-    // affiché ne peut pas recevoir de fenêtre rappelée.
-    function bureauCourant() {
-        const ws = Hyprland.focusedWorkspace
-        if (ws && Number(ws.id) > 0) return Number(ws.id)
-        const m = Hyprland.focusedMonitor
-        const actif = m ? m.activeWorkspace : null
-        if (actif && Number(actif.id) > 0) return Number(actif.id)
-        const liste = Hyprland.workspaces ? Hyprland.workspaces.values : []
-        for (let i = 0; i < liste.length; i++) {
-            if (liste[i] && Number(liste[i].id) > 0 && liste[i].active) return Number(liste[i].id)
-        }
-        return 0
-    }
-
-    // Le geste : la fenêtre au focus (ou l'adresse donnée) part sur le workspace
-    // spécial, sans suivre. L'adresse est retenue dans l'ordre des minimisations.
-    function minimiserFenetre(adresse) {
-        let cible = root.cleAdresse(adresse)
-        if (cible === "" && Hyprland.activeToplevel)
-            cible = root.cleAdresse(Hyprland.activeToplevel.address)
-        if (Hyprland.usingLua) {
-            const sel = cible !== "" ? ', window = "' + root.selecteurAdresse(cible) + '"' : ""
-            Hyprland.dispatch('hl.dsp.window.move({ workspace = "' + root.workspaceMinimise + '"'
-                             + sel + ', follow = false })')
-        } else {
-            Hyprland.dispatch("movetoworkspacesilent " + root.workspaceMinimise
-                              + (cible !== "" ? "," + root.selecteurAdresse(cible) : ""))
-        }
-        if (cible !== "" && root.ordreMinimisees.indexOf(cible) < 0) {
-            const suite = root.ordreMinimisees.slice()
-            suite.push(cible)
-            root.ordreMinimisees = suite
-        }
-        return cible !== ""
-    }
-
-    // Le rappel : la fenêtre revient sur le bureau courant, sans que la vue ne
-    // change de bureau, puis prend le focus.
-    function rappelerFenetre(adresse) {
-        const cible = root.cleAdresse(adresse)
-        const bureau = root.bureauCourant()
-        if (cible === "" || bureau <= 0) return false
-        const sel = root.selecteurAdresse(cible)
-        if (Hyprland.usingLua) {
-            Hyprland.dispatch('hl.dsp.window.move({ workspace = ' + bureau
-                             + ', window = "' + sel + '", follow = false })')
-            Hyprland.dispatch('hl.dsp.focus({ window = "' + sel + '" })')
-        } else {
-            Hyprland.dispatch("movetoworkspacesilent " + bureau + "," + sel)
-            Hyprland.dispatch("focuswindow " + sel)
-        }
-        const i = root.ordreMinimisees.indexOf(cible)
-        if (i >= 0) {
-            const suite = root.ordreMinimisees.slice()
-            suite.splice(i, 1)
-            root.ordreMinimisees = suite
-        }
-        return true
-    }
-
-    // La plus récemment minimisée encore présente.
-    function rappelerDerniere() {
-        const liste = root.fenetresMinimisees()
-        if (liste.length === 0) return false
-        return root.rappelerFenetre(String(liste[liste.length - 1].address))
-    }
-
-    // ────────────────────────────────────────────────────────────────────────
-    // SECTION 8: IPC HANDLER ("shell")
-    // ────────────────────────────────────────────────────────────────────────
-    // Allows scripts, keybindings and sub-processes to control Quickshell:
-    //   qs -p /path/to/shell ipc shell toggleConfig
-    //   qs -p /path/to/shell ipc shell osd volume 75
-    // Crochet : main.qml y branche le mode placement d'un widget. Le déclencheur
-    // vient de Hyprland (SUPER + SHIFT + clic), seul endroit où le modificateur est
-    // fiable — dans un événement souris QML, `mouse.modifiers` vaut 0.
-    property var placeWidgetHook: null
-    // Même principe pour le menu d'un widget de bureau : main.qml y branche
-    // l'ouverture, l'IPC permet de le piloter sans souris (tests).
-    property var widgetMenuHook: null
-
-    // Crochet symétrique pour la capture : main.qml y branche requestCapture,
-    // ce qui rend les modes lançables par IPC (tests scriptés).
-    property var captureHook: null
-
-    // Tiroir de l'historique des notifications (surface `shell-notif-history`),
-    // indépendant du panneau de notifications et de son toast.
-    property bool notifHistoryVisible: false
-
-    // Crochets de diagnostic des notifications, branchés par island_right :
-    //   quickshell ipc call shell notifTargets     → JSON des cibles résolues
-    //   quickshell ipc call shell notifOpenLatest  → ouvre la cible la plus récente
-    property var notifTargetsHook: null
-    property var notifOpenHook: null
-    //   quickshell ipc call shell notifClear        → vide le centre (pas l'historique)
-    property var notifClearHook: null
-    //   quickshell ipc call shell notifInvoke <actionId> → invoque l'action de la notification la plus récente
-    property var notifInvokeHook: null
-
-    property IpcHandler ipc: IpcHandler {
-        target: "shell"
-        function placeWidget() {
-            if (root.placeWidgetHook)
-                root.placeWidgetHook()
-        }
-        function openWidgetMenu(id: string) {
-            if (root.widgetMenuHook)
-                root.widgetMenuHook(id)
-        }
-        function toggleConfig() {
-            root.configPanelVisible = !root.configPanelVisible
-        }
-        function toggleMasqueParallaxe() {
-            root.masqueParallaxeVisible = !root.masqueParallaxeVisible
-        }
-        // Ouvre le panneau sur une section précise — utilisé par le clic milieu
-        // des applets, et par les tests : ipc call shell openConfigSection quickshell_applets
-        function openConfigSection(section: string) {
-            root.openConfigSection(section)
-        }
-        function setConfigButtonVisible(visible: bool) {
-            root.showConfigButton = visible
-        }
-        function toggleConfigButton() {
-            root.showConfigButton = !root.showConfigButton
-        }
-        function reloadTheme() {
-            root.relireStyle()
-        }
-        function osd(kind: string, value: real) {
-            root.showOsd(kind, value)
-        }
-        // Permet de piloter les popups pour les tests : ipc call shell togglePopup calendar
-        function togglePopup(name: string) {
-            root.togglePopup(name)
-        }
-        function toggleIslandPanel() {
-            if (root.barStyle !== "island") return
-            root.activePopup = ""
-            root.islandPanelOpen = !root.islandPanelOpen
-            if (!root.islandPanelOpen) {
-                root.islandSidePanel = ""
-                root.islandNeedsKeyboard = false
-            }
-        }
-        function openIslandPanel(tabIndex: int) {
-            if (root.barStyle !== "island") return
-            root.activePopup = ""
-            const maxTab = root.ilotProjetsActif ? 4 : 3
-            root.islandPanelTab = Math.max(0, Math.min(maxTab, tabIndex))
-            root.islandPanelOpen = true
-        }
-        function nav(action: string): string {
-            if (root.barStyle !== "island") return "not_island"
-            const a = String(action || "").toLowerCase()
-            if (a === "ouvrir" || a === "open") {
-                root.activePopup = ""
-                root.islandNavActive = true
-                root.islandPanelOpen = true
-                return "ok"
-            }
-            if (a === "fermer" || a === "close") {
-                root.islandPanelOpen = false
-                root.islandSidePanel = ""
-                root.islandNeedsKeyboard = false
-                root.islandNavActive = false
-                return "ok"
-            }
-            if (!root.islandPanelOpen) {
-                root.activePopup = ""
-                root.islandPanelOpen = true
-            }
-            root.islandNavActive = true
-            const nTabs = root.ilotProjetsActif ? 5 : 4
-            if (a === "onglet_suiv" || a === "tab_next") {
-                root.islandPanelTab = (root.islandPanelTab + 1) % nTabs
-                return "ok"
-            }
-            if (a === "onglet_prec" || a === "tab_prev") {
-                root.islandPanelTab = (root.islandPanelTab + nTabs - 1) % nTabs
-                return "ok"
-            }
-            if (root.islandNavHook) {
-                root.islandNavHook(a)
-                return "ok"
-            }
-            return "no_hook"
-        }
-        function navState(): bool {
-            return root.islandNavActive
-        }
-        function toggleSpotlight() {
-            if (root.barStyle === "island") {
-                root.activePopup = ""
-                root.islandPanelOpen = false
-                root.wallpaperPickerOpen = false
-                root.themePickerOpen = false
-                root.islandNotesOpen = false
-                root.islandLiveActivityOpen = false
-                root.islandLauncherOpen = !root.islandLauncherOpen
-            } else {
-                root.spotlightVisible = !root.spotlightVisible
-            }
-        }
-        function toggleNotes() {
-            if (root.barStyle !== "island") return
-            root.activePopup = ""
-            root.islandPanelOpen = false
-            root.wallpaperPickerOpen = false
-            root.themePickerOpen = false
-            root.islandLauncherOpen = false
-            root.islandLiveActivityOpen = false
-            root.islandNotesOpen = !root.islandNotesOpen
-        }
-        function toggleLiveActivity() {
-            if (root.barStyle !== "island") return
-            root.activePopup = ""
-            root.islandPanelOpen = false
-            root.wallpaperPickerOpen = false
-            root.themePickerOpen = false
-            root.islandLauncherOpen = false
-            root.islandNotesOpen = false
-            root.islandLiveActivityOpen = !root.islandLiveActivityOpen
-        }
-        function liveActivity(action: string, actId: string, title: string, progress: int): string {
-            return root.handleLiveActivity(action, actId, title, progress)
-        }
-        function liveActivityStart(actId: string, title: string, progress: int): string {
-            return root.handleLiveActivity("start", actId, title, progress)
-        }
-        function liveActivityUpdate(actId: string, progress: int, title: string): string {
-            return root.handleLiveActivity("update", actId, title, progress)
-        }
-        function liveActivityStop(actId: string): string {
-            return root.handleLiveActivity("stop", actId, "", -1)
-        }
-        function liveActivityClear(): string {
-            return root.handleLiveActivity("clear", "", "", -1)
-        }
-        function timerStart(minutes: int): string {
-            root.startTimer(minutes, "")
-            return "ok"
-        }
-        function setContext(ctxId: string): string {
-            return root.applyContext(ctxId) ? "ok" : "unknown_context"
-        }
-        // Écran des raccourcis (SUPER + K) : show/hide idempotents à côté du
-        // toggle, pour les tests scriptés (un toggle qui perd un appel dérive).
-        function toggleCheatsheet() {
-            root.cheatsheetVisible = !root.cheatsheetVisible
-        }
-        function toggleOverview() {
-            root.overviewVisible = !root.overviewVisible
-        }
-        function toggleWidgetEditMode() {
-            root.widgetsEditMode = !root.widgetsEditMode
-        }
-        function toggleWallpaperPicker() {
-            if (root.barStyle === "island") {
-                root.activePopup = ""
-                root.islandPanelOpen = false
-                root.islandLauncherOpen = false
-                root.islandNotesOpen = false
-                root.themePickerOpen = false
-                root.islandLiveActivityOpen = false
-                root.wallpaperPickerOpen = !root.wallpaperPickerOpen
-            } else {
-                Quickshell.execDetached(["quickshell", "-n", "-p", Quickshell.env("HOME") + "/.config/quickshell/hyprquickpaper"])
-            }
-        }
-        function toggleThemePicker() {
-            if (root.barStyle === "island") {
-                root.activePopup = ""
-                root.islandPanelOpen = false
-                root.islandLauncherOpen = false
-                root.islandNotesOpen = false
-                root.wallpaperPickerOpen = false
-                root.islandLiveActivityOpen = false
-                root.themePickerOpen = !root.themePickerOpen
-            } else {
-                root.openConfigSection("apparence_couleurs")
-            }
-        }
-        function themeNav(action: string) {
-            const a = String(action || "").toLowerCase()
-            if (a === "close" || a === "fermer") {
-                root.themePickerOpen = false
-                return
-            }
-            if (root.themeNavHook) root.themeNavHook(a)
-        }
-        function wpNav(action: string) {
-            const a = String(action || "").toLowerCase()
-            if (a === "close" || a === "fermer") {
-                root.wallpaperPickerOpen = false
-                return
-            }
-            if (root.wallpaperNavHook) root.wallpaperNavHook(a)
-        }
-        function showCheatsheet() {
-            root.cheatsheetVisible = true
-        }
-        function hideCheatsheet() {
-            root.cheatsheetVisible = false
-        }
-        function cheatsheetState(): bool {
-            return root.cheatsheetVisible
-        }
-        function showSpotlight() {
-            root.spotlightVisible = true
-        }
-        function hideSpotlight() {
-            root.spotlightVisible = false
-        }
-        function spotlightState(): bool {
-            return root.spotlightVisible
-        }
-        function launchHistoryState(): bool {
-            return root.launchHistory
-        }
-        // Barre de capture : toggle pour le bind SUPER + SHIFT + S (screenshot.sh
-        // sans argument), show/hide idempotents pour les tests scriptés.
-        function toggleScreenshotPicker() {
-            root.screenshotPickerVisible = !root.screenshotPickerVisible
-        }
-        function showScreenshotPicker() {
-            root.screenshotPickerVisible = true
-        }
-        function hideScreenshotPicker() {
-            root.screenshotPickerVisible = false
-        }
-        function screenshotPickerState(): bool {
-            return root.screenshotPickerVisible
-        }
-        // Lance une capture sans passer par la pastille :
-        //   quickshell ipc call shell captureMode record-full
-        // Même chemin que les boutons (requestCapture dans main.qml), donc
-        // testable au clavier — le clic sur une icône n'ajoute rien à couvrir.
-        function captureMode(mode: string) {
-            if (root.captureHook)
-                root.captureHook(mode)
-        }
-        // Diagnostic du clic sur le titre d'une notification :
-        //   quickshell ipc call shell notifTargets      → cibles résolues (JSON)
-        //   quickshell ipc call shell notifOpenLatest   → ouvre la plus récente
-        function notifTargets(): string {
-            return root.notifTargetsHook ? String(root.notifTargetsHook()) : "[]"
-        }
-        function notifOpenLatest(): bool {
-            return root.notifOpenHook ? Boolean(root.notifOpenHook()) : false
-        }
-        function notifClear(): bool {
-            return root.notifClearHook ? Boolean(root.notifClearHook()) : false
-        }
-        function notifInvoke(actionId: string): bool {
-            return root.notifInvokeHook ? Boolean(root.notifInvokeHook(actionId)) : false
-        }
-        // Tiroir de l'historique : toggle + show/hide idempotents (mêmes règles
-        // que les autres surfaces : un toggle perd un appel, un show non).
-        function toggleNotifHistory() {
-            root.notifHistoryVisible = !root.notifHistoryVisible
-        }
-        function showNotifHistory() {
-            root.notifHistoryVisible = true
-        }
-        function hideNotifHistory() {
-            root.notifHistoryVisible = false
-        }
-        function notifHistoryState(): bool {
-            return root.notifHistoryVisible
-        }
-        // Fenêtres mises de côté (SUPER + D, SUPER + MAJ + D) :
-        //   quickshell ipc -n call shell minimiser
-        //   quickshell ipc -n call shell rappelerDerniere
-        // `minimisees` rend l'état lisible par un script de vérification.
-        function minimiser(): bool {
-            return root.minimiserFenetre("")
-        }
-        function rappelerDerniere(): bool {
-            return root.rappelerDerniere()
-        }
-        function rappelerFenetreAdresse(adresse: string) {
-            return root.rappelerFenetre(adresse)
-        }
-        function minimisees(): string {
-            const liste = root.fenetresMinimisees()
-            const out = []
-            for (let i = 0; i < liste.length; i++)
-                out.push({ adresse: String(liste[i].address),
-                           titre: String(liste[i].title || "") })
-            return JSON.stringify(out)
-        }
-    }
 }

@@ -24,17 +24,17 @@ Item {
     property bool miniLecteurRetracte: false
 
     // ── État local synchronisé avec les services système ──────────────
-    readonly property var sysInfo: Theme.systemInfo || ({})
+    readonly property var sysInfo: SystemServices.systemInfo || ({})
     readonly property var wifiInfo: sysInfo.wifi || ({})
     readonly property var batInfo: sysInfo.battery || ({})
     readonly property bool isLaptop: Boolean(sysInfo.has_battery || (batInfo && batInfo.present))
 
-    property bool wifiEnabled: Boolean(wifiInfo && (wifiInfo.enabled !== false))
+    readonly property bool wifiEnabled: SystemServices.wifiEnabled
     property string wifiSsid: (wifiInfo && wifiInfo.ssid) ? String(wifiInfo.ssid) : ""
     property bool wifiConnected: Boolean(wifiInfo && wifiInfo.connected)
 
-    property bool btPowered: false
-    property string btDevice: ""
+    readonly property bool btPowered: SystemServices.btPowered
+    readonly property string btDevice: SystemServices.btDevice
 
     property bool nuitActive: false
     property int nuitTemp: 4200
@@ -43,8 +43,8 @@ Item {
     property int batPlafond: Number((batInfo && batInfo.limit_pct) || 80)
 
     readonly property bool vizActif: {
-        let _rev = Theme.barAppletsRev
-        let a = Theme.barAppletsActifs ? Theme.barAppletsActifs["visualiseur"] : null
+        let _rev = ShellState.barAppletsRev
+        let a = ShellState.barAppletsActifs ? ShellState.barAppletsActifs["visualiseur"] : null
         return a ? Boolean(a.enabled !== false) : false
     }
 
@@ -93,17 +93,12 @@ Item {
     }
 
     function rafraichirEtats() {
-        if (!btProc.running) {
-            btProc.command = ["python3", Quickshell.shellPath("core/bluetooth_service.py"), "etat"]
-            btProc.running = true
-        }
+        SystemServices.refreshBluetooth()
         if (!nuitProc.running) {
             nuitProc.command = ["python3", Quickshell.shellPath("core/nuit_service.py"), "etat"]
             nuitProc.running = true
         }
-        if (!wifiCheckProc.running) {
-            wifiCheckProc.running = true
-        }
+        SystemServices.checkWifiRadio()
         if (!powerProfileReadProc.running) {
             powerProfileReadProc.running = true
         }
@@ -129,6 +124,10 @@ Item {
                 initDelayTimer.restart()
             }
         }
+    }
+
+    Connections {
+        target: SystemServices
         function onSystemInfoChanged() {
             if (root.batInfo) {
                 root.batLimit80 = Boolean(root.batInfo.limit_80)
@@ -139,41 +138,6 @@ Item {
 
     Component.onCompleted: {
         if (Theme.islandPanelOpen) initDelayTimer.restart()
-    }
-
-    Process {
-        id: wifiCheckProc
-        command: ["nmcli", "radio", "wifi"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                let s = text.trim().toLowerCase()
-                if (s === "enabled" || s === "disabled") {
-                    root.wifiEnabled = (s === "enabled")
-                }
-            }
-        }
-    }
-
-    Process {
-        id: wifiToggleProc
-        onExited: wifiCheckProc.running = true
-    }
-
-    Process {
-        id: btProc
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    let d = JSON.parse(text.trim())
-                    root.btPowered = Boolean(d.allume || d.powered)
-                    let dev = ""
-                    if (d.connectes && d.connectes.length > 0) {
-                        dev = String(d.connectes[0].nom || d.connectes[0].name || "")
-                    }
-                    root.btDevice = dev
-                } catch (e) {}
-            }
-        }
     }
 
     Process {
@@ -209,7 +173,7 @@ Item {
                 Quickshell.execDetached(["notify-send", "-a", "AetherShell", "-u", "normal", "Réglage non appliqué", motif])
             }
             actionProc.sortie = ""
-            Theme.rafraichirSystemInfo()
+            SystemServices.rafraichirSystemInfo()
         }
     }
 
@@ -662,10 +626,10 @@ Item {
             spacing: 6
 
             Repeater {
-                model: Theme.workContexts || []
+                model: ShellState.workContexts || []
                 delegate: Rectangle {
                     required property var modelData
-                    readonly property bool isActive: Theme.activeContext === modelData.id
+                    readonly property bool isActive: ShellState.activeContext === modelData.id
                     Layout.fillWidth: true
                     height: 28
                     radius: Math.max(8, Math.round(Theme.globalRadius * 0.5))
@@ -701,7 +665,7 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: Theme.applyContext(modelData.id)
+                        onClicked: ShellState.applyContext(modelData.id)
                     }
                 }
             }
@@ -723,12 +687,13 @@ Item {
                 active: root.wifiEnabled
                 hasChevron: true
                 onToggled: {
-                    let target = root.wifiEnabled ? "off" : "on"
-                    root.wifiEnabled = !root.wifiEnabled
-                    wifiToggleProc.command = ["nmcli", "radio", "wifi", target]
-                    wifiToggleProc.running = true
+                    Theme.islandSystemeTarget = "wifi"
+                    Theme.islandPanelTab = 2
                 }
-                onChevronClicked: Theme.islandPanelTab = 2
+                onChevronClicked: {
+                    Theme.islandSystemeTarget = "wifi"
+                    Theme.islandPanelTab = 2
+                }
             }
 
             QuickTile {
@@ -738,10 +703,7 @@ Item {
                     ? "Désactivé"
                     : (root.btDevice !== "" ? root.btDevice : "Actif · Prêt")
                 active: root.btPowered
-                onToggled: {
-                    btProc.command = ["python3", Quickshell.shellPath("core/bluetooth_service.py"), "basculer"]
-                    btProc.running = true
-                }
+                onToggled: SystemServices.btCommand(["basculer"])
             }
 
             QuickTile {
@@ -756,17 +718,17 @@ Item {
             }
 
             QuickTile {
-                glyphName: Theme.doNotDisturb ? "bell-off" : "bell"
+                glyphName: ShellState.doNotDisturb ? "bell-off" : "bell"
                 title: "Ne pas déranger"
-                subtitle: Theme.doNotDisturb
+                subtitle: ShellState.doNotDisturb
                     ? "Silencieux"
-                    : ("Désactivé (" + Theme.notifCount + " alerte" + (Theme.notifCount > 1 ? "s" : "") + ")")
-                active: Theme.doNotDisturb
+                    : ("Désactivé (" + ShellState.notifCount + " alerte" + (ShellState.notifCount > 1 ? "s" : "") + ")")
+                active: ShellState.doNotDisturb
                 hasChevron: true
                 onToggled: {
-                    Theme.doNotDisturb = !Theme.doNotDisturb
+                    ShellState.doNotDisturb = !ShellState.doNotDisturb
                     dndBridge.command = ["python3", Quickshell.shellPath("core/config_manager.py"),
-                                         "style", "do_not_disturb", Theme.doNotDisturb ? "true" : "false"]
+                                         "style", "do_not_disturb", ShellState.doNotDisturb ? "true" : "false"]
                     dndBridge.running = true
                 }
                 onChevronClicked: Theme.islandPanelTab = 1
@@ -862,9 +824,9 @@ Item {
             QuickTile {
                 glyphName: "coffee"
                 title: "Caffeine"
-                subtitle: Theme.caffeineActif ? "Veille bloquée" : "Inactif"
-                active: Theme.caffeineActif
-                onToggled: Theme.caffeineActif = !Theme.caffeineActif
+                subtitle: SystemServices.caffeineActif ? "Veille bloquée" : "Inactif"
+                active: SystemServices.caffeineActif
+                onToggled: SystemServices.caffeineActif = !SystemServices.caffeineActif
             }
 
             // Tuile 8 : Profil de performance

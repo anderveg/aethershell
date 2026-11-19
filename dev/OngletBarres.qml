@@ -62,6 +62,76 @@ Column {
         }
         return chercher(bloc)
     }
+
+    function barreDe(donnee) {
+        const p = String((donnee && donnee.ile) || "haut:fin").split(":")
+        return p[0] || "haut"
+    }
+
+    function zoneDe(donnee) {
+        const p = String((donnee && donnee.ile) || "haut:fin").split(":")
+        return p[1] || "milieu"
+    }
+
+    function montagesChoisis(donnee) {
+        const o = (donnee && donnee.options) || ({})
+        if (Array.isArray(o.montages)) return o.montages.slice()
+        const defaut = []
+        for (let i = 0; i < root.disquesListe.length; ++i) {
+            const m = String(root.disquesListe[i].montage || "")
+            if (m !== "" && m !== "/") defaut.push(m)
+        }
+        return defaut
+    }
+
+    function montageCoche(donnee, montage) {
+        return montagesChoisis(donnee).indexOf(String(montage)) >= 0
+    }
+
+    function entreeApplet(id) {
+        const cle = String(id || "")
+        for (let i = 0; i < root.appletRows.length; ++i) {
+            if (String(root.appletRows[i].id) === cle) return root.appletRows[i]
+        }
+        return null
+    }
+
+    function basculerMontage(donnee, montage) {
+        const vive = entreeApplet(donnee && donnee.id) || donnee
+        const liste = montagesChoisis(vive)
+        const i = liste.indexOf(String(montage))
+        if (i >= 0) liste.splice(i, 1)
+        else liste.push(String(montage))
+        root.appletCommande(["option", (vive && vive.id) || donnee.id, "montages", JSON.stringify(liste)])
+    }
+
+    function appletBasculer(id, actif) {
+        root.appletCommande([actif ? "desactiver" : "activer", id])
+    }
+
+    function appletEchelle(id, valeur) {
+        const v = Math.max(60, Math.min(160, Math.round(valeur)))
+        root.appletCommande(["echelle", id, String(v)])
+    }
+
+    function basculerVisualiseur() {
+        root.appletCommande([root.vizActif ? "desactiver" : "activer", "visualiseur"])
+        root.rechargerVisualiseur()
+    }
+
+    function placerApplet(id, ile) {
+        root.appletCommande(["placer", id, ile])
+        if (ile === "bas" && !Theme.barBottomVisible)
+            root.runConfigCmd(["style", "bar_bottom", "true"])
+        else if (ile === "cote-gauche" && !Theme.barLeftVisible)
+            root.runConfigCmd(["style", "bar_left", "true"])
+        else if (ile === "cote-droite" && !Theme.barRightVisible)
+            root.runConfigCmd(["style", "bar_right", "true"])
+    }
+
+    function couleurViz(code) {
+        return Theme.resolveVizColor(code)
+    }
 spacing: 11
 
 
@@ -106,39 +176,15 @@ CollapsibleSection {
                 elide: Text.ElideRight
             }
 
-            Row {
-                spacing: 8
+            ConfigSegmented {
                 anchors.verticalCenter: parent.verticalCenter
-
-                Repeater {
-                    model: [
-                        { key: "classic", label: "Classique (3 îlots)" },
-                        { key: "island",  label: "Îlot dynamique" }
-                    ]
-
-                    Rectangle {
-                        width: 140
-                        height: 28
-                        radius: 6
-                        color: Theme.barStyle === modelData.key ? Theme.accent : Qt.alpha(Theme.surfaceVariant, 0.4)
-                        border.color: Theme.barStyle === modelData.key ? Theme.accent : Qt.alpha(Theme.fg, 0.2)
-                        border.width: 1
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: modelData.label
-                            font.pixelSize: 11
-                            font.weight: Theme.barStyle === modelData.key ? Font.DemiBold : Font.Normal
-                            color: Theme.barStyle === modelData.key ? (Theme.activeTheme === "light" ? "#ffffff" : "#101010") : Theme.fg
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.runConfigCmd(["style", "bar_style", modelData.key])
-                        }
-                    }
-                }
+                itemHeight: 24
+                choices: [
+                    { code: "classic", label: "Classique (3 îlots)" },
+                    { code: "island",  label: "Îlot dynamique" }
+                ]
+                currentCode: Theme.barStyle
+                onSelected: function(code) { root.runConfigCmd(["style", "bar_style", code]) }
             }
         }
 
@@ -157,27 +203,10 @@ CollapsibleSection {
                 elide: Text.ElideRight
             }
 
-            Rectangle {
-                width: 96
-                height: 28
-                radius: Theme.globalRadius
-                color: Theme.ilotProjetsActif ? Theme.accent : Theme.bg
-                border.color: Theme.ilotProjetsActif ? Theme.accent : Theme.surfaceVariant
-                border.width: 1
-
-                Text {
-                    anchors.centerIn: parent
-                    text: Theme.ilotProjetsActif ? "Activé" : "Masqué"
-                    color: Theme.ilotProjetsActif ? Theme.bg : Theme.fg
-                    font.pixelSize: Theme.textXs
-                    font.bold: Theme.ilotProjetsActif
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.runConfigCmd(["style", "ilot_projets_actif", Theme.ilotProjetsActif ? "false" : "true"])
-                }
+            ConfigSwitch {
+                anchors.verticalCenter: parent.verticalCenter
+                checked: Theme.ilotProjetsActif
+                onToggled: root.runConfigCmd(["style", "ilot_projets_actif", Theme.ilotProjetsActif ? "false" : "true"])
             }
         }
 
@@ -456,28 +485,10 @@ CollapsibleSection {
                 elide: Text.ElideRight
             }
 
-            Rectangle {
+            ConfigSwitch {
                 anchors.verticalCenter: parent.verticalCenter
-                width: 160
-                height: 26
-                radius: Theme.globalRadius
-                color: Theme.showConfigButton ? Theme.accent : Theme.surfaceVariant
-                border.color: Theme.accent
-                border.width: 1
-
-                Text {
-                    anchors.centerIn: parent
-                    text: Theme.showConfigButton ? "✓ Affiché" : "Masqué (SUPER+SHIFT+H)"
-                    color: Theme.showConfigButton ? Theme.bg : Theme.fg
-                    font.pixelSize: Theme.textXs
-                    font.bold: true
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.runConfigCmd(["style", "show_config_button", String(!Theme.showConfigButton)])
-                }
+                checked: Theme.showConfigButton
+                onToggled: root.runConfigCmd(["style", "show_config_button", String(!Theme.showConfigButton)])
             }
         }
     }   // end Grid
@@ -493,114 +504,29 @@ CollapsibleSection {
             font.pixelSize: Math.max(9, Theme.textXs - 1)
             wrapMode: Text.WordWrap
         }
-        Item {
-            width: parent.width
-            height: 22
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "Barre du bas"
-                color: Theme.fg
-                font.pixelSize: Theme.textXs
-            }
-
-            Rectangle {
-                width: 110
-                height: 20
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                radius: Theme.globalRadius
-                color: Theme.barBottomVisible ? Theme.accent : Theme.surfaceVariant
-                border.color: Theme.accent
-                border.width: 1
+        Repeater {
+            model: [
+                { label: "Barre du bas",    key: "bar_bottom", val: Theme.barBottomVisible },
+                { label: "Barre de gauche", key: "bar_left",   val: Theme.barLeftVisible },
+                { label: "Barre de droite", key: "bar_right",  val: Theme.barRightVisible }
+            ]
+            delegate: Item {
+                required property var modelData
+                width: parent ? parent.width : 0
+                height: 22
 
                 Text {
-                    anchors.centerIn: parent
-                    text: Theme.barBottomVisible ? "✓ Affichée" : "Masquée"
-                    color: Theme.barBottomVisible ? Theme.bg : Theme.fg
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: modelData.label
+                    color: Theme.fg
                     font.pixelSize: Theme.textXs
-                    font.bold: true
                 }
 
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.runConfigCmd(["style", "bar_bottom",
-                        String(!Theme.barBottomVisible)])
-                }
-            }
-        }
-        Item {
-            width: parent.width
-            height: 22
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "Barre de gauche"
-                color: Theme.fg
-                font.pixelSize: Theme.textXs
-            }
-
-            Rectangle {
-                width: 110
-                height: 20
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                radius: Theme.globalRadius
-                color: Theme.barLeftVisible ? Theme.accent : Theme.surfaceVariant
-                border.color: Theme.accent
-                border.width: 1
-
-                Text {
-                    anchors.centerIn: parent
-                    text: Theme.barLeftVisible ? "✓ Affichée" : "Masquée"
-                    color: Theme.barLeftVisible ? Theme.bg : Theme.fg
-                    font.pixelSize: Theme.textXs
-                    font.bold: true
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.runConfigCmd(["style", "bar_left",
-                        String(!Theme.barLeftVisible)])
-                }
-            }
-        }
-        Item {
-            width: parent.width
-            height: 22
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "Barre de droite"
-                color: Theme.fg
-                font.pixelSize: Theme.textXs
-            }
-
-            Rectangle {
-                width: 110
-                height: 20
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                radius: Theme.globalRadius
-                color: Theme.barRightVisible ? Theme.accent : Theme.surfaceVariant
-                border.color: Theme.accent
-                border.width: 1
-
-                Text {
-                    anchors.centerIn: parent
-                    text: Theme.barRightVisible ? "✓ Affichée" : "Masquée"
-                    color: Theme.barRightVisible ? Theme.bg : Theme.fg
-                    font.pixelSize: Theme.textXs
-                    font.bold: true
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.runConfigCmd(["style", "bar_right",
-                        String(!Theme.barRightVisible)])
+                ConfigSwitch {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: modelData.val
+                    onToggled: root.runConfigCmd(["style", modelData.key, String(!modelData.val)])
                 }
             }
         }
@@ -711,7 +637,7 @@ CollapsibleSection {
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: root.appletBasculer(appletRow.donnee.id,
+                        onClicked: bloc.appletBasculer(appletRow.donnee.id,
                                                        appletRow.donnee.actif)
                     }
 
@@ -742,7 +668,7 @@ CollapsibleSection {
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: root.appletBasculer(appletRow.donnee.id,
+                                onClicked: bloc.appletBasculer(appletRow.donnee.id,
                                                                appletRow.donnee.actif)
                             }
                         }
@@ -838,7 +764,7 @@ CollapsibleSection {
                                 MouseArea {
                                     anchors.fill: parent
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.appletEchelle(appletRow.donnee.id,
+                                    onClicked: bloc.appletEchelle(appletRow.donnee.id,
                                                                   appletRow.donnee.text_scale - 5)
                                 }
                             }
@@ -866,7 +792,7 @@ CollapsibleSection {
                                 MouseArea {
                                     anchors.fill: parent
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.appletEchelle(appletRow.donnee.id,
+                                    onClicked: bloc.appletEchelle(appletRow.donnee.id,
                                                                   appletRow.donnee.text_scale + 5)
                                 }
                             }
@@ -887,7 +813,7 @@ CollapsibleSection {
                                 Rectangle {
                                     required property var modelData
                                     readonly property bool choisi:
-                                        root.barreDe(appletRow.donnee) === modelData.code
+                                        bloc.barreDe(appletRow.donnee) === modelData.code
                                     width: 17
                                     height: 16
                                     radius: 4
@@ -908,8 +834,8 @@ CollapsibleSection {
                                     MouseArea {
                                         anchors.fill: parent
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: root.placerApplet(appletRow.donnee.id,
-                                            modelData.code + ":" + root.zoneDe(appletRow.donnee))
+                                        onClicked: bloc.placerApplet(appletRow.donnee.id,
+                                            modelData.code + ":" + bloc.zoneDe(appletRow.donnee))
                                     }
                                 }
                             }
@@ -928,9 +854,9 @@ CollapsibleSection {
                                 Rectangle {
                                     required property var modelData
                                     readonly property bool choisi:
-                                        root.zoneDe(appletRow.donnee) === modelData.code
+                                        bloc.zoneDe(appletRow.donnee) === modelData.code
                                     readonly property bool enHaut:
-                                        root.barreDe(appletRow.donnee) === "haut"
+                                        bloc.barreDe(appletRow.donnee) === "haut"
                                     width: 17
                                     height: 16
                                     radius: 4
@@ -951,8 +877,8 @@ CollapsibleSection {
                                     MouseArea {
                                         anchors.fill: parent
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: root.placerApplet(appletRow.donnee.id,
-                                            root.barreDe(appletRow.donnee) + ":" + modelData.code)
+                                        onClicked: bloc.placerApplet(appletRow.donnee.id,
+                                            bloc.barreDe(appletRow.donnee) + ":" + modelData.code)
                                     }
                                 }
                             }
@@ -1061,9 +987,9 @@ CollapsibleSection {
                                         // reste figé sur l'ancienne copie
                                         // quand la liste est réaffectée.
                                         const _ = root.appletSignature
-                                        const vive = root.entreeApplet(appletRow.donnee.id)
+                                        const vive = bloc.entreeApplet(appletRow.donnee.id)
                                                      || appletRow.donnee
-                                        return root.montageCoche(vive, montage)
+                                        return bloc.montageCoche(vive, montage)
                                     }
 
                                     width: (grilleDisques.width - grilleDisques.columnSpacing) / 2
@@ -1114,7 +1040,7 @@ CollapsibleSection {
                                     MouseArea {
                                         anchors.fill: parent
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: root.basculerMontage(appletRow.donnee,
+                                        onClicked: bloc.basculerMontage(appletRow.donnee,
                                                                         parent.montage)
                                     }
                                 }
@@ -1140,7 +1066,7 @@ CollapsibleSection {
                                 required property var modelData
                                 readonly property bool coche: {
                                     const _ = root.appletSignature
-                                    const vive = root.entreeApplet(appletRow.donnee.id)
+                                    const vive = bloc.entreeApplet(appletRow.donnee.id)
                                                  || appletRow.donnee
                                     const o = vive.options || ({})
                                     const v = o[modelData.cle]
@@ -1236,7 +1162,7 @@ CollapsibleSection {
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: root.basculerVisualiseur()
+                        onClicked: bloc.basculerVisualiseur()
                     }
                 }
 
@@ -1444,14 +1370,14 @@ CollapsibleSection {
                             required property var modelData
                             readonly property bool choisi: root.vizCouleur === modelData.code
                             width: 74; height: 22; radius: Theme.globalRadius
-                            color: choisi ? root.couleurViz(modelData.code) : "transparent"
-                            border.color: root.couleurViz(modelData.code)
+                            color: choisi ? bloc.couleurViz(modelData.code) : "transparent"
+                            border.color: bloc.couleurViz(modelData.code)
                             border.width: 1
 
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData.nom
-                                color: parent.choisi ? Theme.bg : root.couleurViz(modelData.code)
+                                color: parent.choisi ? Theme.bg : bloc.couleurViz(modelData.code)
                                 font.pixelSize: Math.max(8, Theme.textXs - 2)
                                 font.bold: parent.choisi
                             }
@@ -1487,14 +1413,14 @@ CollapsibleSection {
                             required property var modelData
                             readonly property bool choisi: root.vizCouleurIsland === modelData.code
                             width: 74; height: 22; radius: Theme.globalRadius
-                            color: choisi ? root.couleurViz(modelData.code) : "transparent"
-                            border.color: root.couleurViz(modelData.code)
+                            color: choisi ? bloc.couleurViz(modelData.code) : "transparent"
+                            border.color: bloc.couleurViz(modelData.code)
                             border.width: 1
 
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData.nom
-                                color: parent.choisi ? Theme.bg : root.couleurViz(modelData.code)
+                                color: parent.choisi ? Theme.bg : bloc.couleurViz(modelData.code)
                                 font.pixelSize: Math.max(8, Theme.textXs - 2)
                                 font.bold: parent.choisi
                             }

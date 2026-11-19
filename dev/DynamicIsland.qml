@@ -18,6 +18,131 @@ import "."
 Item {
     id: root
 
+    component LiveActivityChip: Rectangle {
+        id: chip
+        property bool animatePulse: true
+        readonly property var primary: root.liveActivities.length > 0 ? root.liveActivities[0] : null
+        height: Math.max(18, Theme.barHeight - 8)
+        width: chipRow.implicitWidth + 12
+        radius: Math.round(height / 2)
+        anchors.verticalCenter: parent.verticalCenter
+        color: primary ? Qt.alpha(primary.color, 0.16) : "transparent"
+        border.width: 1
+        border.color: primary ? Qt.alpha(primary.color, 0.45) : "transparent"
+
+        Row {
+            id: chipRow
+            anchors.centerIn: parent
+            spacing: 5
+
+            Rectangle {
+                width: 6
+                height: 6
+                radius: 3
+                anchors.verticalCenter: parent.verticalCenter
+                color: chip.primary ? chip.primary.color : Theme.accent
+                SequentialAnimation on opacity {
+                    running: chip.animatePulse && chip.visible && !(chip.primary && chip.primary.paused)
+                    loops: Animation.Infinite
+                    NumberAnimation { from: 1.0; to: 0.25; duration: 700; easing.type: Easing.InOutSine }
+                    NumberAnimation { from: 0.25; to: 1.0; duration: 700; easing.type: Easing.InOutSine }
+                }
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: {
+                    const p = chip.primary
+                    if (!p) return ""
+                    const t = String(p.title || "")
+                    return t.length > 16 ? (t.substring(0, 15) + "…") : t
+                }
+                font.family: Theme.fontUi
+                font.pixelSize: Math.max(8, Math.round(11 * Theme.barScale))
+                font.weight: Font.Bold
+                color: chip.primary ? chip.primary.color : Theme.fg
+            }
+
+            Rectangle {
+                visible: root.liveActivities.length > 1
+                width: chipCntTxt.implicitWidth + 8
+                height: 14
+                radius: 7
+                anchors.verticalCenter: parent.verticalCenter
+                color: chip.primary ? chip.primary.color : Theme.accent
+
+                Text {
+                    id: chipCntTxt
+                    anchors.centerIn: parent
+                    text: "+" + (root.liveActivities.length - 1)
+                    font.family: Theme.fontUi
+                    font.pixelSize: 9
+                    font.weight: Font.Bold
+                    color: Theme.bg
+                }
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: Theme.toggleLiveActivity()
+        }
+    }
+
+    component CaptureDot: Rectangle {
+        property string ilotState: "compact"
+        visible: Theme.ilotVisibleIn(Theme.ilotShowCapture, ilotState) && root.captureState !== "none"
+        width: 6
+        height: 6
+        radius: 3
+        anchors.verticalCenter: parent.verticalCenter
+        color: root.captureState === "video" ? "#ef4444" : "#f97316"
+        Behavior on color { ColorAnimation { duration: 150 } }
+    }
+
+    component VpnDot: Rectangle {
+        property string ilotState: "compact"
+        visible: Theme.ilotVisibleIn(Theme.ilotShowVpn, ilotState)
+        width: 6
+        height: 6
+        radius: 3
+        anchors.verticalCenter: parent.verticalCenter
+        color: root.vpnState === "connected" ? "#00a3d5" : (root.vpnState === "error" ? "#eab308" : "#ffffff")
+        Behavior on color { ColorAnimation { duration: 150 } }
+    }
+
+    component PlankaAlertIcon: Item {
+        property string ilotState: "compact"
+        property int boxSize: 20
+        visible: Theme.ilotProjetsActif && Theme.ilotVisibleIn(Theme.ilotShowPlanka, ilotState) && root.plankaEcheanceProche
+        width: boxSize
+        height: boxSize
+        anchors.verticalCenter: parent.verticalCenter
+
+        Icon {
+            anchors.centerIn: parent
+            glyph: "columns-3"
+            size: Theme.iconSm
+            color: root.plankaUrgence === "rouge" ? "#ef4444" : "#f97316"
+        }
+
+        Rectangle {
+            width: 6
+            height: 6
+            radius: 3
+            anchors.top: parent.top
+            anchors.right: parent.right
+            color: root.plankaUrgence === "rouge" ? "#ef4444" : "#f97316"
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.ouvrirPanneau(4)
+        }
+    }
+
     readonly property string ile: "haut:milieu"
 
     // Panneau calendrier interactif rattaché à l'îlot dynamique
@@ -96,7 +221,7 @@ Item {
 
     // Respecte le filtre navigateur activé dans les réglages de l'applet musique
     readonly property bool ignorerNavigateurs: {
-        let a = (Theme.barAppletsActifs && Theme.barAppletsActifs["musique"]) ? Theme.barAppletsActifs["musique"].options : null
+        let a = (ShellState.barAppletsActifs && ShellState.barAppletsActifs["musique"]) ? ShellState.barAppletsActifs["musique"].options : null
         return (a && a.ignorer_navigateurs !== undefined) ? Boolean(a.ignorer_navigateurs) : true
     }
 
@@ -160,8 +285,8 @@ Item {
     readonly property bool isPopupOpen: Theme.activePopup !== ""
     readonly property bool panelOpen: Theme.islandPanelOpen
     readonly property bool notifToastActive: Theme.barStyle === "island"
-        && Theme.notifToastVisible
-        && Theme.notifToast !== null
+        && ShellState.notifToastVisible
+        && ShellState.notifToast !== null
         && !panelOpen
     readonly property bool meteoExpanded: Theme.barStyle === "island"
         && Theme.activePopup === "applet:meteo"
@@ -204,112 +329,6 @@ Item {
         && !themeExpanded
     readonly property string etat: panelOpen ? "panneau" : (notifToastActive ? "toast" : (liveActivityExpanded ? "live" : (themeExpanded ? "theme" : (notesExpanded ? "notes" : (launcherExpanded ? "launcher" : (wallpaperExpanded ? "wallpaper" : (meteoExpanded ? "meteo" : (expanded ? "etendu_barre" : "compact"))))))))
 
-    property var wallpaperList: []
-    property int wallpaperSelectedIdx: 0
-
-    Process {
-        id: wallpaperScanProc
-        command: [
-            "python3", "-c",
-            "import os, json, pathlib\n"
-            + "d = os.environ.get('QS_WP_DIR', '').strip() or os.path.expanduser('~/Images/wallpapers')\n"
-            + "d = os.path.expanduser(os.path.expandvars(d))\n"
-            + "exts = {'.png', '.jpg', '.jpeg', '.webp', '.avif'}\n"
-            + "out = []\n"
-            + "if os.path.isdir(d):\n"
-            + "    for fn in sorted(os.listdir(d)):\n"
-            + "        p = os.path.join(d, fn)\n"
-            + "        if os.path.isfile(p) and os.path.splitext(fn)[1].lower() in exts:\n"
-            + "            out.append({'path': p, 'name': os.path.splitext(fn)[0]})\n"
-            + "print(json.dumps(out))"
-        ]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    const arr = JSON.parse(text.trim())
-                    root.wallpaperList = Array.isArray(arr) ? arr : []
-                    let curIdx = 0
-                    for (let i = 0; i < root.wallpaperList.length; i++) {
-                        if (root.wallpaperList[i].path === Theme.wallpaperCourant) {
-                            curIdx = i
-                            break
-                        }
-                    }
-                    root.wallpaperSelectedIdx = curIdx
-                } catch (e) {
-                    root.wallpaperList = []
-                }
-            }
-        }
-    }
-
-    function applyWallpaper(path) {
-        if (!path) return
-        Theme.setWallpaperCourant(String(path))
-        Quickshell.execDetached(["bash", Quickshell.shellPath("hyprquickpaper/commands.sh"), String(path)])
-        Theme.wallpaperPickerOpen = false
-    }
-
-    function handleWallpaperNav(action) {
-        const n = root.wallpaperList.length
-        if (action === "prev" || action === "left" || action === "gauche") {
-            if (n > 0) {
-                root.wallpaperSelectedIdx = (root.wallpaperSelectedIdx - 1 + n) % n
-                wpListView.positionViewAtIndex(root.wallpaperSelectedIdx, ListView.Center)
-            }
-        } else if (action === "next" || action === "right" || action === "droite") {
-            if (n > 0) {
-                root.wallpaperSelectedIdx = (root.wallpaperSelectedIdx + 1) % n
-                wpListView.positionViewAtIndex(root.wallpaperSelectedIdx, ListView.Center)
-            }
-        } else if (action === "apply" || action === "valider") {
-            if (n > 0) {
-                const idx = Math.max(0, Math.min(n - 1, root.wallpaperSelectedIdx))
-                root.applyWallpaper(root.wallpaperList[idx].path)
-            }
-        }
-    }
-
-    Component.onCompleted: {
-        Theme.wallpaperNavHook = root.handleWallpaperNav
-        Theme.themeNavHook = root.handleThemeNav
-    }
-
-    // ── Sélecteur de jeu de couleurs inline (SUPER + C) ──────────────────
-    property int themeSelectedIdx: 0
-
-    Process {
-        id: islandThemesScanProc
-        command: ["python3", Quickshell.shellPath("core/themes_scan.py"), "--sync"]
-    }
-
-    function applyThemeScheme(nom) {
-        if (!nom) return
-        Quickshell.execDetached(["python3", Quickshell.shellPath("core/theme_manager.py"), String(nom)])
-        Theme.themePickerOpen = false
-    }
-
-    function handleThemeNav(action) {
-        const list = Theme.paletteNoms || []
-        const n = list.length
-        if (action === "prev" || action === "left" || action === "gauche") {
-            if (n > 0) {
-                root.themeSelectedIdx = (root.themeSelectedIdx - 1 + n) % n
-                themeListView.positionViewAtIndex(root.themeSelectedIdx, ListView.Center)
-            }
-        } else if (action === "next" || action === "right" || action === "droite") {
-            if (n > 0) {
-                root.themeSelectedIdx = (root.themeSelectedIdx + 1) % n
-                themeListView.positionViewAtIndex(root.themeSelectedIdx, ListView.Center)
-            }
-        } else if (action === "apply" || action === "valider") {
-            if (n > 0) {
-                const idx = Math.max(0, Math.min(n - 1, root.themeSelectedIdx))
-                root.applyThemeScheme(list[idx])
-            }
-        }
-    }
-
     property bool pretGrabTheme: false
     onThemeExpandedChanged: {
         if (themeExpanded) {
@@ -317,12 +336,7 @@ Item {
             expanded = true
             pretGrabTheme = false
             delaiGrabTheme.restart()
-            if (!islandThemesScanProc.running) islandThemesScanProc.running = true
-            const list = Theme.paletteNoms || []
-            const cur = list.indexOf(Theme.activeTheme)
-            root.themeSelectedIdx = cur >= 0 ? cur : 0
-            themeListView.positionViewAtIndex(root.themeSelectedIdx, ListView.Center)
-            themeContainer.forceActiveFocus()
+            themeContainer.activate()
         } else {
             delaiGrabTheme.stop()
             pretGrabTheme = false
@@ -345,7 +359,6 @@ Item {
         }
     }
 
-    // Attrapeur de focus Hyprland pour le sélecteur de fonds d'écran inline
     property bool pretGrabWallpaper: false
     onWallpaperExpandedChanged: {
         if (wallpaperExpanded) {
@@ -353,9 +366,7 @@ Item {
             expanded = true
             pretGrabWallpaper = false
             delaiGrabWallpaper.restart()
-            wallpaperScanProc.environment = ({ "QS_WP_DIR": Theme.wallpaperDir || "" })
-            if (!wallpaperScanProc.running) wallpaperScanProc.running = true
-            wallpaperContainer.forceActiveFocus()
+            wallpaperContainer.activate()
         } else {
             delaiGrabWallpaper.stop()
             pretGrabWallpaper = false
@@ -379,40 +390,10 @@ Item {
     }
 
     // ── Lanceur d'applications inline (SUPER + R en mode îlot) ───────────
-    property var launcherApps: []
-    property var launcherHistory: []
     property var launcherServiceResults: []
     property string launcherQuery: ""
     property int launcherSelectedIdx: 0
     property bool launcherSearching: false
-
-    FileView {
-        id: launcherAppsFile
-        path: Quickshell.shellPath("core/app_index.json")
-        watchChanges: root.launcherExpanded
-        printErrors: false
-        onFileChanged: reload()
-        onLoaded: {
-            try {
-                const d = JSON.parse(text())
-                root.launcherApps = Array.isArray(d) ? d : []
-            } catch (e) { root.launcherApps = [] }
-        }
-    }
-
-    FileView {
-        id: launcherHistoryFile
-        path: Quickshell.shellPath("core/launch_history.json")
-        watchChanges: root.launcherExpanded
-        printErrors: false
-        onFileChanged: reload()
-        onLoaded: {
-            try {
-                const d = JSON.parse(text())
-                root.launcherHistory = Array.isArray(d) ? d : []
-            } catch (e) { root.launcherHistory = [] }
-        }
-    }
 
     Process {
         id: launcherServiceProc
@@ -497,13 +478,13 @@ Item {
 
         if (rl === "contexte" || rl.indexOf("contexte ") === 0) {
             const qCtx = rl.slice(8).trim()
-            const ctxs = Theme.workContexts || []
+            const ctxs = ShellState.workContexts || []
             for (let i = 0; i < ctxs.length; i++) {
                 const c = ctxs[i]
                 if (qCtx === "" || c.id.indexOf(qCtx) !== -1 || c.label.toLowerCase().indexOf(qCtx) !== -1) {
                     out.push({
                         name: "as contexte " + c.id,
-                        desc: (c.id === Theme.activeContext ? "Actif · " : "") + c.label + " — " + c.desc,
+                        desc: (c.id === ShellState.activeContext ? "Actif · " : "") + c.label + " — " + c.desc,
                         icon: c.icon,
                         kind: "as",
                         asAction: "contexte",
@@ -515,8 +496,8 @@ Item {
         }
 
         const catalog = [
-            { name: "as dnd", desc: Theme.doNotDisturb ? "Désactiver Ne Pas Déranger" : "Activer Ne Pas Déranger", icon: Theme.doNotDisturb ? "bell" : "bell-off", kind: "as", asAction: "dnd" },
-            { name: "as caffeine", desc: Theme.caffeineActif ? "Désactiver Caffeine" : "Activer Caffeine (empêche la veille)", icon: "coffee", kind: "as", asAction: "caffeine" },
+            { name: "as dnd", desc: ShellState.doNotDisturb ? "Désactiver Ne Pas Déranger" : "Activer Ne Pas Déranger", icon: ShellState.doNotDisturb ? "bell" : "bell-off", kind: "as", asAction: "dnd" },
+            { name: "as caffeine", desc: SystemServices.caffeineActif ? "Désactiver Caffeine" : "Activer Caffeine (empêche la veille)", icon: "coffee", kind: "as", asAction: "caffeine" },
             { name: "as nuit", desc: "Basculer le mode nuit (ou « as nuit 3500 »)", icon: "weather-night", kind: "as", asAction: "nuit" },
             { name: "as theme", desc: "Choisir un jeu de couleurs (ou « as theme <nom> »)", icon: "palette", kind: "as", asAction: "theme_picker" },
             { name: "as fond", desc: "Ouvrir le sélecteur de fond d'écran", icon: "image", kind: "as", asAction: "fond" },
@@ -546,16 +527,15 @@ Item {
         if (!entry || !entry.asAction) return
         const act = entry.asAction
         if (act === "prefill_as" && entry.asArg) {
-            launcherInput.text = String(entry.asArg)
-            launcherInput.cursorPosition = launcherInput.text.length
+            launcherContainer.setText(String(entry.asArg))
             return
         }
         Theme.islandLauncherOpen = false
         if (act === "dnd") {
-            Theme.doNotDisturb = !Theme.doNotDisturb
-            Quickshell.execDetached(["python3", Quickshell.shellPath("core/config_manager.py"), "style", "do_not_disturb", Theme.doNotDisturb ? "true" : "false"])
+            ShellState.doNotDisturb = !ShellState.doNotDisturb
+            Quickshell.execDetached(["python3", Quickshell.shellPath("core/config_manager.py"), "style", "do_not_disturb", ShellState.doNotDisturb ? "true" : "false"])
         } else if (act === "caffeine") {
-            Theme.caffeineActif = !Theme.caffeineActif
+            SystemServices.caffeineActif = !SystemServices.caffeineActif
         } else if (act === "nuit") {
             Quickshell.execDetached(["python3", Quickshell.shellPath("core/nuit_service.py"), "basculer"])
         } else if (act === "nuit_temp") {
@@ -568,7 +548,7 @@ Item {
         } else if (act === "theme_picker") {
             Theme.themePickerOpen = true
         } else if (act === "theme_apply" && entry.asArg) {
-            root.applyThemeScheme(String(entry.asArg))
+            themeContainer.applyScheme(String(entry.asArg))
         } else if (act === "fond") {
             Theme.wallpaperPickerOpen = true
         } else if (act === "energie" && entry.asArg) {
@@ -584,9 +564,9 @@ Item {
         } else if (act === "eteindre") {
             Quickshell.execDetached(["systemctl", "poweroff"])
         } else if (act === "timer" && entry.asArg) {
-            Theme.startTimer(entry.asArg, "")
+            ShellState.startTimer(entry.asArg, "")
         } else if (act === "contexte" && entry.asArg) {
-            Theme.applyContext(String(entry.asArg))
+            ShellState.applyContext(String(entry.asArg))
         }
     }
 
@@ -643,18 +623,18 @@ Item {
                 color: "#ef4444"
             })
         }
-        if (Theme.timerRunning) {
-            const pct = Theme.timerTotalSec > 0
-                ? Math.max(0, Math.min(100, Math.round(100 * (Theme.timerTotalSec - Theme.timerRemainingSec) / Theme.timerTotalSec)))
+        if (ShellState.timerRunning) {
+            const pct = ShellState.timerTotalSec > 0
+                ? Math.max(0, Math.min(100, Math.round(100 * (ShellState.timerTotalSec - ShellState.timerRemainingSec) / ShellState.timerTotalSec)))
                 : 0
             list.push({
                 id: "timer",
                 kind: "timer",
-                title: (Theme.timerPaused ? "⏸ " : "") + root.formatLiveDuration(Theme.timerRemainingSec),
-                subtitle: Theme.timerLabel,
-                etaText: "Reste ~ " + root.formatLiveDuration(Theme.timerRemainingSec),
+                title: (ShellState.timerPaused ? "⏸ " : "") + root.formatLiveDuration(ShellState.timerRemainingSec),
+                subtitle: ShellState.timerLabel,
+                etaText: "Reste ~ " + root.formatLiveDuration(ShellState.timerRemainingSec),
                 progress: pct,
-                paused: Theme.timerPaused,
+                paused: ShellState.timerPaused,
                 color: Theme.accent
             })
         }
@@ -705,7 +685,7 @@ Item {
                 color: Theme.info
             })
         }
-        const ipcs = Array.isArray(Theme.ipcActivities) ? Theme.ipcActivities : []
+        const ipcs = Array.isArray(ShellState.ipcActivities) ? ShellState.ipcActivities : []
         for (let j = 0; j < ipcs.length; j++) {
             const x = ipcs[j]
             if (!x || !x.id) continue
@@ -730,7 +710,7 @@ Item {
     }
 
     readonly property var compactBarsList: root.liveActivities.slice(0, 3)
-    readonly property real compactExtraHeight: (!Theme.osdVisible && root.compactBarsList.length > 1)
+    readonly property real compactExtraHeight: (!ShellState.osdVisible && root.compactBarsList.length > 1)
         ? (root.compactBarsList.length * 3 + 2)
         : 0
 
@@ -779,24 +759,10 @@ Item {
             return root.launcherServiceResults.slice(0, 8)
         }
         if (q === "") {
-            if (Theme.launchHistory && root.launcherHistory.length > 0) {
-                return root.launcherHistory.slice(0, 7)
-            }
-            return root.launcherApps.slice(0, 7)
+            const rec = LauncherEngine.recentEntries(7)
+            return rec.length > 0 ? rec : LauncherEngine.appIndex.slice(0, 7)
         }
-        const ql = q.toLowerCase()
-        const exact = []
-        const sub = []
-        for (let i = 0; i < root.launcherApps.length; i++) {
-            const a = root.launcherApps[i]
-            if (!a || !a.name) continue
-            const name = String(a.name).toLowerCase()
-            const gen = String(a.generic || "").toLowerCase()
-            const ex = String(a.exec || "").toLowerCase()
-            if (name.indexOf(ql) === 0) exact.push(a)
-            else if (name.indexOf(ql) !== -1 || gen.indexOf(ql) !== -1 || ex.indexOf(ql) !== -1) sub.push(a)
-        }
-        return exact.concat(sub).slice(0, 8)
+        return LauncherEngine.searchAppsAndAliases(q, 8)
     }
 
     Timer {
@@ -836,8 +802,7 @@ Item {
             return
         }
         if (entry.action === "prefill" && entry.arg !== undefined) {
-            launcherInput.text = String(entry.arg)
-            launcherInput.cursorPosition = launcherInput.text.length
+            launcherContainer.setText(String(entry.arg))
             return
         }
         if (entry.action === "copy" && entry.arg) {
@@ -845,8 +810,13 @@ Item {
             Theme.islandLauncherOpen = false
             return
         }
+        if (entry.action === "open-config") {
+            Theme.islandLauncherOpen = false
+            Theme.configPanelVisible = true
+            return
+        }
         if ((entry.action === "open" || entry.action === "open-url") && entry.arg) {
-            Quickshell.execDetached(["xdg-open", String(entry.arg)])
+            SystemServices.launchInScope('exec xdg-open "' + String(entry.arg).replace(/"/g, '\\"') + '"')
             Theme.islandLauncherOpen = false
             return
         }
@@ -856,13 +826,7 @@ Item {
             return
         }
         if (!entry.exec) return
-        const shell = entry.kind === "cmd"
-            ? 'cd "$HOME" && ' + entry.exec
-            : 'cd "$HOME" && exec ' + entry.exec
-        Quickshell.execDetached(["setsid", "sh", "-c", shell])
-        if (Theme.launchHistory && entry.name) {
-            Quickshell.execDetached(["python3", Quickshell.shellPath("core/launch_history.py"), "add", String(entry.name), String(entry.exec), String(entry.icon || "")])
-        }
+        LauncherEngine.launch(entry)
         Theme.islandLauncherOpen = false
     }
 
@@ -873,12 +837,10 @@ Item {
             expanded = true
             pretGrabLauncher = false
             delaiGrabLauncher.restart()
-            launcherAppsFile.reload()
-            launcherHistoryFile.reload()
-            launcherInput.text = ""
+            LauncherEngine.reload()
             root.launcherQuery = ""
             root.launcherSelectedIdx = 0
-            launcherInput.forceActiveFocus()
+            launcherContainer.clearAndFocus()
         } else {
             delaiGrabLauncher.stop()
             pretGrabLauncher = false
@@ -902,90 +864,6 @@ Item {
     }
 
     // ── Notes rapides / Post-its inline (SUPER + N ou bouton Notes) ──────
-    property var quickNotes: []
-    property int activeNoteIdx: 0
-    property bool _notesSyncing: false
-
-    Process {
-        id: notesLoadProc
-        command: [
-            "python3", "-c",
-            "import os, json\n"
-            + "p = os.path.expanduser('~/.cache/quickshell/quick_notes.json')\n"
-            + "try:\n"
-            + "    d = json.loads(open(p).read())\n"
-            + "    print(json.dumps(d if isinstance(d, list) and d else [{'id': 1, 'text': ''}]))\n"
-            + "except Exception:\n"
-            + "    print(json.dumps([{'id': 1, 'text': ''}]))"
-        ]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    const arr = JSON.parse(text.trim())
-                    root.quickNotes = (Array.isArray(arr) && arr.length > 0) ? arr : [{ id: 1, text: "" }]
-                } catch (e) {
-                    root.quickNotes = [{ id: 1, text: "" }]
-                }
-                root.activeNoteIdx = Math.max(0, Math.min(root.quickNotes.length - 1, root.activeNoteIdx))
-                root._notesSyncing = true
-                noteEditor.text = String((root.quickNotes[root.activeNoteIdx] && root.quickNotes[root.activeNoteIdx].text) || "")
-                root._notesSyncing = false
-            }
-        }
-    }
-
-    Process { id: notesSaveProc }
-
-    function saveQuickNotes() {
-        notesSaveProc.environment = ({ "QS_NOTES_JSON": JSON.stringify(root.quickNotes) })
-        notesSaveProc.command = [
-            "python3", "-c",
-            "import os, pathlib\n"
-            + "p = pathlib.Path(os.path.expanduser('~/.cache/quickshell/quick_notes.json'))\n"
-            + "p.parent.mkdir(parents=True, exist_ok=True)\n"
-            + "p.write_text(os.environ.get('QS_NOTES_JSON', '[]'))"
-        ]
-        if (!notesSaveProc.running) notesSaveProc.running = true
-    }
-
-    Timer {
-        id: notesSaveTimer
-        interval: 300
-        repeat: false
-        onTriggered: root.saveQuickNotes()
-    }
-
-    function selectNote(idx) {
-        if (idx < 0 || idx >= root.quickNotes.length) return
-        root.activeNoteIdx = idx
-        root._notesSyncing = true
-        noteEditor.text = String(root.quickNotes[idx].text || "")
-        root._notesSyncing = false
-        noteEditor.forceActiveFocus()
-    }
-
-    function addQuickNote() {
-        const list = root.quickNotes.slice()
-        list.push({ id: Date.now(), text: "" })
-        root.quickNotes = list
-        selectNote(list.length - 1)
-        root.saveQuickNotes()
-    }
-
-    function deleteQuickNote(idx) {
-        if (root.quickNotes.length <= 1) {
-            root.quickNotes = [{ id: 1, text: "" }]
-            selectNote(0)
-            root.saveQuickNotes()
-            return
-        }
-        const list = root.quickNotes.slice()
-        list.splice(idx, 1)
-        root.quickNotes = list
-        selectNote(Math.max(0, Math.min(list.length - 1, idx)))
-        root.saveQuickNotes()
-    }
-
     property bool pretGrabNotes: false
     onNotesExpandedChanged: {
         if (notesExpanded) {
@@ -993,8 +871,7 @@ Item {
             expanded = true
             pretGrabNotes = false
             delaiGrabNotes.restart()
-            if (!notesLoadProc.running) notesLoadProc.running = true
-            noteEditor.forceActiveFocus()
+            notesContainer.activate()
         } else {
             delaiGrabNotes.stop()
             pretGrabNotes = false
@@ -1025,7 +902,7 @@ Item {
             expanded = true
             pretGrabMeteo = false
             delaiGrabMeteo.restart()
-            Theme.rafraichirMeteo(false)
+            SystemServices.rafraichirMeteo(false)
             meteoContainer.forceActiveFocus()
         } else {
             delaiGrabMeteo.stop()
@@ -1050,7 +927,7 @@ Item {
     }
 
     Binding {
-        target: Theme
+        target: ShellState
         property: "notifToastHovered"
         value: root.notifToastActive && root.isHovered
     }
@@ -1152,7 +1029,7 @@ Item {
     // Largeur dynamique animée selon l'état
     readonly property real osdWidth: Math.max(160, osdRow.implicitWidth + Theme.padH * 2 + 16)
     readonly property real compactRestWidth: Math.max(90, compactContentRow.implicitWidth + Theme.padH * 2)
-    readonly property real compactWidth: Theme.osdVisible ? osdWidth : compactRestWidth
+    readonly property real compactWidth: ShellState.osdVisible ? osdWidth : compactRestWidth
     readonly property real meteoWidth: Math.max(410, meteoContentCol.implicitWidth + 32)
     readonly property real wallpaperWidth: 880
     readonly property real launcherWidth: 560
@@ -1211,13 +1088,11 @@ Item {
             id: osdRow
             anchors.centerIn: parent
             spacing: 8
-            visible: Theme.osdVisible
+            visible: ShellState.osdVisible
 
             Icon {
                 anchors.verticalCenter: parent.verticalCenter
-                glyph: Theme.osdKind === "brightness" ? "brightness"
-                    : Theme.osdKind === "mute" ? "volume-off"
-                    : (Theme.osdValue <= 0 ? "mute" : Theme.osdValue < 50 ? "volume-medium" : "volume-high")
+                glyph: ShellState.osdGlyph
                 size: Theme.iconSm
                 color: Theme.accent
             }
@@ -1229,7 +1104,7 @@ Item {
                 radius: 2
                 color: Theme.surfaceVariant
                 Rectangle {
-                    width: parent.width * (Theme.osdValue / 100)
+                    width: parent.width * (ShellState.osdValue / 100)
                     height: parent.height
                     radius: 2
                     color: Theme.accent
@@ -1239,7 +1114,7 @@ Item {
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: Math.round(Theme.osdValue) + "%"
+                text: ShellState.osdPercent
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.textXs
                 font.weight: Font.Bold
@@ -1254,18 +1129,10 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             height: Theme.barHeight
             spacing: 10
-            visible: !Theme.osdVisible
+            visible: !ShellState.osdVisible
 
             // Point capture vidéo (rouge) / audio seule (orange) avant les ws
-            Rectangle {
-                visible: Theme.ilotVisibleIn(Theme.ilotShowCapture, "compact") && root.captureState !== "none"
-                width: 6
-                height: 6
-                radius: 3
-                anchors.verticalCenter: parent.verticalCenter
-                color: root.captureState === "video" ? "#ef4444" : "#f97316"
-                Behavior on color { ColorAnimation { duration: 150 } }
-            }
+            CaptureDot { ilotState: "compact" }
 
             WorkspacesApplet {
                 id: compactWorkspaces
@@ -1328,44 +1195,17 @@ Item {
             // Applets configurés en mode « Repos » ou « Les deux »
             AppletRow {
                 id: compactApplets
-                directModel: Theme.appletsPourIlot("compact", "all")
+                directModel: ShellState.appletsPourIlot("compact", "all")
                 visible: compactApplets.applets.length > 0
                 anchors.verticalCenter: parent.verticalCenter
             }
 
             // Icône Projets (columns-3) si échéance Planka < 24h
-            Item {
-                visible: Theme.ilotProjetsActif && Theme.ilotVisibleIn(Theme.ilotShowPlanka, "compact") && root.plankaEcheanceProche
-                width: 20
-                height: 20
-                anchors.verticalCenter: parent.verticalCenter
-
-                Icon {
-                    anchors.centerIn: parent
-                    glyph: "columns-3"
-                    size: Theme.iconSm
-                    color: root.plankaUrgence === "rouge" ? "#ef4444" : "#f97316"
-                }
-
-                Rectangle {
-                    width: 6
-                    height: 6
-                    radius: 3
-                    anchors.top: parent.top
-                    anchors.right: parent.right
-                    color: root.plankaUrgence === "rouge" ? "#ef4444" : "#f97316"
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.ouvrirPanneau(4)
-                }
-            }
+            PlankaAlertIcon { ilotState: "compact"; boxSize: 20 }
 
             // Badge contexte actif (si différent de « normal »)
             Rectangle {
-                visible: Theme.activeContext !== "" && Theme.activeContext !== "normal"
+                visible: ShellState.activeContext !== "" && ShellState.activeContext !== "normal"
                 height: Math.max(18, Theme.barHeight - 8)
                 width: ctxPillTxt.implicitWidth + 12
                 radius: Math.round(height / 2)
@@ -1378,11 +1218,11 @@ Item {
                     id: ctxPillTxt
                     anchors.centerIn: parent
                     text: {
-                        const ctxs = Theme.workContexts || []
+                        const ctxs = ShellState.workContexts || []
                         for (let i = 0; i < ctxs.length; i++) {
-                            if (ctxs[i].id === Theme.activeContext) return ctxs[i].label
+                            if (ctxs[i].id === ShellState.activeContext) return ctxs[i].label
                         }
-                        return Theme.activeContext
+                        return ShellState.activeContext
                     }
                     font.family: Theme.fontUi
                     font.pixelSize: Math.max(8, Math.round(10 * Theme.barScale))
@@ -1398,91 +1238,14 @@ Item {
             }
 
             // Live Activity (enregistrement, minuteur, téléchargements, tâches IPC)
-            Rectangle {
+            LiveActivityChip {
                 id: liveActivityPill
-                visible: root.liveActivities.length > 0
-                readonly property var primary: root.liveActivities.length > 0 ? root.liveActivities[0] : null
-                height: Math.max(18, Theme.barHeight - 8)
-                width: liveActRow.implicitWidth + 12
-                radius: Math.round(height / 2)
-                anchors.verticalCenter: parent.verticalCenter
-                color: primary ? Qt.alpha(primary.color, 0.16) : "transparent"
-                border.width: 1
-                border.color: primary ? Qt.alpha(primary.color, 0.45) : "transparent"
-
-                Row {
-                    id: liveActRow
-                    anchors.centerIn: parent
-                    spacing: 5
-
-                    Rectangle {
-                        id: livePulseDot
-                        width: 6
-                        height: 6
-                        radius: 3
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: liveActivityPill.primary ? liveActivityPill.primary.color : Theme.accent
-                        SequentialAnimation on opacity {
-                            running: liveActivityPill.visible && !(liveActivityPill.primary && liveActivityPill.primary.paused)
-                            loops: Animation.Infinite
-                            NumberAnimation { from: 1.0; to: 0.25; duration: 700; easing.type: Easing.InOutSine }
-                            NumberAnimation { from: 0.25; to: 1.0; duration: 700; easing.type: Easing.InOutSine }
-                        }
-                    }
-
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: {
-                            const p = liveActivityPill.primary
-                            if (!p) return ""
-                            const t = String(p.title || "")
-                            return t.length > 16 ? (t.substring(0, 15) + "…") : t
-                        }
-                        font.family: Theme.fontUi
-                        font.pixelSize: Math.max(8, Math.round(11 * Theme.barScale))
-                        font.weight: Font.Bold
-                        color: liveActivityPill.primary ? liveActivityPill.primary.color : Theme.fg
-                    }
-
-                    Rectangle {
-                        visible: root.liveActivities.length > 1
-                        width: liveCountTxt.implicitWidth + 8
-                        height: 14
-                        radius: 7
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: liveActivityPill.primary ? liveActivityPill.primary.color : Theme.accent
-
-                        Text {
-                            id: liveCountTxt
-                            anchors.centerIn: parent
-                            text: "+" + (root.liveActivities.length - 1)
-                            font.family: Theme.fontUi
-                            font.pixelSize: 9
-                            font.weight: Font.Bold
-                            color: Theme.bg
-                        }
-                    }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: Theme.toggleLiveActivity()
-                }
+                visible: Theme.ilotVisibleIn(Theme.ilotShowLiveActivity, "compact") && root.liveActivities.length > 0
+                animatePulse: true
             }
 
             // Point VPN à droite (bleu = connecté, blanc = déconnecté, jaune = erreur)
-            Rectangle {
-                visible: Theme.ilotVisibleIn(Theme.ilotShowVpn, "compact")
-                width: 6
-                height: 6
-                radius: 3
-                anchors.verticalCenter: parent.verticalCenter
-                color: root.vpnState === "connected"
-                    ? "#00a3d5"
-                    : (root.vpnState === "error" ? "#eab308" : "#ffffff")
-                Behavior on color { ColorAnimation { duration: 150 } }
-            }
+            VpnDot { ilotState: "compact" }
         }
 
         // Seconde barre (et +) vers le bas pour les téléchargements / activités secondaires
@@ -1490,7 +1253,7 @@ Item {
         // Barres de progression fines (2px, espacées de 1px) collées en bas de la pilule
         Column {
             id: compactBarsCol
-            visible: root.compactBarsList.length > 0 && !Theme.osdVisible
+            visible: root.compactBarsList.length > 0 && !ShellState.osdVisible
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 2
             anchors.left: parent.left
@@ -1549,15 +1312,7 @@ Item {
             spacing: 10
 
             // Côté Gauche : Point capture (si actif) + Workspaces (points/tiret maintenus) + Applets gauche
-            Rectangle {
-                visible: Theme.ilotVisibleIn(Theme.ilotShowCapture, "expanded") && root.captureState !== "none"
-                width: 6
-                height: 6
-                anchors.verticalCenter: parent.verticalCenter
-                radius: 3
-                color: root.captureState === "video" ? "#ef4444" : "#f97316"
-                Behavior on color { ColorAnimation { duration: 150 } }
-            }
+            CaptureDot { ilotState: "expanded" }
 
             WorkspacesApplet {
                 id: expandedWorkspaces
@@ -1568,7 +1323,7 @@ Item {
 
             AppletRow {
                 id: leftApplets
-                directModel: Theme.appletsPourIlot("expanded", "left")
+                directModel: ShellState.appletsPourIlot("expanded", "left")
                 visible: applets.length > 0
                 anchors.verticalCenter: parent.verticalCenter
             }
@@ -1638,76 +1393,16 @@ Item {
             }
 
             // Live Activity visible aussi en mode étendu (au survol)
-            Rectangle {
+            LiveActivityChip {
                 id: expandedLiveActivityPill
-                visible: root.liveActivities.length > 0
-                readonly property var primary: root.liveActivities.length > 0 ? root.liveActivities[0] : null
-                height: Math.max(18, Theme.barHeight - 8)
-                width: expLiveRow.implicitWidth + 12
-                radius: Math.round(height / 2)
-                anchors.verticalCenter: parent.verticalCenter
-                color: primary ? Qt.alpha(primary.color, 0.16) : "transparent"
-                border.width: 1
-                border.color: primary ? Qt.alpha(primary.color, 0.45) : "transparent"
-
-                Row {
-                    id: expLiveRow
-                    anchors.centerIn: parent
-                    spacing: 5
-
-                    Rectangle {
-                        width: 6
-                        height: 6
-                        radius: 3
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: expandedLiveActivityPill.primary ? expandedLiveActivityPill.primary.color : Theme.accent
-                    }
-
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: {
-                            const p = expandedLiveActivityPill.primary
-                            if (!p) return ""
-                            const t = String(p.title || "")
-                            return t.length > 16 ? (t.substring(0, 15) + "…") : t
-                        }
-                        font.family: Theme.fontUi
-                        font.pixelSize: Math.max(8, Math.round(11 * Theme.barScale))
-                        font.weight: Font.Bold
-                        color: expandedLiveActivityPill.primary ? expandedLiveActivityPill.primary.color : Theme.fg
-                    }
-
-                    Rectangle {
-                        visible: root.liveActivities.length > 1
-                        width: expLiveCnt.implicitWidth + 8
-                        height: 14
-                        radius: 7
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: expandedLiveActivityPill.primary ? expandedLiveActivityPill.primary.color : Theme.accent
-
-                        Text {
-                            id: expLiveCnt
-                            anchors.centerIn: parent
-                            text: "+" + (root.liveActivities.length - 1)
-                            font.family: Theme.fontUi
-                            font.pixelSize: 9
-                            font.weight: Font.Bold
-                            color: Theme.bg
-                        }
-                    }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: Theme.toggleLiveActivity()
-                }
+                visible: Theme.ilotVisibleIn(Theme.ilotShowLiveActivity, "expanded") && root.liveActivities.length > 0
+                animatePulse: false
             }
 
             // Côté Droit : Applets droite
             AppletRow {
                 id: rightApplets
-                directModel: Theme.appletsPourIlot("expanded", "right")
+                directModel: ShellState.appletsPourIlot("expanded", "right")
                 visible: applets.length > 0
                 anchors.verticalCenter: parent.verticalCenter
             }
@@ -1741,47 +1436,10 @@ Item {
             }
 
             // Icône Projets (columns-3) maintenue au survol si échéance Planka < 24h
-            Item {
-                visible: Theme.ilotProjetsActif && Theme.ilotVisibleIn(Theme.ilotShowPlanka, "expanded") && root.plankaEcheanceProche
-                width: 22
-                height: 22
-                anchors.verticalCenter: parent.verticalCenter
-
-                Icon {
-                    anchors.centerIn: parent
-                    glyph: "columns-3"
-                    size: Theme.iconSm
-                    color: root.plankaUrgence === "rouge" ? "#ef4444" : "#f97316"
-                }
-
-                Rectangle {
-                    width: 6
-                    height: 6
-                    radius: 3
-                    anchors.top: parent.top
-                    anchors.right: parent.right
-                    color: root.plankaUrgence === "rouge" ? "#ef4444" : "#f97316"
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.ouvrirPanneau(4)
-                }
-            }
+            PlankaAlertIcon { ilotState: "expanded"; boxSize: 22 }
 
             // Point VPN à droite en mode étendu
-            Rectangle {
-                visible: Theme.ilotVisibleIn(Theme.ilotShowVpn, "expanded")
-                width: 6
-                height: 6
-                anchors.verticalCenter: parent.verticalCenter
-                radius: 3
-                color: root.vpnState === "connected"
-                    ? "#00a3d5"
-                    : (root.vpnState === "error" ? "#eab308" : "#ffffff")
-                Behavior on color { ColorAnimation { duration: 150 } }
-            }
+            VpnDot { ilotState: "expanded" }
         }
     }
 
@@ -1801,7 +1459,7 @@ Item {
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
             onClicked: {
-                if (Theme.notifOps && Theme.notifOps.dismissToast) Theme.notifOps.dismissToast()
+                if (ShellState.notifOps && ShellState.notifOps.dismissToast) ShellState.notifOps.dismissToast()
                 root.ouvrirPanneau(1)
             }
         }
@@ -1828,7 +1486,7 @@ Item {
 
                 Text {
                     Layout.fillWidth: true
-                    text: Theme.notifToast ? String(Theme.notifToast.appName || "Système") : ""
+                    text: ShellState.notifToast ? String(ShellState.notifToast.appName || "Système") : ""
                     color: Theme.accent
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.textXs
@@ -1837,7 +1495,7 @@ Item {
                 }
 
                 Text {
-                    text: Theme.notifToast ? String(Theme.notifToast.time || "") : ""
+                    text: ShellState.notifToast ? String(ShellState.notifToast.time || "") : ""
                     color: Qt.alpha(Theme.fg, 0.5)
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.textXs
@@ -1860,7 +1518,7 @@ Item {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            if (Theme.notifOps && Theme.notifOps.quietToast) Theme.notifOps.quietToast()
+                            if (ShellState.notifOps && ShellState.notifOps.quietToast) ShellState.notifOps.quietToast()
                         }
                     }
                 }
@@ -1882,7 +1540,7 @@ Item {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            if (Theme.notifOps && Theme.notifOps.dismissToast) Theme.notifOps.dismissToast()
+                            if (ShellState.notifOps && ShellState.notifOps.dismissToast) ShellState.notifOps.dismissToast()
                         }
                     }
                 }
@@ -1896,7 +1554,7 @@ Item {
                 Text {
                     id: islandToastTitle
                     width: parent.width
-                    text: Theme.notifToast ? String(Theme.notifToast.summary || "") : ""
+                    text: ShellState.notifToast ? String(ShellState.notifToast.summary || "") : ""
                     color: (islandToastTitleMa.containsMouse && islandToastTitleMa.enabled)
                         ? Theme.accent : Theme.fg
                     font.family: Theme.fontUi
@@ -1911,12 +1569,12 @@ Item {
                 MouseArea {
                     id: islandToastTitleMa
                     anchors.fill: parent
-                    enabled: Boolean(Theme.notifToast && Theme.notifOps && Theme.notifOps.hasTarget && Theme.notifOps.hasTarget(Theme.notifToast))
+                    enabled: Boolean(ShellState.notifToast && ShellState.notifOps && ShellState.notifOps.hasTarget && ShellState.notifOps.hasTarget(ShellState.notifToast))
                     hoverEnabled: true
                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onClicked: {
-                        if (Theme.notifToast && Theme.notifOps && Theme.notifOps.open) {
-                            Theme.notifOps.open(Theme.notifToast, false)
+                        if (ShellState.notifToast && ShellState.notifOps && ShellState.notifOps.open) {
+                            ShellState.notifOps.open(ShellState.notifToast, false)
                         }
                     }
                 }
@@ -1924,9 +1582,9 @@ Item {
 
             // Corps du message
             Text {
-                visible: Boolean(Theme.notifToast && Theme.notifToast.body && Theme.notifToast.body !== "")
+                visible: Boolean(ShellState.notifToast && ShellState.notifToast.body && ShellState.notifToast.body !== "")
                 width: parent.width
-                text: Theme.notifToast ? String(Theme.notifToast.body || "") : ""
+                text: ShellState.notifToast ? String(ShellState.notifToast.body || "") : ""
                 color: Qt.alpha(Theme.fg, 0.85)
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.textXs
@@ -1938,12 +1596,12 @@ Item {
             // Boutons d'actions D-Bus de la notification
             Flow {
                 width: parent.width
-                visible: Boolean(Theme.notifToast && Theme.notifOps && Theme.notifOps.actions && Theme.notifOps.actions(Theme.notifToast).length > 0)
+                visible: Boolean(ShellState.notifToast && ShellState.notifOps && ShellState.notifOps.actions && ShellState.notifOps.actions(ShellState.notifToast).length > 0)
                 spacing: Theme.space1
 
                 Repeater {
-                    model: (Theme.notifToast && Theme.notifOps && Theme.notifOps.actions)
-                        ? Theme.notifOps.actions(Theme.notifToast) : []
+                    model: (ShellState.notifToast && ShellState.notifOps && ShellState.notifOps.actions)
+                        ? ShellState.notifOps.actions(ShellState.notifToast) : []
 
                     Rectangle {
                         required property var modelData
@@ -1976,9 +1634,9 @@ Item {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                if (Theme.notifToast && Theme.notifOps && Theme.notifOps.invoke) {
-                                    Theme.notifOps.invoke(Theme.notifToast, modelData.identifier)
-                                    if (Theme.notifOps.dismissToast) Theme.notifOps.dismissToast()
+                                if (ShellState.notifToast && ShellState.notifOps && ShellState.notifOps.invoke) {
+                                    ShellState.notifOps.invoke(ShellState.notifToast, modelData.identifier)
+                                    if (ShellState.notifOps.dismissToast) ShellState.notifOps.dismissToast()
                                 }
                             }
                         }
@@ -2001,8 +1659,8 @@ Item {
         visible: opacity > 0.05
         Behavior on opacity { NumberAnimation { duration: root.fadeDuration; easing.type: Easing.OutCubic } }
 
-        readonly property var meteo: Theme.meteoData
-        readonly property bool ok: Theme.meteoLoaded && meteo && meteo.ok === true
+        readonly property var meteo: SystemServices.meteoData
+        readonly property bool ok: SystemServices.meteoLoaded && meteo && meteo.ok === true
         readonly property var previsions: (meteo && meteo.previsions) ? meteo.previsions.slice(1, 6) : []
 
         function meteoNombre(v, suffixe) {
@@ -2061,7 +1719,7 @@ Item {
                         width: parent.width
                         text: meteoContainer.ok
                             ? String(meteoContainer.meteo.label || "")
-                            : (Theme.meteoStatut !== "" ? Theme.meteoStatut : "Chargement…")
+                            : (SystemServices.meteoStatut !== "" ? SystemServices.meteoStatut : "Chargement…")
                         color: Theme.fg
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.textSm
@@ -2094,7 +1752,7 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: Theme.rafraichirMeteo(true)
+                        onClicked: SystemServices.rafraichirMeteo(true)
                     }
                 }
 
@@ -2202,1167 +1860,53 @@ Item {
     // ──────────────────────────────────────────────────────────────────────
     // SÉLECTEUR DE FOND D'ÉCRAN INLINE FAÇON IMPASTO (SUPER + W)
     // ──────────────────────────────────────────────────────────────────────
-    Item {
+    IslandWallpaperPicker {
         id: wallpaperContainer
-        anchors.fill: parent
-        clip: true
-        focus: root.wallpaperExpanded
-        Keys.onEscapePressed: Theme.wallpaperPickerOpen = false
-        Keys.onLeftPressed: {
-            if (root.wallpaperList.length > 0) {
-                root.wallpaperSelectedIdx = (root.wallpaperSelectedIdx - 1 + root.wallpaperList.length) % root.wallpaperList.length
-                wpListView.positionViewAtIndex(root.wallpaperSelectedIdx, ListView.Contain)
-            }
-        }
-        Keys.onRightPressed: {
-            if (root.wallpaperList.length > 0) {
-                root.wallpaperSelectedIdx = (root.wallpaperSelectedIdx + 1) % root.wallpaperList.length
-                wpListView.positionViewAtIndex(root.wallpaperSelectedIdx, ListView.Contain)
-            }
-        }
-        Keys.onReturnPressed: {
-            if (root.wallpaperList.length > 0) {
-                const idx = Math.max(0, Math.min(root.wallpaperList.length - 1, root.wallpaperSelectedIdx))
-                root.applyWallpaper(root.wallpaperList[idx].path)
-            }
-        }
-        opacity: root.wallpaperExpanded ? 1.0 : 0.0
-        visible: opacity > 0.05
-        Behavior on opacity { NumberAnimation { duration: root.fadeDuration; easing.type: Easing.OutCubic } }
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 14
-            spacing: 10
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-
-                Icon {
-                    glyph: "palette"
-                    size: Theme.iconSm
-                    color: Theme.accent
-                }
-
-                Text {
-                    text: "FONDS D'ÉCRAN"
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.textXs
-                    font.weight: Font.Bold
-                    color: Theme.accent
-                }
-
-                Text {
-                    Layout.fillWidth: true
-                    text: root.wallpaperList.length + " image" + (root.wallpaperList.length > 1 ? "s" : "")
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.text2xs
-                    color: Qt.alpha(Theme.fg, 0.55)
-                }
-
-                Rectangle {
-                    visible: root.wallpaperList.length > 1
-                    Layout.preferredWidth: wpRandLbl.implicitWidth + 16
-                    Layout.preferredHeight: 22
-                    radius: 6
-                    color: wpRandMa.containsMouse ? Qt.alpha(Theme.accent, 0.25) : Qt.alpha(Theme.fg, 0.08)
-
-                    Text {
-                        id: wpRandLbl
-                        anchors.centerIn: parent
-                        text: "Aléatoire"
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.text2xs
-                        font.weight: Font.DemiBold
-                        color: wpRandMa.containsMouse ? Theme.accent : Theme.fg
-                    }
-
-                    MouseArea {
-                        id: wpRandMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            const idx = Math.floor(Math.random() * root.wallpaperList.length)
-                            root.wallpaperSelectedIdx = idx
-                            wpListView.positionViewAtIndex(idx, ListView.Center)
-                            root.applyWallpaper(root.wallpaperList[idx].path)
-                        }
-                    }
-                }
-
-                Item {
-                    width: 22
-                    height: 22
-                    Icon {
-                        anchors.centerIn: parent
-                        glyph: "close"
-                        size: 13
-                        color: wpCloseMa.containsMouse ? Theme.fg : Qt.alpha(Theme.fg, 0.6)
-                        opacityLevel: 1
-                    }
-                    MouseArea {
-                        id: wpCloseMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Theme.wallpaperPickerOpen = false
-                    }
-                }
-            }
-
-            Item {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-
-                Text {
-                    visible: root.wallpaperList.length === 0
-                    anchors.centerIn: parent
-                    text: "Aucune image trouvée dans le dossier des fonds d'écran"
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.textXs
-                    color: Qt.alpha(Theme.fg, 0.55)
-                }
-
-                ListView {
-                    id: wpListView
-                    anchors.fill: parent
-                    orientation: ListView.Horizontal
-                    spacing: 10
-                    clip: true
-                    visible: root.wallpaperList.length > 0
-                    model: root.wallpaperList
-
-                    WheelHandler {
-                        onWheel: event => {
-                            const delta = event.angleDelta.y !== 0 ? event.angleDelta.y : event.angleDelta.x
-                            wpListView.contentX = Math.max(0, Math.min(Math.max(0, wpListView.contentWidth - wpListView.width), wpListView.contentX - delta * 0.8))
-                        }
-                    }
-
-                    delegate: Rectangle {
-                        required property var modelData
-                        required property int index
-                        readonly property bool isCurrent: modelData.path === Theme.wallpaperCourant
-                        readonly property bool isSelected: index === root.wallpaperSelectedIdx
-                        width: 212
-                        height: wpListView.height
-                        radius: Math.max(8, Math.round(Theme.globalRadius * 0.65))
-                        color: Qt.alpha(Theme.surfaceVariant, 0.4)
-                        border.width: (isCurrent || isSelected || wpCardMa.containsMouse) ? 2 : 1
-                        border.color: isCurrent
-                            ? Theme.accent
-                            : ((isSelected || wpCardMa.containsMouse) ? Qt.alpha(Theme.accent, 0.65) : Qt.alpha(Theme.fg, 0.12))
-                        clip: true
-
-                        Image {
-                            anchors.fill: parent
-                            anchors.margins: 2
-                            source: "file://" + modelData.path
-                            fillMode: Image.PreserveAspectCrop
-                            asynchronous: true
-                            sourceSize.width: 290
-                            sourceSize.height: 180
-                        }
-
-                        Rectangle {
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            height: 22
-                            color: Qt.alpha(Theme.bg, 0.72)
-
-                            Text {
-                                anchors.fill: parent
-                                anchors.leftMargin: 6
-                                anchors.rightMargin: 6
-                                verticalAlignment: Text.AlignVCenter
-                                text: modelData.name
-                                font.family: Theme.fontUi
-                                font.pixelSize: Theme.text2xs
-                                font.bold: isCurrent
-                                color: isCurrent ? Theme.accent : Theme.fg
-                                elide: Text.ElideRight
-                            }
-                        }
-
-                        MouseArea {
-                            id: wpCardMa
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onEntered: root.wallpaperSelectedIdx = index
-                            onClicked: {
-                                root.wallpaperSelectedIdx = index
-                                root.applyWallpaper(modelData.path)
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        open: root.wallpaperExpanded
+        fadeDuration: root.fadeDuration
     }
 
     // ──────────────────────────────────────────────────────────────────────
     // LANCEUR D'APPLICATIONS INLINE FAÇON IMPASTO (SUPER + R)
     // ──────────────────────────────────────────────────────────────────────
-    Item {
+    IslandLauncherDrawer {
         id: launcherContainer
-        anchors.fill: parent
-        clip: true
-        opacity: root.launcherExpanded ? 1.0 : 0.0
-        visible: opacity > 0.05
-        Behavior on opacity { NumberAnimation { duration: root.fadeDuration; easing.type: Easing.OutCubic } }
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 14
-            spacing: 10
-
-            // Barre de recherche
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 38
-                radius: Math.max(8, Math.round(Theme.globalRadius * 0.65))
-                color: Qt.alpha(Theme.surfaceVariant, 0.45)
-                border.width: 1
-                border.color: launcherInput.activeFocus ? Theme.accent : Qt.alpha(Theme.fg, 0.14)
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 8
-                    spacing: 8
-
-                    Icon {
-                        glyph: "search"
-                        size: Theme.iconSm
-                        color: Theme.accent
-                    }
-
-                    TextInput {
-                        id: launcherInput
-                        Layout.fillWidth: true
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.textSm
-                        color: Theme.fg
-                        selectByMouse: true
-                        clip: true
-                        onTextChanged: root.launcherQuery = text
-                        Keys.onEscapePressed: Theme.islandLauncherOpen = false
-                        Keys.onUpPressed: {
-                            if (root.launcherResults.length > 0) {
-                                root.launcherSelectedIdx = (root.launcherSelectedIdx - 1 + root.launcherResults.length) % root.launcherResults.length
-                                launcherListView.positionViewAtIndex(root.launcherSelectedIdx, ListView.Contain)
-                            }
-                        }
-                        Keys.onDownPressed: {
-                            if (root.launcherResults.length > 0) {
-                                root.launcherSelectedIdx = (root.launcherSelectedIdx + 1) % root.launcherResults.length
-                                launcherListView.positionViewAtIndex(root.launcherSelectedIdx, ListView.Contain)
-                            }
-                        }
-                        Keys.onReturnPressed: {
-                            if (root.launcherResults.length > 0) {
-                                const idx = Math.max(0, Math.min(root.launcherResults.length - 1, root.launcherSelectedIdx))
-                                root.runLauncherEntry(root.launcherResults[idx])
-                            }
-                        }
-
-                        Text {
-                            visible: launcherInput.text === ""
-                            text: "Rechercher une application (> cmd, = calcul, / fichier)…"
-                            font.family: Theme.fontUi
-                            font.pixelSize: Theme.textSm
-                            color: Qt.alpha(Theme.fg, 0.45)
-                        }
-                    }
-
-                    Item {
-                        width: 22
-                        height: 22
-                        Icon {
-                            anchors.centerIn: parent
-                            glyph: "close"
-                            size: 13
-                            color: launcherCloseMa.containsMouse ? Theme.fg : Qt.alpha(Theme.fg, 0.6)
-                            opacityLevel: 1
-                        }
-                        MouseArea {
-                            id: launcherCloseMa
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: Theme.islandLauncherOpen = false
-                        }
-                    }
-                }
-            }
-
-            // Liste des résultats
-            Item {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-
-                Text {
-                    visible: root.launcherResults.length === 0
-                    anchors.centerIn: parent
-                    text: root.launcherSearching ? "Recherche…" : "Aucun résultat"
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.textXs
-                    color: Qt.alpha(Theme.fg, 0.5)
-                }
-
-                ListView {
-                    id: launcherListView
-                    anchors.fill: parent
-                    spacing: 4
-                    clip: true
-                    visible: root.launcherResults.length > 0
-                    model: root.launcherResults
-
-                    delegate: Rectangle {
-                        required property var modelData
-                        required property int index
-                        readonly property bool selected: index === root.launcherSelectedIdx
-                        width: launcherListView.width
-                        height: 40
-                        radius: Math.max(6, Math.round(Theme.globalRadius * 0.5))
-                        color: selected
-                            ? Qt.alpha(Theme.accent, 0.22)
-                            : (lItemMa.containsMouse ? Qt.alpha(Theme.surfaceVariant, 0.45) : "transparent")
-                        border.width: selected ? 1 : 0
-                        border.color: Qt.alpha(Theme.accent, 0.55)
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 10
-                            anchors.rightMargin: 10
-                            spacing: 10
-
-                            Icon {
-                                glyph: "rocket"
-                                size: Theme.iconSm
-                                color: selected ? Theme.accent : Qt.alpha(Theme.fg, 0.7)
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 0
-
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: String(modelData.name || "")
-                                    font.family: Theme.fontUi
-                                    font.pixelSize: Theme.textSm
-                                    font.weight: selected ? Font.Bold : Font.Medium
-                                    color: selected ? Theme.accent : Theme.fg
-                                    elide: Text.ElideRight
-                                }
-
-                                Text {
-                                    visible: Boolean(modelData.desc || modelData.generic)
-                                    Layout.fillWidth: true
-                                    text: String(modelData.desc || modelData.generic || "")
-                                    font.family: Theme.fontUi
-                                    font.pixelSize: Theme.text2xs
-                                    color: Qt.alpha(Theme.fg, 0.58)
-                                    elide: Text.ElideRight
-                                }
-                            }
-                        }
-
-                        MouseArea {
-                            id: lItemMa
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onEntered: root.launcherSelectedIdx = index
-                            onClicked: root.runLauncherEntry(modelData)
-                        }
-                    }
-                }
-            }
-        }
+        open: root.launcherExpanded
+        fadeDuration: root.fadeDuration
+        results: root.launcherResults
+        searching: root.launcherSearching
+        selectedIdx: root.launcherSelectedIdx
+        onQueryEdited: q => { root.launcherQuery = q }
+        onSelectedIdxChangedRequested: idx => { root.launcherSelectedIdx = idx }
+        onEntryActivated: entry => root.runLauncherEntry(entry)
     }
 
     // ──────────────────────────────────────────────────────────────────────
     // NOTES RAPIDES / POST-ITS INLINE (SUPER + N)
     // ──────────────────────────────────────────────────────────────────────
-    Item {
+    IslandNotesDrawer {
         id: notesContainer
-        anchors.fill: parent
-        clip: true
-        opacity: root.notesExpanded ? 1.0 : 0.0
-        visible: opacity > 0.05
-        Behavior on opacity { NumberAnimation { duration: root.fadeDuration; easing.type: Easing.OutCubic } }
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 14
-            spacing: 10
-
-            // En-tête : titre + onglets de notes + Copier + Nouvelle + Fermer
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 6
-
-                Icon {
-                    glyph: "widgets"
-                    size: Theme.iconSm
-                    color: Theme.accent
-                }
-
-                Text {
-                    text: "NOTES"
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.textXs
-                    font.weight: Font.Bold
-                    color: Theme.accent
-                }
-
-                Row {
-                    Layout.fillWidth: true
-                    spacing: 4
-                    clip: true
-
-                    Repeater {
-                        model: root.quickNotes
-                        delegate: Rectangle {
-                            required property var modelData
-                            required property int index
-                            readonly property bool active: index === root.activeNoteIdx
-                            width: noteTabLbl.implicitWidth + 14
-                            height: 22
-                            radius: 6
-                            color: active ? Theme.accent : (noteTabMa.containsMouse ? Qt.alpha(Theme.fg, 0.14) : Qt.alpha(Theme.fg, 0.07))
-
-                            Text {
-                                id: noteTabLbl
-                                anchors.centerIn: parent
-                                text: "#" + (index + 1)
-                                font.family: Theme.fontUi
-                                font.pixelSize: Theme.text2xs
-                                font.bold: active
-                                color: active ? Theme.bg : Theme.fg
-                            }
-
-                            MouseArea {
-                                id: noteTabMa
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.selectNote(index)
-                            }
-                        }
-                    }
-
-                    Rectangle {
-                        width: 22
-                        height: 22
-                        radius: 6
-                        color: addNoteMa.containsMouse ? Qt.alpha(Theme.accent, 0.25) : Qt.alpha(Theme.fg, 0.08)
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "+"
-                            font.family: Theme.fontUi
-                            font.pixelSize: Theme.textSm
-                            font.bold: true
-                            color: addNoteMa.containsMouse ? Theme.accent : Theme.fg
-                        }
-
-                        MouseArea {
-                            id: addNoteMa
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.addQuickNote()
-                        }
-                    }
-                }
-
-                Rectangle {
-                    Layout.preferredWidth: pinNoteLbl.implicitWidth + 14
-                    Layout.preferredHeight: 22
-                    radius: 6
-                    color: pinNoteMa.containsMouse ? Qt.alpha(Theme.accent, 0.25) : Qt.alpha(Theme.fg, 0.08)
-
-                    Text {
-                        id: pinNoteLbl
-                        anchors.centerIn: parent
-                        text: "Bureau"
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.text2xs
-                        font.weight: Font.DemiBold
-                        color: pinNoteMa.containsMouse ? Theme.accent : Theme.fg
-                    }
-
-                    MouseArea {
-                        id: pinNoteMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            root.saveQuickNotes()
-                            const list = Theme.widgets || []
-                            let existing = null
-                            for (let i = 0; i < list.length; i++) {
-                                if (list[i] && list[i].type === "notes") {
-                                    existing = list[i]
-                                    break
-                                }
-                            }
-                            const cm = Quickshell.shellPath("core/config_manager.py")
-                            if (existing && existing.id) {
-                                Quickshell.execDetached([
-                                    "sh", "-c",
-                                    "python3 \"$1\" widget_set \"$2\" enabled true && python3 \"$1\" widget_set \"$2\" note_index \"$3\"",
-                                    "sh", cm, String(existing.id), String(root.activeNoteIdx)
-                                ])
-                            } else {
-                                const wsId = Hyprland.focusedWorkspace ? Number(Hyprland.focusedWorkspace.id) : 1
-                                Quickshell.execDetached([
-                                    "python3", cm, "widget_add", "notes", String(wsId > 0 ? wsId : 1), "120", "160"
-                                ])
-                            }
-                        }
-                    }
-                }
-
-                Rectangle {
-                    Layout.preferredWidth: copyNoteLbl.implicitWidth + 14
-                    Layout.preferredHeight: 22
-                    radius: 6
-                    color: copyNoteMa.containsMouse ? Qt.alpha(Theme.accent, 0.22) : Qt.alpha(Theme.fg, 0.08)
-
-                    Text {
-                        id: copyNoteLbl
-                        anchors.centerIn: parent
-                        text: "Copier"
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.text2xs
-                        color: copyNoteMa.containsMouse ? Theme.accent : Theme.fg
-                    }
-
-                    MouseArea {
-                        id: copyNoteMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Quickshell.execDetached(["wl-copy", noteEditor.text])
-                    }
-                }
-
-                Rectangle {
-                    Layout.preferredWidth: delNoteLbl.implicitWidth + 14
-                    Layout.preferredHeight: 22
-                    radius: 6
-                    color: delNoteMa.containsMouse ? Qt.alpha(Theme.error, 0.22) : Qt.alpha(Theme.fg, 0.08)
-
-                    Text {
-                        id: delNoteLbl
-                        anchors.centerIn: parent
-                        text: "Suppr."
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.text2xs
-                        color: delNoteMa.containsMouse ? Theme.error : Qt.alpha(Theme.fg, 0.75)
-                    }
-
-                    MouseArea {
-                        id: delNoteMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.deleteQuickNote(root.activeNoteIdx)
-                    }
-                }
-
-                Item {
-                    width: 22
-                    height: 22
-                    Icon {
-                        anchors.centerIn: parent
-                        glyph: "close"
-                        size: 13
-                        color: notesCloseMa.containsMouse ? Theme.fg : Qt.alpha(Theme.fg, 0.6)
-                        opacityLevel: 1
-                    }
-                    MouseArea {
-                        id: notesCloseMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Theme.islandNotesOpen = false
-                    }
-                }
-            }
-
-            // Zone d'édition libre (auto-sauvegardée)
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                radius: Math.max(8, Math.round(Theme.globalRadius * 0.65))
-                color: Qt.alpha(Theme.surfaceVariant, 0.35)
-                border.width: 1
-                border.color: noteEditor.activeFocus ? Qt.alpha(Theme.accent, 0.6) : Qt.alpha(Theme.fg, 0.1)
-
-                Flickable {
-                    id: noteFlick
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    clip: true
-                    contentWidth: width
-                    contentHeight: Math.max(height, noteEditor.implicitHeight)
-                    boundsBehavior: Flickable.StopAtBounds
-
-                    TextEdit {
-                        id: noteEditor
-                        width: noteFlick.width
-                        height: Math.max(noteFlick.height, implicitHeight)
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.textSm
-                        color: Theme.fg
-                        wrapMode: TextEdit.Wrap
-                        selectByMouse: true
-                        Keys.onEscapePressed: Theme.islandNotesOpen = false
-                        onTextChanged: {
-                            if (root._notesSyncing) return
-                            if (root.activeNoteIdx >= 0 && root.activeNoteIdx < root.quickNotes.length) {
-                                const list = root.quickNotes.slice()
-                                list[root.activeNoteIdx] = Object.assign({}, list[root.activeNoteIdx], { text: text })
-                                root.quickNotes = list
-                                notesSaveTimer.restart()
-                            }
-                        }
-
-                        Text {
-                            visible: noteEditor.text === ""
-                            text: "Écrire une note rapide… (sauvegarde automatique)"
-                            font.family: Theme.fontUi
-                            font.pixelSize: Theme.textSm
-                            color: Qt.alpha(Theme.fg, 0.42)
-                        }
-                    }
-                }
-            }
-        }
+        open: root.notesExpanded
+        fadeDuration: root.fadeDuration
     }
 
     // ──────────────────────────────────────────────────────────────────────
     // SÉLECTEUR DE JEU DE COULEURS INLINE (SUPER + C)
     // ──────────────────────────────────────────────────────────────────────
-    Item {
+    IslandThemePicker {
         id: themeContainer
-        anchors.fill: parent
-        clip: true
-        focus: root.themeExpanded
-        Keys.onEscapePressed: Theme.themePickerOpen = false
-        Keys.onLeftPressed: root.handleThemeNav("prev")
-        Keys.onRightPressed: root.handleThemeNav("next")
-        Keys.onReturnPressed: root.handleThemeNav("apply")
-        opacity: root.themeExpanded ? 1.0 : 0.0
-        visible: opacity > 0.05
-        Behavior on opacity { NumberAnimation { duration: root.fadeDuration; easing.type: Easing.OutCubic } }
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 14
-            spacing: 10
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-
-                Icon {
-                    glyph: "palette"
-                    size: Theme.iconSm
-                    color: Theme.accent
-                }
-
-                Text {
-                    text: "JEUX DE COULEURS"
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.textXs
-                    font.weight: Font.Bold
-                    color: Theme.accent
-                }
-
-                Text {
-                    Layout.fillWidth: true
-                    text: (Theme.paletteNoms ? Theme.paletteNoms.length : 0) + " schémas"
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.text2xs
-                    color: Qt.alpha(Theme.fg, 0.55)
-                }
-
-                Item {
-                    width: 22
-                    height: 22
-                    Icon {
-                        anchors.centerIn: parent
-                        glyph: "close"
-                        size: 13
-                        color: themeCloseMa.containsMouse ? Theme.fg : Qt.alpha(Theme.fg, 0.6)
-                        opacityLevel: 1
-                    }
-                    MouseArea {
-                        id: themeCloseMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Theme.themePickerOpen = false
-                    }
-                }
-            }
-
-            ListView {
-                id: themeListView
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                orientation: ListView.Horizontal
-                spacing: 10
-                clip: true
-                model: Theme.paletteNoms || []
-
-                WheelHandler {
-                    onWheel: event => {
-                        const delta = event.angleDelta.y !== 0 ? event.angleDelta.y : event.angleDelta.x
-                        themeListView.contentX = Math.max(0, Math.min(Math.max(0, themeListView.contentWidth - themeListView.width), themeListView.contentX - delta * 0.8))
-                    }
-                }
-
-                delegate: Rectangle {
-                    required property var modelData
-                    required property int index
-                    readonly property var pal: (Theme.paletteCouleurs && Theme.paletteCouleurs[modelData]) ? Theme.paletteCouleurs[modelData] : ({})
-                    readonly property string label: String((Theme.paletteEtiquettes && Theme.paletteEtiquettes[modelData]) || modelData)
-                    readonly property bool isCurrent: modelData === Theme.activeTheme
-                    readonly property bool isSelected: index === root.themeSelectedIdx
-
-                    width: 172
-                    height: themeListView.height
-                    radius: Math.max(10, Math.round(Theme.globalRadius * 0.65))
-                    color: pal.bg ? Qt.alpha(String(pal.bg), 0.88) : Qt.alpha(Theme.surfaceVariant, 0.45)
-                    border.width: (isCurrent || isSelected || thCardMa.containsMouse) ? 2 : 1
-                    border.color: isCurrent
-                        ? Theme.accent
-                        : ((isSelected || thCardMa.containsMouse) ? String(pal.accent || Theme.accent) : Qt.alpha(Theme.fg, 0.14))
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 10
-                        spacing: 6
-
-                        Item { Layout.fillHeight: true }
-
-                        Row {
-                            Layout.alignment: Qt.AlignHCenter
-                            spacing: 6
-
-                            Repeater {
-                                model: [
-                                    String(pal.bg || Theme.bg),
-                                    String(pal.surface || Theme.surface),
-                                    String(pal.accent || Theme.accent),
-                                    String(pal.accent_muted || Theme.accentMuted),
-                                    String(pal.fg || Theme.fg)
-                                ]
-                                delegate: Rectangle {
-                                    required property string modelData
-                                    width: 16
-                                    height: 16
-                                    radius: 8
-                                    color: modelData
-                                    border.width: 1
-                                    border.color: Qt.alpha("#ffffff", 0.22)
-                                }
-                            }
-                        }
-
-                        Item { Layout.fillHeight: true }
-
-                        Text {
-                            Layout.fillWidth: true
-                            horizontalAlignment: Text.AlignHCenter
-                            text: label
-                            font.family: Theme.fontUi
-                            font.pixelSize: Theme.textXs
-                            font.bold: isCurrent || isSelected
-                            color: String(pal.fg || Theme.fg)
-                            elide: Text.ElideRight
-                        }
-
-                        Text {
-                            visible: isCurrent
-                            Layout.fillWidth: true
-                            horizontalAlignment: Text.AlignHCenter
-                            text: "Actif"
-                            font.family: Theme.fontUi
-                            font.pixelSize: Theme.text2xs
-                            font.bold: true
-                            color: String(pal.accent || Theme.accent)
-                        }
-                    }
-
-                    MouseArea {
-                        id: thCardMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onEntered: root.themeSelectedIdx = index
-                        onClicked: {
-                            root.themeSelectedIdx = index
-                            root.applyThemeScheme(modelData)
-                        }
-                    }
-                }
-            }
-        }
+        open: root.themeExpanded
+        fadeDuration: root.fadeDuration
     }
 
     // ──────────────────────────────────────────────────────────────────────
     // EXTENSION INLINE LIVE ACTIVITY (TÂCHES LONGUES, MINUTEUR, REC, DL)
     // ──────────────────────────────────────────────────────────────────────
-    Item {
+    IslandLiveActivityDrawer {
         id: liveActivityContainer
-        anchors.fill: parent
-        clip: true
-        focus: root.liveActivityExpanded
-        Keys.onEscapePressed: Theme.islandLiveActivityOpen = false
-        opacity: root.liveActivityExpanded ? 1.0 : 0.0
-        visible: opacity > 0.05
-        Behavior on opacity { NumberAnimation { duration: root.fadeDuration; easing.type: Easing.OutCubic } }
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 12
-            spacing: 10
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-
-                Icon {
-                    glyph: "clock"
-                    size: Theme.iconSm
-                    color: Theme.accent
-                }
-
-                Text {
-                    Layout.fillWidth: true
-                    text: "Activités en cours (" + root.liveActivities.length + ")"
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.textSm
-                    font.bold: true
-                    color: Theme.fg
-                }
-
-                Rectangle {
-                    id: p5Btn
-                    property bool hovered: false
-                    width: 40
-                    height: 22
-                    radius: 6
-                    color: (root.liveActivityExpanded && hovered) ? Qt.alpha(Theme.accent, 0.25) : Qt.alpha(Theme.surfaceVariant, 0.55)
-                    Text { anchors.centerIn: parent; text: "+5m"; font.family: Theme.fontUi; font.pixelSize: Theme.text2xs; font.bold: true; color: Theme.accent }
-                    MouseArea {
-                        anchors.fill: parent
-                        hoverEnabled: root.liveActivityExpanded
-                        cursorShape: Qt.PointingHandCursor
-                        onEntered: p5Btn.hovered = true
-                        onExited: p5Btn.hovered = false
-                        onClicked: { p5Btn.hovered = false; Theme.startTimer(5, "Minuteur 5m") }
-                    }
-                }
-
-                Rectangle {
-                    id: p25Btn
-                    property bool hovered: false
-                    width: 46
-                    height: 22
-                    radius: 6
-                    color: (root.liveActivityExpanded && hovered) ? Qt.alpha(Theme.accent, 0.25) : Qt.alpha(Theme.surfaceVariant, 0.55)
-                    Text { anchors.centerIn: parent; text: "+25m"; font.family: Theme.fontUi; font.pixelSize: Theme.text2xs; font.bold: true; color: Theme.accent }
-                    MouseArea {
-                        anchors.fill: parent
-                        hoverEnabled: root.liveActivityExpanded
-                        cursorShape: Qt.PointingHandCursor
-                        onEntered: p25Btn.hovered = true
-                        onExited: p25Btn.hovered = false
-                        onClicked: { p25Btn.hovered = false; Theme.startTimer(25, "Pomodoro 25m") }
-                    }
-                }
-
-                // Timer personnalisé (minutes)
-                Rectangle {
-                    width: 68
-                    height: 22
-                    radius: 6
-                    color: Qt.alpha(Theme.bg, 0.55)
-                    border.width: 1
-                    border.color: customTimerInput.activeFocus ? Theme.accent : Qt.alpha(Theme.fg, 0.16)
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 6
-                        anchors.rightMargin: 2
-                        spacing: 2
-
-                        TextInput {
-                            id: customTimerInput
-                            Layout.fillWidth: true
-                            font.family: Theme.fontUi
-                            font.pixelSize: Theme.text2xs
-                            color: Theme.fg
-                            horizontalAlignment: TextInput.AlignHCenter
-                            validator: IntValidator { bottom: 1; top: 999 }
-                            maximumLength: 3
-                            selectByMouse: true
-                            Keys.onEscapePressed: Theme.islandLiveActivityOpen = false
-                            onAccepted: {
-                                const m = parseInt(text, 10)
-                                if (!isNaN(m) && m > 0) {
-                                    Theme.startTimer(m, "Minuteur " + m + "m")
-                                    text = ""
-                                }
-                            }
-
-                            Text {
-                                visible: customTimerInput.text === ""
-                                anchors.centerIn: parent
-                                text: "min"
-                                font.family: Theme.fontUi
-                                font.pixelSize: Theme.text2xs
-                                color: Qt.alpha(Theme.fg, 0.42)
-                            }
-                        }
-
-                        Rectangle {
-                            width: 18
-                            height: 18
-                            radius: 5
-                            color: customGoMa.containsMouse ? Qt.alpha(Theme.accent, 0.3) : Qt.alpha(Theme.accent, 0.16)
-                            Text { anchors.centerIn: parent; text: "▶"; font.pixelSize: 8; color: Theme.accent }
-                            MouseArea {
-                                id: customGoMa
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    const m = parseInt(customTimerInput.text, 10)
-                                    if (!isNaN(m) && m > 0) {
-                                        Theme.startTimer(m, "Minuteur " + m + "m")
-                                        customTimerInput.text = ""
-                                    } else {
-                                        customTimerInput.forceActiveFocus()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Rectangle {
-                    width: 22
-                    height: 22
-                    radius: 6
-                    color: laCloseMa.containsMouse ? Qt.alpha(Theme.error, 0.22) : Qt.alpha(Theme.surfaceVariant, 0.45)
-                    Text { anchors.centerIn: parent; text: "✕"; font.pixelSize: 10; font.bold: true; color: laCloseMa.containsMouse ? Theme.error : Theme.fg }
-                    MouseArea { id: laCloseMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Theme.islandLiveActivityOpen = false }
-                }
-            }
-
-            Rectangle { Layout.fillWidth: true; height: 1; color: Qt.alpha(Theme.fg, 0.1) }
-
-            Text {
-                visible: root.liveActivities.length === 0
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-                text: "Aucune activité longue en cours"
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.textXs
-                color: Qt.alpha(Theme.fg, 0.5)
-            }
-
-            ListView {
-                visible: root.liveActivities.length > 0
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                spacing: 6
-                clip: true
-                model: root.liveActivities
-
-                delegate: Rectangle {
-                    required property var modelData
-                    readonly property bool canFocusWindow: modelData.kind === "update" || modelData.kind === "download"
-                    width: ListView.view.width
-                    height: 62
-                    radius: Math.max(8, Math.round(Theme.globalRadius * 0.55))
-                    color: (canFocusWindow && laCardMa.containsMouse)
-                        ? Qt.alpha(Theme.surfaceVariant, 0.72)
-                        : Qt.alpha(Theme.surfaceVariant, 0.42)
-                    border.width: 1
-                    border.color: Qt.alpha(modelData.color || Theme.accent, (canFocusWindow && laCardMa.containsMouse) ? 0.65 : 0.32)
-
-                    MouseArea {
-                        id: laCardMa
-                        anchors.fill: parent
-                        enabled: canFocusWindow
-                        hoverEnabled: canFocusWindow
-                        cursorShape: canFocusWindow ? Qt.PointingHandCursor : Qt.ArrowCursor
-                        onClicked: {
-                            Theme.islandLiveActivityOpen = false
-                            Quickshell.execDetached([
-                                "python3", Quickshell.shellPath("core/live_activity_probe.py"),
-                                "--focus", String(modelData.kind), String(modelData.pid || 0)
-                            ])
-                        }
-                    }
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 10
-                        spacing: 6
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-
-                            Rectangle {
-                                width: 8
-                                height: 8
-                                radius: 4
-                                color: modelData.color || Theme.accent
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 1
-
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: String(modelData.title || "")
-                                    font.family: Theme.fontUi
-                                    font.pixelSize: Theme.textXs
-                                    font.bold: true
-                                    color: Theme.fg
-                                    elide: Text.ElideRight
-                                }
-
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: String(modelData.subtitle || "")
-                                    font.family: Theme.fontUi
-                                    font.pixelSize: Theme.text2xs
-                                    color: Qt.alpha(Theme.fg, 0.65)
-                                    elide: Text.ElideRight
-                                }
-                            }
-
-                            Rectangle {
-                                visible: String(modelData.etaText || "") !== ""
-                                Layout.preferredWidth: etaBadgeTxt.implicitWidth + 12
-                                Layout.preferredHeight: 20
-                                radius: 6
-                                color: Qt.alpha(modelData.color || Theme.accent, 0.16)
-
-                                Text {
-                                    id: etaBadgeTxt
-                                    anchors.centerIn: parent
-                                    text: String(modelData.etaText || "")
-                                    font.family: Theme.fontUi
-                                    font.pixelSize: Theme.text2xs
-                                    font.bold: true
-                                    color: modelData.color || Theme.accent
-                                }
-                            }
-
-                            Rectangle {
-                                visible: modelData.kind === "timer"
-                                Layout.preferredWidth: 24
-                                Layout.preferredHeight: 22
-                                Layout.alignment: Qt.AlignVCenter
-                                radius: 6
-                                color: pauseMa.containsMouse ? Qt.alpha(Theme.accent, 0.25) : Qt.alpha(Theme.surfaceVariant, 0.65)
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: modelData.paused ? "▶" : "⏸"
-                                    font.pixelSize: 10
-                                    color: Theme.fg
-                                }
-                                MouseArea {
-                                    id: pauseMa
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: Theme.togglePauseTimer()
-                                }
-                            }
-
-                            Rectangle {
-                                visible: modelData.kind === "record" || modelData.kind === "timer" || modelData.kind === "ipc"
-                                Layout.preferredWidth: 24
-                                Layout.preferredHeight: 22
-                                Layout.alignment: Qt.AlignVCenter
-                                radius: 6
-                                color: stopMa.containsMouse ? Qt.alpha(Theme.error, 0.28) : Qt.alpha(Theme.surfaceVariant, 0.65)
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "■"
-                                    font.pixelSize: 10
-                                    color: stopMa.containsMouse ? Theme.error : Theme.fg
-                                }
-                                MouseArea {
-                                    id: stopMa
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        if (modelData.kind === "record") {
-                                            Quickshell.execDetached(["pkill", "-INT", "-x", "wf-recorder"])
-                                        } else if (modelData.kind === "timer") {
-                                            Theme.stopTimer()
-                                        } else if (modelData.kind === "ipc") {
-                                            Theme.handleLiveActivity("stop", modelData.id, "", -1)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Barre de chargement agrandie (6px) avec animation si indéterminée
-                        Rectangle {
-                            id: laBarTrack
-                            Layout.fillWidth: true
-                            height: 6
-                            radius: 3
-                            color: Qt.alpha(Theme.fg, 0.14)
-                            clip: true
-
-                            Rectangle {
-                                height: parent.height
-                                radius: 3
-                                color: modelData.color || Theme.accent
-                                readonly property real p: Number(modelData.progress)
-                                width: p >= 0 ? Math.round(parent.width * Math.max(0, Math.min(100, p)) / 100.0) : Math.round(parent.width * 0.32)
-                                x: p >= 0 ? 0 : laIndOff
-                                property real laIndOff: 0
-                                SequentialAnimation on laIndOff {
-                                    running: root.liveActivityExpanded && Number(modelData.progress) < 0
-                                    loops: Animation.Infinite
-                                    NumberAnimation { from: 0; to: Math.max(0, laBarTrack.width * 0.68); duration: 1050; easing.type: Easing.InOutSine }
-                                    NumberAnimation { from: Math.max(0, laBarTrack.width * 0.68); to: 0; duration: 1050; easing.type: Easing.InOutSine }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        open: root.liveActivityExpanded
+        fadeDuration: root.fadeDuration
+        liveActivities: root.liveActivities
     }
 
     // ──────────────────────────────────────────────────────────────────────

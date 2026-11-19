@@ -6,44 +6,14 @@ import Quickshell.Wayland
 // ════════════════════════════════════════════════════════════════════════════
 // SYSTEM CONFIGURATION PANEL (config_panel.qml)
 // ════════════════════════════════════════════════════════════════════════════
-// Choix du contrôle numérique (règle du 05/11) :
-//   • plage > 12 unités  → Slider (curseur) : viser une valeur dans une large
-//     plage au glissement est plus rapide qu'au clic.
-//   • plage ≤ 12 unités  → Stepper (compteur [−] valeur [+]) : plus précis, et
-//     la valeur exacte reste lisible.
-//   • exceptions assumées : la position x/y des widgets (plage de 1800 px, mais
-//     on veut du pas régulier), et l'opacité « Fond » des cartes de widgets
-//     (coincée entre trois interrupteurs dans une rangée à largeur calculée).
-// Architecture Overview:
-//   • Section 1: Backend IPC & State Synchronization
-//       - Communicates with core/config_manager.py (CLI commands and state queries)
-//       - Watches core/app_vars.json via FileView
-//       - Synchronized command queue (cmdQueue) to prevent race conditions
-//   • Section 2: Header Frame & Close Control (panelHeader)
-//   • Section 3: Navigation Tabs Bar (Bureau, Quickshell, Widgets, Système & Écrans,
-//     Contrôles, Applications, Connexion)
-//   • Section 4: Tab Content Area (tabContentArea + mainFlickable with auto-scroll reset on tab switch)
-//       - Tab 0: Bureau — seulement le fond d'écran, les thèmes et les fenêtres Hyprland
-//           * CollapsibleSection secTheme: Themes, Matugen presets, palette hex editor, wallpaper directory
-//           * CollapsibleSection secAspect: Gaps, Borders, Rounding, Opacity, Blur passes/size,
-//             Resize step (réglages des fenêtres, pas du shell)
-//       - Tab 1: Gestion Quickshell — la barre et ses applets, en deux tiroirs
-//           * CollapsibleSection secBarre: îlots, hauteur de barre, opacité et flou du shell,
-//             bordure, flou des popups, bouton central
-//           * CollapsibleSection secApplets: quels applets, dans quel îlot, dans quel ordre, à quelle échelle
-//       - Tab 2: Widgets du bureau
-//           * Host detection (desktop vs laptop), multi-monitor grid, resolution/refresh modes, scaling,
-//             and time synchronization (Timezone & NTP toggle)
-//       - Tab 2: Contrôles, Clavier & Raccourcis
-//           * Keyboard layout preview & switcher, Hyprland binds viewer/editor, workspace shortcuts
-//       - Tab 3: Applications & Démarrage
-//           * CollapsibleSection secApps: Default applications (terminal, browser, editor, file manager)
-//           * CollapsibleSection secAutostart: Managed user background daemons & autostart entries
+// Choix du contrôle numérique :
+//   • plage > 12 unités → Slider (curseur)
+//   • plage ≤ 12 unités → Stepper (compteur [−] valeur [+])
+//   • exceptions : position x/y des widgets et opacité « Fond » des cartes.
+//
+// Règle de gel : une option nouvelle naît dans son propre composant Onglet*.qml,
+// chargé par URL depuis ici (`Loader { source: "Onglet….qml" }`).
 // ════════════════════════════════════════════════════════════════════════════
-
-// ── Règle de gel (11/11) ────────────────────────────────────────────────────
-// Ce fichier ne doit plus grossir. Une option nouvelle naît dans son propre
-// composant, chargé par URL depuis ici : `Loader { source: "Onglet….qml" }`.
 // C'est le motif qui a déjà sorti l'onglet Greeter (707 lignes) puis l'onglet
 // Bureau (1 500 lignes dans OngletApparence.qml).
 //
@@ -121,9 +91,9 @@ Rectangle {
           section: "widgets_homelab", target: "secHomelab" },
         { label: "Îlot dynamique (mode, animation, projets)", words: "ilot dynamique pilule animation projets kanban bordure hauteur",
           tab: 2, section: "ilot_config", target: "secIlotConfig" },
-        { label: "Indicateurs de la pilule (VPN, capture, média)", words: "ilot indicateurs pilule vpn capture media planka workspaces horloge",
+        { label: "Indicateurs de la pilule (VPN, capture, Live Activity...)", words: "ilot indicateurs pilule vpn capture live activity media planka workspaces horloge",
           tab: 2, section: "ilot_indicateurs", target: "secIlotIndicateurs" },
-        { label: "Applets de l'îlot (systray, musique, nuit...)", words: "ilot applets systray musique audio nuit batterie volume reseau repos etendu",
+        { label: "Applets de l'îlot (systray, musique, nuit, usb...)", words: "ilot applets systray musique audio nuit batterie volume reseau wifi usb repos etendu",
           tab: 2, section: "ilot_applets", target: "secIlotApplets" },
         { label: "Applets de la barre", words: "applets barre ilot ordre position echelle cloche volume reseau",
           tab: 1, section: "quickshell_applets", target: "secApplets" },
@@ -473,15 +443,6 @@ Rectangle {
         // Fusion des trois précédents : un seul widget, blocs empilés.
         { type: "comptes",  label: "Quotas IA" }
     ]
-    // Libellé lisible d'une nature de widget : la carte de réglages affichait le
-    // nom technique (« combo ») alors que la grille du dessus dit « Aperçu du jour ».
-    function libelleWidget(nature) {
-        const n = String(nature || "")
-        for (let i = 0; i < widgetTypes.length; ++i)
-            if (String(widgetTypes[i].type) === n) return widgetTypes[i].label
-        return n
-    }
-
     readonly property var widgetTypeRows: {
         const poses = ({})
         for (let i = 0; i < widgetsList.length; i++) {
@@ -566,16 +527,6 @@ Rectangle {
         { code: "milieu", labelA: "C", labelB: "●" },
         { code: "fin", labelA: "D", labelB: "⇥" }
     ]
-
-    function barreDe(donnee) {
-        const p = String((donnee && donnee.ile) || "haut:fin").split(":")
-        return p[0] || "haut"
-    }
-
-    function zoneDe(donnee) {
-        const p = String((donnee && donnee.ile) || "haut:fin").split(":")
-        return p[1] || "milieu"
-    }
 
     Process {
         id: appletsEtatProc
@@ -830,27 +781,13 @@ Rectangle {
         onTriggered: root.appletsRafraichir()
     }
 
-    function basculerVisualiseur() {
-        root.appletCommande([root.vizActif ? "desactiver" : "activer", "visualiseur"])
+    function rechargerVisualiseur() {
         vizRafraichir.restart()
     }
 
     function appletCommande(args) {
         appletsCmdProc.command = ["python3", Quickshell.shellPath("core/bar_applets.py")].concat(args)
         appletsCmdProc.running = true
-    }
-
-    // Placer un applet dans une barre éteinte le rendrait invisible : on allume
-    // la barre dans le même geste. C'était le cas vécu « je choisis → et l'applet
-    // disparaît ».
-    function placerApplet(id, ile) {
-        appletCommande(["placer", id, ile])
-        if (ile === "bas" && !Theme.barBottomVisible)
-            runConfigCmd(["style", "bar_bottom", "true"])
-        else if (ile === "cote-gauche" && !Theme.barLeftVisible)
-            runConfigCmd(["style", "bar_left", "true"])
-        else if (ile === "cote-droite" && !Theme.barRightVisible)
-            runConfigCmd(["style", "bar_right", "true"])
     }
 
     // ── Disques : la sélection se fait sur la liste réelle des montages ──────
@@ -871,131 +808,6 @@ Rectangle {
         }
     }
 
-    // Sans choix enregistré, le service affiche tout sauf la racine : la case doit
-    // refléter ce défaut, sinon la première coche décocherait tout le reste.
-    function montagesChoisis(donnee) {
-        const o = (donnee && donnee.options) || ({})
-        if (Array.isArray(o.montages)) return o.montages.slice()
-        const defaut = []
-        for (let i = 0; i < root.disquesListe.length; ++i) {
-            const m = String(root.disquesListe[i].montage || "")
-            if (m !== "" && m !== "/") defaut.push(m)
-        }
-        return defaut
-    }
-
-    function montageCoche(donnee, montage) {
-        return montagesChoisis(donnee).indexOf(String(montage)) >= 0
-    }
-
-    // L'entrée telle que le panneau la connaît **maintenant** : le délégué peut
-    // porter un `modelData` périmé, et c'est ce qui faisait repartir la sélection
-    // du défaut (tout sauf la racine) au lieu du choix courant.
-    function entreeApplet(id) {
-        const cle = String(id || "")
-        for (let i = 0; i < root.appletRows.length; ++i) {
-            if (String(root.appletRows[i].id) === cle) return root.appletRows[i]
-        }
-        return null
-    }
-
-    function basculerMontage(donnee, montage) {
-        const vive = entreeApplet(donnee && donnee.id) || donnee
-        const liste = montagesChoisis(vive)
-        const i = liste.indexOf(String(montage))
-        if (i >= 0) liste.splice(i, 1)
-        else liste.push(String(montage))
-        appletCommande(["option", (vive && vive.id) || donnee.id, "montages", JSON.stringify(liste)])
-    }
-
-    function appletBasculer(id, actif) {
-        appletCommande([actif ? "desactiver" : "activer", id])
-    }
-
-    function appletEchelle(id, valeur) {
-        const v = Math.max(60, Math.min(160, Math.round(valeur)))
-        appletCommande(["echelle", id, String(v)])
-    }
-
-    // Fichiers suivis par le widget Tâches : une option vide veut dire « tous »,
-    // donc on matérialise la liste complète avant d'en retirer un — sinon la
-    // première case décochée ne changerait rien.
-    function basculerFichierWidget(wid, nom) {
-        let vive = null
-        for (let i = 0; i < root.widgetsList.length; ++i) {
-            if (String(root.widgetsList[i].id) === String(wid)) vive = root.widgetsList[i]
-        }
-        if (!vive) return
-        const o = vive.options || ({})
-        let liste = Array.isArray(o.fichiers)
-                  ? o.fichiers.map(function (s) { return String(s) })
-                  : (typeof o.fichiers === "string" && o.fichiers !== ""
-                     ? o.fichiers.split(",").map(function (s) { return s.trim() }) : [])
-        liste = liste.filter(function (s) { return s !== "" })
-        if (liste.length === 0) {
-            for (let i = 0; i < root.todoFichiers.length; ++i)
-                liste.push(String(root.todoFichiers[i].nom || ""))
-        }
-        const i = liste.indexOf(String(nom))
-        if (i >= 0) liste.splice(i, 1)
-        else liste.push(String(nom))
-        root.runConfigCmd(["widget_set", wid, "fichiers", JSON.stringify(liste)])
-    }
-
-    // Services suivis par le widget Comptes (Quotas IA) : une option vide veut
-    // dire « tous », donc on matérialise la liste complète avant d'en retirer un.
-    function basculerServiceWidget(wid, serviceId) {
-        let vive = null
-        for (let i = 0; i < root.widgetsList.length; ++i) {
-            if (String(root.widgetsList[i].id) === String(wid)) vive = root.widgetsList[i]
-        }
-        if (!vive) return
-        const o = vive.options || ({})
-        let liste = null
-        if (o.services !== undefined && o.services !== null) {
-            liste = []
-            if (o.services.length !== undefined && typeof o.services !== "string") {
-                for (let i = 0; i < o.services.length; i++) {
-                    const s = String(o.services[i] || "").trim()
-                    if (s !== "" && liste.indexOf(s) < 0) liste.push(s)
-                }
-            } else if (typeof o.services === "string" && o.services.trim() !== "") {
-                const parts = o.services.split(",")
-                for (let i = 0; i < parts.length; i++) {
-                    const s = parts[i].trim()
-                    if (s !== "" && liste.indexOf(s) < 0) liste.push(s)
-                }
-            }
-        }
-        if (liste === null) {
-            liste = []
-            const provs = (root.llmProviders && root.llmProviders.length > 0)
-                        ? root.llmProviders
-                        : [{id: "deepseek"}, {id: "ollama"}, {id: "antigravity"}]
-            for (let j = 0; j < provs.length; ++j) {
-                const sid = String(provs[j].id || "").trim()
-                if (sid !== "" && liste.indexOf(sid) < 0) liste.push(sid)
-            }
-        }
-        const s = String(serviceId).trim()
-        const idx = liste.indexOf(s)
-        if (idx >= 0) liste.splice(idx, 1)
-        else liste.push(s)
-        root.runConfigCmd(["widget_set", wid, "services", JSON.stringify(liste)])
-    }
-
-    // Cocher pose le widget (bureau 1, position par défaut) ; décocher retire
-    // toutes ses instances — il ne doit pas y en avoir plusieurs.
-    function toggleWidgetType(nature, present) {
-        if (present) {
-            for (let i = 0; i < widgetsList.length; i++) {
-                if (String(widgetsList[i].type) === String(nature))
-                    root.runConfigCmd(["widget_remove", widgetsList[i].id])
-            }
-            return
-        }
-        root.runConfigCmd(["widget_add", String(nature), "1", "120", "160"])
-    }
     property string launcherPosition: "bas-centre"
     property var appVarsModel: []
     // Cible du clic sur une notification (core/notif_targets.json) : lignes
@@ -1058,9 +870,6 @@ Rectangle {
         { code: "warn", nom: "Alerte" },
         { code: "success", nom: "Succès" }
     ]
-    function couleurViz(code) {
-        return Theme.resolveVizColor(code)
-    }
     property real shellBlurAlpha: 0.4
     property bool shellBlurPopups: true
     property int resizeStep: 15
@@ -1239,13 +1048,8 @@ Rectangle {
         return s
     }
 
-    // Sélecteurs de dossier et de fichier : feuilles modales du panneau
-    // (SelecteurDossier.qml / SelecteurFichier.qml), pas des dialogues Qt.
-    property string selecteurCible: ""
+    // Sélecteur unifié de fichier / dossier (SelecteurFichier.qml).
     property string selecteurFichierCible: ""
-    // Paramètres en attente pour les feuilles modales : le premier clic sur
-    // « Choisir » crée le composant, et c'est `onLoaded` qui les applique.
-    property var selecteurParams: ({})
     property var selecteurFichierParams: ({})
 
     // Installation des paquets manquants (onglet « Apps & Alertes »). Le script
@@ -1285,16 +1089,6 @@ Rectangle {
         const q = cmdQueue.slice()
         q.push(args)
         cmdQueue = q
-    }
-
-    // Vide core/launch_history.json (bouton « Vider » du panneau).
-    Process {
-        id: clearHistoryProc
-        command: ["python3", Quickshell.shellPath("core/launch_history.py"), "clear"]
-    }
-
-    function clearLaunchHistory() {
-        if (!clearHistoryProc.running) clearHistoryProc.running = true
     }
 
     function applyStateJson(data) {
@@ -2266,51 +2060,7 @@ Rectangle {
         liberationSelecteur.restart()
     }
 
-    Loader {
-        id: selecteurLoader
-        anchors.fill: parent
-        z: 1000
-        active: false
-        source: "SelecteurDossier.qml"
-        onLoaded: {
-            item.accepte.connect(function (chemin) {
-                root.validerSelecteur(chemin)
-                root.libererSelecteur(selecteurLoader)
-            })
-            item.annule.connect(function () {
-                root.selecteurCible = ""
-                root.libererSelecteur(selecteurLoader)
-            })
-            // Premier clic : l'item n'existait pas encore quand `ouvrirSelecteur` a
-            // posé la cible, c'est ici qu'on lui passe ses paramètres.
-            root.appliquerSelecteur()
-        }
-    }
-
-    function ouvrirSelecteur(cible, titre, chemin) {
-        root.selecteurCible = String(cible)
-        root.selecteurParams = ({ titre: String(titre), chemin: root.cheminAbsolu(chemin) })
-        selecteurLoader.active = true
-        root.appliquerSelecteur()
-    }
-
-    function appliquerSelecteur() {
-        const it = selecteurLoader.item
-        if (!it || root.selecteurCible === "")
-            return
-        it.titre = String(root.selecteurParams.titre || "")
-        it.chemin = String(root.selecteurParams.chemin || "")
-        it.ouvert = true
-    }
-
-    function validerSelecteur(chemin) {
-        if (root.selecteurCible === "")
-            return
-        root.runConfigCmd(["style", root.selecteurCible, String(chemin) + "/"])
-        root.selecteurCible = ""
-    }
-
-    // Feuille modale du sélecteur de fichier (ex: Markdown pour les tâches)
+    // Feuille modale unifiée (fichiers et dossiers via dossierSeulement)
     Loader {
         id: selecteurFichierLoader
         anchors.fill: parent
@@ -2330,11 +2080,25 @@ Rectangle {
         }
     }
 
+    function ouvrirSelecteur(cible, titre, chemin) {
+        root.selecteurFichierCible = String(cible)
+        root.selecteurFichierParams = ({
+            dossierSeulement: true,
+            titre: String(titre),
+            chemin: root.cheminAbsolu(chemin),
+            extensions: [],
+            icone: "folder"
+        })
+        selecteurFichierLoader.active = true
+        root.appliquerSelecteurFichier()
+    }
+
     function ouvrirSelecteurFichier(cible, titre, chemin, extensions, icone) {
         root.selecteurFichierCible = String(cible)
         let chem = String(chemin || "")
         if (chem === "") chem = "~"
         root.selecteurFichierParams = ({
+            dossierSeulement: false,
             titre: String(titre),
             chemin: root.cheminAbsolu(chem),
             extensions: extensions || [],
@@ -2349,10 +2113,11 @@ Rectangle {
         if (!it || root.selecteurFichierCible === "")
             return
         const p = root.selecteurFichierParams
+        it.dossierSeulement = Boolean(p.dossierSeulement)
         it.titre = String(p.titre || "")
         if (p.extensions && p.extensions.length > 0)
             it.extensions = p.extensions
-        it.filtrerExtensions = true
+        it.filtrerExtensions = !it.dossierSeulement
         it.icone = String(p.icone || "file-document")
         it.chemin = String(p.chemin || "")
         it.fichierSelectionne = ""
@@ -2360,16 +2125,20 @@ Rectangle {
     }
 
     function validerSelecteurFichier(chemin) {
-        if (root.selecteurFichierCible === "todo_md") {
+        const c = root.selecteurFichierCible
+        if (c === "") return
+        if (root.selecteurFichierParams && root.selecteurFichierParams.dossierSeulement) {
+            root.runConfigCmd(["style", c, String(chemin) + "/"])
+        } else if (c === "todo_md") {
             nouveauTodoChemin.text = root.abregerHome(chemin)
             if (nouveauTodoNom.text.trim() === "") {
                 const base = String(chemin).split("/").pop().replace(/\.md$/i, "").replace(/\.markdown$/i, "")
                 if (base)
                     nouveauTodoNom.text = base
             }
-        } else if (root.selecteurFichierCible === "install_theme_colors") {
+        } else if (c === "install_theme_colors") {
             root.installerThemeCouleur(chemin)
-        } else if (root.selecteurFichierCible === "lock_bg_image") {
+        } else if (c === "lock_bg_image") {
             root.runConfigCmd(["style", "lock_bg_image", String(chemin)])
             root.runConfigCmd(["style", "lock_bg_mode", "image"])
         }

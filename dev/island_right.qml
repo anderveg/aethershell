@@ -4,7 +4,7 @@ import Quickshell
 // ════════════════════════════════════════════════════════════════════════════
 // ÎLOT DROIT — conteneur des applets de fin de barre et bouton tablette.
 // ════════════════════════════════════════════════════════════════════════════
-// Le serveur de notifications, les toasts et `Theme.notifOps` vivent désormais
+// Le serveur de notifications, les toasts et `ShellState.notifOps` vivent désormais
 // dans `NotifService.qml` afin de rester actifs en mode `island`.
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -20,7 +20,7 @@ Item {
     property bool tabletMode: false
 
     function synchroniserSystemInfo() {
-        const d = Theme.systemInfo
+        const d = SystemServices.systemInfo
         if (d && typeof d.tablet_mode === "boolean")
             islandRight.tabletMode = d.tablet_mode
     }
@@ -28,7 +28,7 @@ Item {
     Component.onCompleted: islandRight.synchroniserSystemInfo()
 
     Connections {
-        target: Theme
+        target: SystemServices
         function onSystemInfoChanged() {
             islandRight.synchroniserSystemInfo()
         }

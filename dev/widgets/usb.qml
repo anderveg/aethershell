@@ -21,20 +21,12 @@ Item {
         return 1.0
     }
 
-    property var etat: ({})
+    readonly property var etat: SystemServices.usbData
     readonly property var disques: root.etat.disques || []
 
-    function tailles(o) {
-        const go = Number(o || 0) / 1073741824
-        if (go >= 1000) return (go / 1000).toFixed(1).replace(".", ",") + " To"
-        if (go >= 1) return Math.round(go) + " Go"
-        return Math.round(go * 1000) + " Mo"
-    }
+    function tailles(o) { return SystemServices.formatBytes(o) }
 
-    function rafraichir() {
-        proc.running = false
-        proc.running = true
-    }
+    function rafraichir() { SystemServices.rafraichirUsb() }
 
     Component.onCompleted: rafraichir()
 
@@ -54,21 +46,6 @@ Item {
             onRead: line => {
                 if (String(line).indexOf("UDEV") >= 0)
                     usbDebounce.restart()
-            }
-        }
-    }
-
-    Process {
-        id: proc
-        command: ["python3", Quickshell.shellPath("core/usb_applet.py"), "etat"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    const d = JSON.parse(text.trim())
-                    root.etat = (d.detail && d.detail.usb) ? d.detail.usb : d
-                } catch (e) {
-                    root.etat = ({})
-                }
             }
         }
     }

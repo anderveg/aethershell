@@ -401,14 +401,24 @@ def set_brightness(pct):
     return True
 
 
-def get_wifi_networks(rescan=True):
-    rescan_flag = "auto" if rescan else "no"
+def _known_wifi_profiles():
+    """Return dict {ssid: connection_name} for all saved NetworkManager Wi-Fi profiles."""
     known_out = run_cmd(["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"])
-    known_ssids = set()
+    profiles = {}
     for line in known_out.splitlines():
         parts = _split_nmcli(line, 1)
         if len(parts) == 2 and parts[1] == "802-11-wireless":
-            known_ssids.add(_unescape_nmcli(parts[0]))
+            name = _unescape_nmcli(parts[0])
+            ssid_val = run_cmd(["nmcli", "-g", "802-11-wireless.ssid", "connection", "show", name]).strip()
+            ssid_key = ssid_val or name
+            profiles.setdefault(ssid_key, name)
+            profiles.setdefault(name, name)
+    return profiles
+
+
+def get_wifi_networks(rescan=True):
+    rescan_flag = "auto" if rescan else "no"
+    known_profiles = _known_wifi_profiles()
 
     output = run_cmd(["nmcli", "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY", "dev", "wifi", "list", "--rescan", rescan_flag])
     by_ssid = {}
@@ -416,13 +426,15 @@ def get_wifi_networks(rescan=True):
     for line in output.splitlines():
         if not line:
             continue
-        in_use = line.startswith("*:")
-        rest = line[2:] if (line.startswith("*:") or line.startswith(" :")) else line
+        in_use_field, sep, rest = line.partition(":")
+        if not sep:
+            continue
+        in_use = in_use_field.strip() == "*"
         parts = rest.rsplit(":", 2)
         if len(parts) < 3:
             continue
         raw_ssid, sig_str, security = parts[0], parts[1], parts[2]
-        ssid = raw_ssid.replace("\\:", ":").strip()
+        ssid = _unescape_nmcli(raw_ssid).strip()
         if not ssid:
             continue
         signal = int(sig_str) if sig_str.isdigit() else 0
@@ -436,7 +448,7 @@ def get_wifi_networks(rescan=True):
                 "in_use": in_use or (existing["in_use"] if existing else False),
                 "security": security or "Ouvert",
                 "secured": secured,
-                "known": ssid in known_ssids,
+                "known": ssid in known_profiles,
             }
 
     networks = list(by_ssid.values())
@@ -449,7 +461,11 @@ def connect_wifi(ssid, password=""):
         if password:
             cmd = ["nmcli", "dev", "wifi", "connect", ssid, "password", password]
         else:
-            cmd = ["nmcli", "dev", "wifi", "connect", ssid]
+            profile = _known_wifi_profiles().get(ssid)
+            if profile:
+                cmd = ["nmcli", "connection", "up", "id", profile]
+            else:
+                cmd = ["nmcli", "dev", "wifi", "connect", ssid]
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
         ok = res.returncode == 0
         msg = (res.stdout or res.stderr or "").strip()

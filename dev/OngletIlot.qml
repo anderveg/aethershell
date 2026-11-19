@@ -266,11 +266,12 @@ Column {
 
         Repeater {
             model: [
-                { key: "ilot_show_vpn",        label: "Voyant VPN",             desc: "Point d'état VPN",                    mode: Theme.ilotShowVpn },
-                { key: "ilot_show_capture",    label: "Voyant Capture",         desc: "Capture vidéo / audio active",        mode: Theme.ilotShowCapture },
-                { key: "ilot_show_planka",     label: "Échéance Kanban Planka", desc: "Icône si une carte approche",         mode: Theme.ilotShowPlanka },
-                { key: "ilot_show_workspaces", label: "Workspaces",             desc: "Points des bureaux virtuels",         mode: Theme.ilotShowWorkspaces },
-                { key: "ilot_show_clock",      label: "Horloge",                desc: "Heure (et date en mode étendu)",      mode: Theme.ilotShowClock }
+                { key: "ilot_show_vpn",           label: "Voyant VPN",             desc: "Point d'état VPN",                    mode: Theme.ilotShowVpn },
+                { key: "ilot_show_capture",       label: "Voyant Capture",         desc: "Capture vidéo / audio active",        mode: Theme.ilotShowCapture },
+                { key: "ilot_show_live_activity", label: "Live Activity",          desc: "Minuteur, enregistrement, téléchargements", mode: Theme.ilotShowLiveActivity },
+                { key: "ilot_show_planka",        label: "Échéance Kanban Planka", desc: "Icône si une carte approche",         mode: Theme.ilotShowPlanka },
+                { key: "ilot_show_workspaces",    label: "Workspaces",             desc: "Points des bureaux virtuels",         mode: Theme.ilotShowWorkspaces },
+                { key: "ilot_show_clock",         label: "Horloge",                desc: "Heure (et date en mode étendu)",      mode: Theme.ilotShowClock }
             ]
 
             delegate: Rectangle {
@@ -310,50 +311,13 @@ Column {
                         }
                     }
 
-                    Rectangle {
+                    ConfigSegmented {
                         id: segTrack
-                        width: segRow.implicitWidth + 6
-                        height: 28
                         anchors.verticalCenter: parent.verticalCenter
-                        radius: Math.max(6, Math.round(Theme.globalRadius * 0.5))
-                        color: Theme.bg
-                        border.color: Theme.surfaceVariant
-                        border.width: 1
-
-                        Row {
-                            id: segRow
-                            anchors.centerIn: parent
-                            spacing: 2
-
-                            Repeater {
-                                model: bloc.modeChoices
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    readonly property var rowItem: parent.parent.parent.parent.modelData
-                                    readonly property bool active: rowItem.mode === modelData.code
-                                    width: segLbl.implicitWidth + 12
-                                    height: 22
-                                    radius: Math.max(4, Math.round(Theme.globalRadius * 0.4))
-                                    color: active ? Theme.accent : (segMa.containsMouse ? Qt.alpha(Theme.surfaceVariant, 0.6) : "transparent")
-
-                                    Text {
-                                        id: segLbl
-                                        anchors.centerIn: parent
-                                        text: modelData.label
-                                        color: active ? Theme.bg : Qt.alpha(Theme.fg, 0.8)
-                                        font.pixelSize: Theme.text2xs
-                                        font.bold: active
-                                    }
-
-                                    MouseArea {
-                                        id: segMa
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: if (root) root.runConfigCmd(["style", rowItem.key, modelData.code])
-                                    }
-                                }
-                            }
+                        choices: bloc.modeChoices
+                        currentCode: modelData.mode
+                        onSelected: code => {
+                            if (root) root.runConfigCmd(["style", modelData.key, code])
                         }
                     }
                 }
@@ -381,12 +345,13 @@ Column {
                 { id: "batterie",        label: "Batterie",            desc: "Niveau et charge (laptop)" },
                 { id: "minimise",        label: "Fenêtres minimisées", desc: "Icônes des fenêtres réduites" },
                 { id: "volume",          label: "Volume",              desc: "Sortie audio et muet" },
-                { id: "reseau",          label: "Réseau",              desc: "Wi-Fi et connexion" },
+                { id: "reseau",          label: "Wi-Fi / Réseau",      desc: "Wi-Fi et connexion" },
                 { id: "notifications",   label: "Notifications",       desc: "Cloche et compteur d'alertes" },
                 { id: "maj",             label: "Mises à jour",        desc: "Paquets en attente" },
                 { id: "todo",            label: "Tâches Todo",         desc: "Compteur de tâches ouvertes" },
                 { id: "meteo",           label: "Météo",               desc: "Température actuelle" },
-                { id: "presse-papiers",  label: "Presse-papiers",      desc: "Historique du presse-papiers" }
+                { id: "presse-papiers",  label: "Presse-papiers",      desc: "Historique du presse-papiers" },
+                { id: "usb",             label: "Périphériques USB",   desc: "Clés USB, cartes SD et disques optiques" }
             ]
 
             delegate: Rectangle {
@@ -394,7 +359,7 @@ Column {
                 readonly property string curMode: modelData.styleKey ? Theme.ilotShowMedia : Theme.ilotAppletModeFor(modelData.id)
                 readonly property bool isMaj: modelData.id === "maj"
                 width: parent ? parent.width : 0
-                height: isMaj ? 78 : 46
+                height: isMaj ? 112 : 46
                 radius: Math.max(8, Math.round(Theme.globalRadius * 0.6))
                 color: Qt.alpha(Theme.surfaceVariant, 0.35)
                 border.color: Qt.alpha(Theme.fg, 0.08)
@@ -410,7 +375,7 @@ Column {
                     spacing: 10
 
                     Column {
-                        width: Math.max(90, parent.width - appSegTrack.width - 10)
+                        width: Math.max(90, parent.width - appSegTrack.width - (modelData.styleKey ? 10 : appMoveRow.width + 20))
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 2
 
@@ -431,115 +396,155 @@ Column {
                         }
                     }
 
-                    Rectangle {
-                        id: appSegTrack
-                        width: appSegRow.implicitWidth + 6
-                        height: 28
+                    Row {
+                        id: appMoveRow
+                        visible: !modelData.styleKey
                         anchors.verticalCenter: parent.verticalCenter
-                        radius: Math.max(6, Math.round(Theme.globalRadius * 0.5))
-                        color: Theme.bg
-                        border.color: Theme.surfaceVariant
-                        border.width: 1
+                        spacing: 3
+                        opacity: curMode !== "off" ? 1 : 0.35
 
-                        Row {
-                            id: appSegRow
-                            anchors.centerIn: parent
-                            spacing: 2
+                        Rectangle {
+                            width: 16
+                            height: 22
+                            radius: 4
+                            color: moveLeftMa.containsMouse && curMode !== "off" ? Qt.alpha(Theme.surfaceVariant, 0.7) : "transparent"
 
-                            Repeater {
-                                model: bloc.modeChoices
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    readonly property var appRow: parent.parent.parent.parent
-                                    readonly property bool active: appRow.curMode === modelData.code
-                                    width: appSegLbl.implicitWidth + 12
-                                    height: 22
-                                    radius: Math.max(4, Math.round(Theme.globalRadius * 0.4))
-                                    color: active ? Theme.accent : (appSegMa.containsMouse ? Qt.alpha(Theme.surfaceVariant, 0.6) : "transparent")
+                            Text {
+                                anchors.centerIn: parent
+                                text: "‹"
+                                color: Theme.fg
+                                font.pixelSize: Theme.textSm
+                            }
 
-                                    Text {
-                                        id: appSegLbl
-                                        anchors.centerIn: parent
-                                        text: modelData.label
-                                        color: active ? Theme.bg : Qt.alpha(Theme.fg, 0.8)
-                                        font.pixelSize: Theme.text2xs
-                                        font.bold: active
-                                    }
+                            MouseArea {
+                                id: moveLeftMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: curMode !== "off" ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                onClicked: if (root && curMode !== "off")
+                                    root.runConfigCmd(["ilot_applet_move", modelData.id, "left"])
+                            }
+                        }
 
-                                    MouseArea {
-                                        id: appSegMa
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            if (!root) return
-                                            if (appRow.modelData.styleKey) {
-                                                root.runConfigCmd(["style", appRow.modelData.styleKey, modelData.code])
-                                            } else {
-                                                root.runConfigCmd(["ilot_applet_mode", appRow.modelData.id, modelData.code])
-                                            }
-                                        }
-                                    }
-                                }
+                        Rectangle {
+                            width: 16
+                            height: 22
+                            radius: 4
+                            color: moveRightMa.containsMouse && curMode !== "off" ? Qt.alpha(Theme.surfaceVariant, 0.7) : "transparent"
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "›"
+                                color: Theme.fg
+                                font.pixelSize: Theme.textSm
+                            }
+
+                            MouseArea {
+                                id: moveRightMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: curMode !== "off" ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                onClicked: if (root && curMode !== "off")
+                                    root.runConfigCmd(["ilot_applet_move", modelData.id, "right"])
+                            }
+                        }
+                    }
+
+                    ConfigSegmented {
+                        id: appSegTrack
+                        anchors.verticalCenter: parent.verticalCenter
+                        choices: bloc.modeChoices
+                        currentCode: curMode
+                        onSelected: code => {
+                            if (!root) return
+                            if (modelData.styleKey) {
+                                root.runConfigCmd(["style", modelData.styleKey, code])
+                            } else {
+                                root.runConfigCmd(["ilot_applet_mode", modelData.id, code])
                             }
                         }
                     }
                 }
 
-                // Option spécifique à « Mises à jour » : masquer s'il n'y a aucune MAJ
-                Item {
+                // Option spécifique à « Mises à jour » : masquer s'il n'y a aucune MAJ + mode fenêtre
+                Column {
                     visible: isMaj
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     anchors.leftMargin: 12
                     anchors.rightMargin: 10
-                    height: 32
+                    height: 66
 
-                    Rectangle {
-                        anchors.top: parent.top
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        height: 1
-                        color: Qt.alpha(Theme.fg, 0.06)
-                    }
-
-                    Text {
-                        anchors.left: parent.left
-                        anchors.right: majCondSwitch.left
-                        anchors.rightMargin: 8
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "Uniquement s'il y a des mises à jour"
-                        color: Qt.alpha(Theme.fg, 0.8)
-                        font.pixelSize: Theme.text2xs
-                        elide: Text.ElideRight
-                    }
-
-                    Rectangle {
-                        id: majCondSwitch
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 34
-                        height: 18
-                        radius: 9
-                        color: Theme.majSeulementSiDispo ? Theme.accent : Qt.alpha(Theme.fg, 0.22)
-                        Behavior on color { ColorAnimation { duration: 140 } }
+                    Item {
+                        width: parent.width
+                        height: 32
 
                         Rectangle {
-                            width: 14
-                            height: 14
-                            radius: 7
-                            y: 2
-                            x: Theme.majSeulementSiDispo ? (parent.width - width - 2) : 2
-                            color: Theme.majSeulementSiDispo ? Theme.bg : Theme.fg
-                            Behavior on x { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                            anchors.top: parent.top
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            height: 1
+                            color: Qt.alpha(Theme.fg, 0.06)
+                        }
+
+                        Text {
+                            anchors.left: parent.left
+                            anchors.right: majCondSwitch.left
+                            anchors.rightMargin: 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Uniquement s'il y a des mises à jour"
+                            color: Qt.alpha(Theme.fg, 0.8)
+                            font.pixelSize: Theme.text2xs
+                            elide: Text.ElideRight
+                        }
+
+                        ConfigSwitch {
+                            id: majCondSwitch
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            checked: Theme.majSeulementSiDispo
+                            onToggled: if (root) root.runConfigCmd(["style", "maj_seulement_si_dispo", String(!Theme.majSeulementSiDispo)])
                         }
                     }
 
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: if (root) root.runConfigCmd(["style", "maj_seulement_si_dispo", String(!Theme.majSeulementSiDispo)])
+                    Item {
+                        width: parent.width
+                        height: 34
+
+                        Rectangle {
+                            anchors.top: parent.top
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            height: 1
+                            color: Qt.alpha(Theme.fg, 0.06)
+                        }
+
+                        Text {
+                            anchors.left: parent.left
+                            anchors.right: majWinTrack.left
+                            anchors.rightMargin: 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Fenêtre de mise à jour"
+                            color: Qt.alpha(Theme.fg, 0.8)
+                            font.pixelSize: Theme.text2xs
+                            elide: Text.ElideRight
+                        }
+
+                        ConfigSegmented {
+                            id: majWinTrack
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            itemHeight: 18
+                            choices: [
+                                { code: "float", label: "Flottante" },
+                                { code: "tiling", label: "Tiling" }
+                            ]
+                            currentCode: Theme.majTerminalMode
+                            onSelected: code => {
+                                if (root) root.runConfigCmd(["style", "maj_terminal_mode", code])
+                            }
+                        }
                     }
                 }
             }

@@ -8,6 +8,7 @@ hl.bind(mainMod .. " + Q", hl.dsp.window.close(), { description = "fermer la fen
 hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("quickshell ipc -n call shell minimiser"), { description = "mettre la fenêtre de côté" })
 hl.bind(mainMod .. " + SHIFT + D", hl.dsp.exec_cmd("quickshell ipc -n call shell rappelerDerniere"), { description = "rappeler la dernière fenêtre de côté" })
 hl.bind(mainMod .. " + V", hl.dsp.window.float({ action = "toggle" }), { description = "fenêtre flottante" })
+hl.bind(mainMod .. " + SHIFT + V", hl.dsp.exec_cmd("python3 $HOME/.config/quickshell/core/workspace_float_toggle.py"), { description = "basculer tout le bureau flottant / tiling" })
 hl.bind(mainMod .. " + F", hl.dsp.window.float({ action = "toggle" }), { description = "fenêtre flottante" })  -- essentiel
 hl.bind(mainMod .. " + SHIFT + F", hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle" }), { description = "plein écran" })
 hl.bind(mainMod .. " + CTRL + F", hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" }), { description = "maximiser" })
@@ -98,6 +99,9 @@ hl.bind(mainMod .. " + ALT + agrave",  hl.dsp.window.move({ workspace = 10 }), {
 
 --: Applications
 hl.bind(mainMod .. " + Return", hl.dsp.exec_cmd(terminal), { description = "terminal" })  -- essentiel
+hl.bind(mainMod .. " + SHIFT + Return", hl.dsp.exec_cmd(
+    "sh -c 'case \"$1\" in *ghostty*) exec \"$1\" --class=org.aether.floating-terminal ;; *kitty*) exec \"$1\" --class org.aether.floating-terminal ;; *alacritty*) exec \"$1\" --class org.aether.floating-terminal ;; *foot*) exec \"$1\" --app-id org.aether.floating-terminal ;; *) exec \"$1\" ;; esac' _ " .. terminal
+), { description = "terminal flottant" })
 hl.bind(mainMod .. " + B", hl.dsp.exec_cmd(browser1), { description = "navigateur" })  -- essentiel
 hl.bind(mainMod .. " + Z", hl.dsp.exec_cmd(browser2), { description = "navigateur secondaire" })
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(file_explorer), { description = "fichiers" })  -- essentiel

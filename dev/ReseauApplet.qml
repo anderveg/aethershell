@@ -25,19 +25,19 @@ Item {
     readonly property int tailleIcone: Math.round(Math.max(11, Math.round(Theme.iconSm * echelle))
                                                   * (verticale ? 1.45 : 1))
 
-    property bool wifiConnected: (Theme.systemInfo && Theme.systemInfo.wifi && Theme.systemInfo.wifi.connected) ? true : false
-    property string wifiSsid: (Theme.systemInfo && Theme.systemInfo.wifi && Theme.systemInfo.wifi.ssid) ? String(Theme.systemInfo.wifi.ssid) : ""
-    property int wifiSignal: (Theme.systemInfo && Theme.systemInfo.wifi && Theme.systemInfo.wifi.signal) ? Number(Theme.systemInfo.wifi.signal) : 0
-    property string netType: (Theme.systemInfo && Theme.systemInfo.wifi && Theme.systemInfo.wifi.type) ? String(Theme.systemInfo.wifi.type) : "wifi"
+    property bool wifiConnected: (SystemServices.systemInfo && SystemServices.systemInfo.wifi && SystemServices.systemInfo.wifi.connected) ? true : false
+    property string wifiSsid: (SystemServices.systemInfo && SystemServices.systemInfo.wifi && SystemServices.systemInfo.wifi.ssid) ? String(SystemServices.systemInfo.wifi.ssid) : ""
+    property int wifiSignal: (SystemServices.systemInfo && SystemServices.systemInfo.wifi && SystemServices.systemInfo.wifi.signal) ? Number(SystemServices.systemInfo.wifi.signal) : 0
+    property string netType: (SystemServices.systemInfo && SystemServices.systemInfo.wifi && SystemServices.systemInfo.wifi.type) ? String(SystemServices.systemInfo.wifi.type) : "wifi"
 
     // État du panneau
-    property var wifiNetworks: []
-    property bool wifiScanning: false
+    readonly property var wifiNetworks: SystemServices.wifiNetworks
+    readonly property bool wifiScanning: SystemServices.wifiScanning
     property string expandedSsid: ""
     property string connectingStatus: ""
     property bool connectingBusy: false
-    property bool wifiScanQueued: false
-    property bool wifiScanQueuedRescan: false
+    readonly property bool qrAvailable: SystemServices.qrWifiAvailable
+    property bool qrScanning: false
 
     readonly property bool ouvert: Theme.activePopup === "applet:reseau"
 
@@ -45,7 +45,7 @@ Item {
     implicitHeight: Math.max(22, Math.round(28 * echelle))
 
     function synchroniserSystemInfo() {
-        const w = (Theme.systemInfo && Theme.systemInfo.wifi) || null
+        const w = (SystemServices.systemInfo && SystemServices.systemInfo.wifi) || null
         if (!w) return
         root.wifiConnected = Boolean(w.connected)
         root.wifiSsid = String(w.ssid || "")
@@ -62,24 +62,12 @@ Item {
     }
 
     function rafraichir() {
-        Theme.rafraichirSystemInfo()
-    }
-
-    function startWifiScan(rescan) {
-        const args = ["python3", Quickshell.shellPath("core/system_service.py"), "wifi"]
-        if (!rescan) args.push("--no-rescan")
-        wifiScanProc.command = args
-        wifiScanProc.running = true
+        SystemServices.rafraichirSystemInfo()
     }
 
     function scanWifi(rescan) {
-        wifiScanning = true
-        if (wifiScanProc.running) {
-            wifiScanQueued = true
-            wifiScanQueuedRescan = wifiScanQueuedRescan || Boolean(rescan)
-            return
-        }
-        startWifiScan(rescan)
+        SystemServices.checkQrWifi()
+        SystemServices.scanWifi(rescan)
     }
 
     function connectToWifi(ssid, password) {
@@ -101,35 +89,13 @@ Item {
     Component.onCompleted: {
         root.synchroniserSystemInfo()
         root.lireBluetooth()
+        SystemServices.checkQrWifi()
     }
 
     Connections {
-        target: Theme
+        target: SystemServices
         function onSystemInfoChanged() {
             root.synchroniserSystemInfo()
-        }
-    }
-
-    Process {
-        id: wifiScanProc
-        onExited: {
-            if (root.wifiScanQueued) {
-                const rescan = root.wifiScanQueuedRescan
-                root.wifiScanQueued = false
-                root.wifiScanQueuedRescan = false
-                root.startWifiScan(rescan)
-            }
-        }
-        stdout: StdioCollector {
-            onStreamFinished: {
-                if (root.wifiScanQueued) return // périmé : un balayage plus récent est en file
-                root.wifiScanning = false
-                try {
-                    root.wifiNetworks = JSON.parse(text.trim())
-                } catch (e) {
-                    root.wifiNetworks = []
-                }
-            }
         }
     }
 
@@ -150,6 +116,32 @@ Item {
                     }
                 } catch (e) {
                     root.connectingStatus = "✕ Erreur de connexion"
+                }
+            }
+        }
+    }
+
+    Process {
+        id: qrScanProc
+        command: ["python3", Quickshell.shellPath("core/wifi_qr_scan.py"), "scan"]
+        property string targetSsid: ""
+        stdout: StdioCollector {
+            onStreamFinished: {
+                root.qrScanning = false
+                try {
+                    const d = JSON.parse(text.trim() || "{}")
+                    if (d.ok) {
+                        const pwd = String(d.password || "")
+                        if (pwd !== "") {
+                            root.connectToWifi(qrScanProc.targetSsid || String(d.ssid || ""), pwd)
+                        } else {
+                            root.connectingStatus = "✕ QR code sans clé Wi-Fi"
+                        }
+                    } else {
+                        root.connectingStatus = "✕ " + String(d.error || "Scan annulé")
+                    }
+                } catch (e) {
+                    root.connectingStatus = "✕ Lecture QR impossible"
                 }
             }
         }
@@ -398,7 +390,7 @@ Item {
                                         }
 
                                         Icon {
-                                            visible: Boolean(netItemCol.modelData.secured)
+                                            visible: Boolean(netItemCol.modelData.secured) && !netItemCol.modelData.in_use && !Boolean(netItemCol.modelData.known)
                                             anchors.verticalCenter: parent.verticalCenter
                                             glyph: "lock"
                                             size: 10
@@ -413,8 +405,9 @@ Item {
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
                                             if (netItemCol.modelData.in_use) return
-                                            if (!netItemCol.modelData.secured) {
-                                                // Open network -> connect immediately
+                                            if (!netItemCol.modelData.secured || Boolean(netItemCol.modelData.known)) {
+                                                // Open or known network -> connect immediately
+                                                root.expandedSsid = ""
                                                 root.connectToWifi(netItemCol.modelData.ssid, "")
                                             } else {
                                                 // Toggle inline password field right below this network
@@ -427,7 +420,7 @@ Item {
                                 // Inline Password Box directly underneath the clicked network
                                 Rectangle {
                                     id: inlinePassBox
-                                    visible: netItemCol.isExpanded
+                                    visible: netItemCol.isExpanded && !Boolean(netItemCol.modelData.known)
                                     width: parent.width
                                     height: visible ? 44 : 0
                                     color: Theme.surfaceVariant
@@ -448,7 +441,7 @@ Item {
                                         spacing: 6
 
                                         Rectangle {
-                                            width: parent.width - 82
+                                            width: parent.width - (root.qrAvailable ? 116 : 82)
                                             height: parent.height
                                             color: Theme.bg
                                             radius: Theme.globalRadius
@@ -485,6 +478,37 @@ Item {
                                                 anchors.fill: parent
                                                 cursorShape: Qt.IBeamCursor
                                                 acceptedButtons: Qt.NoButton
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            visible: root.qrAvailable
+                                            width: 28
+                                            height: parent.height
+                                            radius: Theme.globalRadius
+                                            color: qrBarMa.containsMouse || root.qrScanning ? Qt.alpha(Theme.accent, 0.25) : Theme.bg
+                                            border.width: 1
+                                            border.color: root.qrScanning ? Theme.accent : Qt.alpha(Theme.fg, 0.15)
+
+                                            Icon {
+                                                anchors.centerIn: parent
+                                                glyph: "qrcode"
+                                                size: 14
+                                                color: root.qrScanning ? Theme.accent : Theme.fg
+                                            }
+
+                                            MouseArea {
+                                                id: qrBarMa
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    if (qrScanProc.running) return
+                                                    root.qrScanning = true
+                                                    root.connectingStatus = "Scan QR en cours (webcam)..."
+                                                    qrScanProc.targetSsid = netItemCol.modelData.ssid
+                                                    qrScanProc.running = true
+                                                }
                                             }
                                         }
 
@@ -656,45 +680,13 @@ Item {
 
     // ────────────────────────────────────────────────────────────────────────
 
-    // Bluetooth : même panneau que le WiFi, bloc séparé. Tout vient de
-    // core/bluetooth_service.py — le shell n'invente aucun état.
-    property bool btPresent: false
-    property bool btAllume: false
-    property var btAppareils: []
+    // Bluetooth : centralisé dans SystemServices.qml (core/bluetooth_service.py)
+    readonly property bool btPresent: SystemServices.btPresent
+    readonly property bool btAllume: SystemServices.btPowered
+    readonly property var btAppareils: SystemServices.btDevices
 
-    function majBluetooth(txt) {
-        try {
-            const d = JSON.parse(txt.trim())
-            root.btPresent = d.present === true
-            root.btAllume = d.allume === true
-            root.btAppareils = d.appaires || []
-        } catch (e) { /* réponse partielle : on garde l'état précédent */ }
-    }
-
-    function lireBluetooth() {
-        if (btProc.running) return
-        btProc.running = true
-    }
-
-    function btCommande(args) {
-        btAction.command = ["python3", Quickshell.shellPath("core/bluetooth_service.py")].concat(args)
-        btAction.running = true
-    }
-
-    Process {
-        id: btProc
-        command: ["python3", Quickshell.shellPath("core/bluetooth_service.py"), "etat"]
-        stdout: StdioCollector {
-            onStreamFinished: root.majBluetooth(text)
-        }
-    }
-
-    Process {
-        id: btAction
-        stdout: StdioCollector {
-            onStreamFinished: root.majBluetooth(text)
-        }
-    }
+    function lireBluetooth() { SystemServices.refreshBluetooth() }
+    function btCommande(args) { SystemServices.btCommand(args) }
 
     property bool pretGrab: false
     onOuvertChanged: {
