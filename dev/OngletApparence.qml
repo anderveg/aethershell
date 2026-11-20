@@ -29,6 +29,7 @@ Column {
     readonly property var sections: ({
         "esthetique_theme": secTheme,
         "esthetique_fonds": secFonds,
+        "esthetique_icones": secIcones,
         "esthetique_aspect": secAspect,
         "quickshell_barre": secBarre
     })
@@ -38,6 +39,7 @@ Column {
         "matugenRow": matugenRow,
         "wallpaperDirRow": wallpaperDirRow,
         "masqueProfondeurRow": masqueProfondeurRow,
+        "secIcones": secIcones,
         "gapsRow": gapsRow,
         "borderRow": borderRow,
         "roundingWinRow": roundingWinRow,
@@ -196,8 +198,7 @@ MouseArea {
     anchors.fill: parent
     cursorShape: Qt.PointingHandCursor
     onClicked: Quickshell.execDetached([
-        "python3",
-        Quickshell.shellPath("core/theme_manager.py"),
+        Quickshell.shellPath("core/as-core"), "theme-manager",
         parent.modelData
     ])
 }
@@ -631,6 +632,56 @@ onClicked: root.runConfigCmd([
     }
 }
 
+Row {
+    id: wallpaperSlideRow
+    objectName: "wallpaperSlideRow"
+    width: parent.width
+    spacing: 8
+    opacity: Theme.depthWallpaper ? 0.5 : 1.0
+
+    Text {
+        width: 160
+        anchors.verticalCenter: parent.verticalCenter
+        text: "Glissement du fond :"
+        color: Theme.fg
+        font.pixelSize: Theme.textSm
+        elide: Text.ElideRight
+    }
+
+    Rectangle {
+        anchors.verticalCenter: parent.verticalCenter
+        width: 160
+        height: 26
+        radius: Theme.globalRadius
+        color: Theme.wallpaperSlide ? Theme.accent : Theme.surfaceVariant
+        border.color: Theme.accent
+        border.width: 1
+
+        Text {
+anchors.centerIn: parent
+text: Theme.wallpaperSlide ? "✓ Actif" : "✕ Désactivé"
+color: Theme.wallpaperSlide ? Theme.bg : Theme.fg
+font.pixelSize: Theme.textXs
+        }
+
+        MouseArea {
+anchors.fill: parent
+cursorShape: Qt.PointingHandCursor
+onClicked: root.runConfigCmd([
+    "style", "wallpaper_slide", Theme.wallpaperSlide ? "false" : "true"
+])
+        }
+    }
+
+    Text {
+        anchors.verticalCenter: parent.verticalCenter
+        visible: Theme.depthWallpaper
+        text: "(inactif si parallaxe active)"
+        color: Qt.alpha(Theme.fg, 0.55)
+        font.pixelSize: Theme.textXs
+    }
+}
+
 // Le modèle de profondeur ne suit pas toujours l'intention : sur
 // Fantasy-Landscape1 il range la rive de l'étang à 0,45 et les
 // bosquets de gauche à 0,19, presque comme l'eau (0,14). Ce bouton
@@ -811,21 +862,22 @@ onValueModified: newVal => root.runConfigCmd([
         Item { width: 160; height: 1 }
 
         Rectangle {
+            id: lockPalBtn
             readonly property bool actif: Theme.lockBgColor === ""
             width: lockPalLbl.implicitWidth + 16
             height: 26
             radius: Theme.globalRadius
-            color: actif ? Theme.accent : (lockPalMa.containsMouse ? Theme.surfaceVariant : Theme.bg)
-            border.color: actif ? Theme.accent : Theme.surfaceVariant
+            color: lockPalBtn.actif ? Theme.accent : (lockPalMa.containsMouse ? Theme.surfaceVariant : Theme.bg)
+            border.color: lockPalBtn.actif ? Theme.accent : Theme.surfaceVariant
             border.width: 1
 
             Text {
                 id: lockPalLbl
                 anchors.centerIn: parent
                 text: "Fond du thème"
-                color: actif ? Theme.bg : Theme.fg
+                color: lockPalBtn.actif ? Theme.bg : Theme.fg
                 font.pixelSize: Theme.textXs
-                font.bold: actif
+                font.bold: lockPalBtn.actif
             }
 
             MouseArea {
@@ -1429,5 +1481,207 @@ Text {
     }
 
 }   // end CollapsibleSection secShell
+
+// 3b. Thèmes & Packs d'icônes : sélection du thème actif + installation d'archives.
+CollapsibleSection {
+    id: secIcones
+    objectName: "secIcones"
+    title: "Thèmes & Packs d'icônes"
+    summary: (root && root.iconesEtat && root.iconesEtat.actif)
+        ? ("Actif : " + root.iconesEtat.actif)
+        : "Sélection et installation de packs d'icônes"
+    icon: "image"
+    expanded: root ? root.sectionOpen("esthetique_icones", false) : false
+    espacementContenu: 8
+    onToggled: expanded => {
+        if (!root) return
+        root.setPanelSection("esthetique_icones", expanded)
+        if (expanded && Theme.panelAccordion) root.fermerAutresTiroirs("esthetique_icones")
+        if (expanded && (!root.iconesEtat.themes || root.iconesEtat.themes.length === 0)) {
+            root.rafraichirIcones()
+        }
+    }
+    Component.onCompleted: {
+        if (root && (!root.iconesEtat.themes || root.iconesEtat.themes.length === 0)) {
+            root.rafraichirIcones()
+        }
+    }
+
+    Row {
+        width: parent.width
+        spacing: 8
+
+        Rectangle {
+            width: 250
+            height: 30
+            radius: Theme.globalRadius
+            color: icInstallMa.containsMouse ? Theme.accentMuted : Theme.accent
+
+            Text {
+                anchors.centerIn: parent
+                text: "Installer un pack (.tar.gz / .tar.xz / .zip)…"
+                color: Theme.bg
+                font.pixelSize: Theme.textXs
+                font.bold: true
+            }
+
+            MouseArea {
+                id: icInstallMa
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: if (root) root.ouvrirSelecteurFichier(
+                    "icon_pack",
+                    "Choisir une archive de pack d'icônes",
+                    "~/Téléchargements",
+                    ["tar.gz", "tgz", "tar.xz", "txz", "tar.bz2", "tar.zst", "tar", "zip"],
+                    "folder"
+                )
+            }
+        }
+
+        Rectangle {
+            width: 96
+            height: 30
+            radius: Theme.globalRadius
+            color: icRefreshMa.containsMouse ? Theme.surfaceVariant : Qt.alpha(Theme.surfaceVariant, 0.55)
+            border.color: Theme.surfaceVariant
+            border.width: 1
+
+            Text {
+                anchors.centerIn: parent
+                text: "Actualiser"
+                color: Theme.fg
+                font.pixelSize: Theme.textXs
+            }
+
+            MouseArea {
+                id: icRefreshMa
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: if (root) root.rafraichirIcones()
+            }
+        }
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root && root.iconesMessage !== ""
+            text: root ? root.iconesMessage : ""
+            color: Theme.accent
+            font.pixelSize: Theme.textXs
+            elide: Text.ElideRight
+            width: Math.max(80, parent.width - 362)
+        }
+    }
+
+    Repeater {
+        model: (root && root.iconesEtat && root.iconesEtat.themes) ? root.iconesEtat.themes : []
+
+        delegate: Rectangle {
+            required property var modelData
+            readonly property bool estActif: root && root.iconesEtat && root.iconesEtat.actif === modelData.id
+            width: parent ? parent.width : 0
+            height: 46
+            radius: Math.max(8, Math.round(Theme.globalRadius * 0.6))
+            color: estActif ? Qt.alpha(Theme.accent, 0.14) : Qt.alpha(Theme.surfaceVariant, 0.35)
+            border.color: estActif ? Theme.accent : Qt.alpha(Theme.fg, 0.08)
+            border.width: 1
+
+            Item {
+                anchors.fill: parent
+                anchors.leftMargin: 12
+                anchors.rightMargin: 10
+
+                // Aperçu visuel (emplacement fixe de 4 icônes pour aligner les noms)
+                Row {
+                    id: previewRow
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 100
+                    spacing: 4
+
+                    Repeater {
+                        model: modelData.apercu || []
+                        Image {
+                            required property string modelData
+                            width: 22
+                            height: 22
+                            fillMode: Image.PreserveAspectFit
+                            asynchronous: true
+                            sourceSize.width: 24
+                            sourceSize.height: 24
+                            source: "file://" + modelData
+                        }
+                    }
+                }
+
+                Column {
+                    anchors.left: previewRow.right
+                    anchors.leftMargin: 12
+                    anchors.right: btnSupprimer.visible ? btnSupprimer.left : btnAppliquer.left
+                    anchors.rightMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 1
+
+                    Text {
+                        width: parent.width
+                        text: modelData.nom + (modelData.utilisateur ? " · perso" : "")
+                        color: Theme.fg
+                        font.pixelSize: Theme.textSm
+                        font.bold: estActif
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        width: parent.width
+                        text: modelData.id
+                        color: Qt.alpha(Theme.fg, 0.55)
+                        font.pixelSize: Theme.text2xs
+                        elide: Text.ElideRight
+                    }
+                }
+
+                Rectangle {
+                    id: btnSupprimer
+                    visible: modelData.utilisateur === true && !estActif
+                    anchors.right: btnAppliquer.left
+                    anchors.rightMargin: 8
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 78
+                    height: 26
+                    radius: Theme.globalRadius
+                    color: Qt.alpha(Theme.error, 0.14)
+                    border.color: Qt.alpha(Theme.error, 0.4)
+                    border.width: 1
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Supprimer"
+                        color: Theme.error
+                        font.pixelSize: Theme.text2xs
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: if (root) root.supprimerPackIcones(modelData.id)
+                    }
+                }
+
+                ConfigToggle {
+                    id: btnAppliquer
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    pillWidth: 88
+                    active: estActif
+                    onLabel: "✓ Actif"
+                    offLabel: "Appliquer"
+                    onToggled: if (root && !estActif) root.appliquerThemeIcones(modelData.id)
+                }
+            }
+        }
+    }
+}
 
 }

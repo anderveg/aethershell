@@ -373,7 +373,9 @@ SHELL_BLUR_END = "-- END shell-blur"
 # le panneau reecrit ce bloc des qu'un reglage de flou change, et une entree
 # ajoutee a la main dans general.lua disparaitrait a ce moment-la.
 SHELL_BLUR_NAMESPACES = ("shell-bar", "shell-bar-bas", "shell-bar-cote-gauche",
-                         "shell-bar-cote-droite", "shell-osd", "shell-config",
+                         "shell-bar-cote-droite", "shell-ilot-coin-top-left",
+                         "shell-ilot-coin-top-right", "shell-ilot-coin-bottom-left",
+                         "shell-ilot-coin-bottom-right", "shell-osd", "shell-config",
                          "shell-onboarding", "shell-spotlight",
                          "shell-spotlight-rest", "shell-cheatsheet", "shell-whichkey", "shell-overview",
                          "shell-tray-menu", "shell-shotbar",
@@ -780,12 +782,11 @@ def update_style_var(key, value):
         data[key] = max(14, min(60, int(float(value))))
     elif key == "panel_anim_duration":
         data[key] = max(80, min(500, int(float(value))))
-    elif key in ("bar_gaps_out_h", "bar_gaps_out_v", "bar_gaps_out"):
-        # Marge extérieure des quatre barres : `_h` pour les côtés (gauche/droite),
-        # `_v` pour le haut et le bas. `bar_gaps_out` est l'ancienne clé unique,
-        # gardée écrivable et lue en repli par Theme.qml pour une machine qui n'a
-        # pas encore séparé les deux axes. 0 colle la barre au bord ; au-delà de
-        # 32, la barre ne tient plus dans la surface qui la réserve.
+    elif key == "bar_gaps_out_h":
+        data[key] = max(0, min(280, int(float(value))))
+    elif key in ("bar_gaps_out_v", "bar_gaps_out"):
+        # Marge extérieure verticale : au-delà de 32, la barre ne tient plus
+        # dans la surface qui la réserve.
         data[key] = max(0, min(32, int(float(value))))
     elif key == "resize_step":
         data[key] = max(1, min(200, int(float(value))))
@@ -831,6 +832,10 @@ def update_style_var(key, value):
         # Fond en profondeur (parallaxe au changement de bureau), rendu par
         # FondProfondeur.qml sur une couche `background`.
         data[key] = str(value).lower() in ("true", "1", "yes")
+    elif key == "wallpaper_slide":
+        # Glissement horizontal du fond au changement de bureau lorsque la
+        # parallaxe (depth_wallpaper) n'est pas activée.
+        data[key] = str(value).lower() in ("true", "1", "yes")
     elif key == "depth_mask":
         # Masque de premier plan (idée du plugin Noctalia `wallpaper_depth`) :
         # les widgets de bureau passent derrière les objets proches du fond.
@@ -857,6 +862,8 @@ def update_style_var(key, value):
     elif key == "first_run_completed":
         data[key] = str(value).lower() in ("true", "1", "yes")
     elif key == "ilot_projets_actif":
+        data[key] = str(value).lower() in ("true", "1", "yes")
+    elif key == "ilot_coins_groupes":
         data[key] = str(value).lower() in ("true", "1", "yes")
     elif key == "lock_bg_mode" and str(value) in ("solid", "image"):
         data[key] = str(value)
@@ -2097,6 +2104,8 @@ def get_full_config_state():
         "shell_blur_alpha": float(style_data.get("shell_blur_alpha", 0.3)),
         "shell_blur_popups": bool(style_data.get("shell_blur_popups", True)),
         "depth_wallpaper": bool(style_data.get("depth_wallpaper", False)),
+        "wallpaper_slide": bool(style_data.get("wallpaper_slide", False)),
+        "ilot_coins_groupes": bool(style_data.get("ilot_coins_groupes", False)),
         "panel_accordion": bool(style_data.get("panel_accordion", True)),
         "user_location_ville": str(style_data.get("user_location_ville", "") or ""),
         "user_location_lat": style_data.get("user_location_lat"),
@@ -2363,7 +2372,7 @@ if __name__ == "__main__":
         default_order = [
             "systray", "luminosite", "batterie", "minimise", "volume",
             "reseau", "notifications", "maj", "todo", "meteo",
-            "presse-papiers", "usb",
+            "presse-papiers", "usb", "systeme",
         ]
         data = load_json(STYLE_FILE)
         order = data.get("ilot_applets_order")
@@ -2377,11 +2386,130 @@ if __name__ == "__main__":
         if aid and aid not in order:
             order.append(aid)
         if aid in order:
+            corners = data.get("ilot_applets_corner")
+            if not isinstance(corners, dict):
+                corners = {}
+            cible_corner = corners.get(aid, "")
+            modes = data.get("ilot_applets_mode")
+            if not isinstance(modes, dict):
+                modes = {}
+            def_exp = ("systray", "minimise", "luminosite", "batterie")
+
+            def _actif(x):
+                return modes.get(x, "expanded" if x in def_exp else "off") != "off"
+
             idx = order.index(aid)
-            nxt = idx - 1 if direction in ("left", "gauche", "up", "monter") else idx + 1
+            pas = -1 if direction in ("left", "gauche", "up", "monter") else 1
+            nxt = idx + pas
+            while 0 <= nxt < len(order):
+                cand = order[nxt]
+                if corners.get(cand, "") == cible_corner and _actif(cand):
+                    break
+                nxt += pas
             if 0 <= nxt < len(order):
                 order[idx], order[nxt] = order[nxt], order[idx]
+            else:
+                # Repli : échange immédiat si aucun voisin actif dans le même groupe
+                nxt_def = idx + pas
+                if 0 <= nxt_def < len(order):
+                    order[idx], order[nxt_def] = order[nxt_def], order[idx]
         data["ilot_applets_order"] = order
+        save_json(STYLE_FILE, data)
+        print(json.dumps(get_full_config_state()))
+    elif action == "ilot_applet_corner" and len(sys.argv) > 3:
+        aid = str(sys.argv[2]).strip()
+        corner = str(sys.argv[3]).strip().lower()
+        if corner in ("ilot", "none", "off", ""):
+            corner = ""
+        elif corner not in ("top-left", "top-right", "bottom-left", "bottom-right"):
+            corner = ""
+        data = load_json(STYLE_FILE)
+        corners = data.get("ilot_applets_corner")
+        if not isinstance(corners, dict):
+            corners = {}
+        if corner:
+            corners[aid] = corner
+            # Si l'applet était éteint, on l'allume automatiquement pour que
+            # l'utilisateur le voie apparaître dans le coin choisi.
+            modes = data.get("ilot_applets_mode")
+            if not isinstance(modes, dict):
+                modes = {}
+            def_exp = ("systray", "minimise", "luminosite", "batterie")
+            cur_mode = modes.get(aid, "expanded" if aid in def_exp else "off")
+            if cur_mode == "off":
+                modes[aid] = "both"
+                data["ilot_applets_mode"] = modes
+        else:
+            corners.pop(aid, None)
+        data["ilot_applets_corner"] = corners
+        save_json(STYLE_FILE, data)
+        print(json.dumps(get_full_config_state()))
+    elif action == "ilot_applet_move_to" and len(sys.argv) > 3:
+        aid = str(sys.argv[2]).strip()
+        corner = str(sys.argv[3]).strip().lower()
+        if corner in ("ilot", "none", "off", ""):
+            corner = ""
+        elif corner not in ("top-left", "top-right", "bottom-left", "bottom-right"):
+            corner = ""
+        try:
+            idx_target = int(sys.argv[4]) if len(sys.argv) > 4 else None
+        except ValueError:
+            idx_target = None
+
+        default_order = [
+            "horloge", "workspaces", "systray", "luminosite", "batterie", "minimise",
+            "volume", "reseau", "notifications", "maj", "todo", "meteo",
+            "presse-papiers", "usb", "systeme", "comptes",
+        ]
+        data = load_json(STYLE_FILE)
+        order = data.get("ilot_applets_order")
+        if not isinstance(order, list) or not order:
+            order = list(default_order)
+        else:
+            order = [str(x) for x in order]
+            for x in default_order:
+                if x not in order:
+                    order.append(x)
+        if aid and aid not in order:
+            order.append(aid)
+
+        corners = data.get("ilot_applets_corner")
+        if not isinstance(corners, dict):
+            corners = {}
+        if corner:
+            corners[aid] = corner
+        else:
+            corners.pop(aid, None)
+
+        modes = data.get("ilot_applets_mode")
+        if not isinstance(modes, dict):
+            modes = {}
+        def_exp = ("systray", "minimise", "luminosite", "batterie")
+        if modes.get(aid, "expanded" if aid in def_exp else "off") == "off":
+            modes[aid] = "both"
+
+        # Réordonner `aid` à `idx_target` parmi les membres du groupe `corner`
+        if aid in order:
+            order.remove(aid)
+            groupe_positions = [i for i, x in enumerate(order) if corners.get(x, "") == corner]
+            if idx_target is None or idx_target >= len(groupe_positions):
+                insert_pos = (groupe_positions[-1] + 1) if groupe_positions else len(order)
+            elif idx_target <= 0:
+                insert_pos = groupe_positions[0] if groupe_positions else 0
+            else:
+                insert_pos = groupe_positions[idx_target]
+            order.insert(insert_pos, aid)
+
+        data["ilot_applets_order"] = order
+        data["ilot_applets_corner"] = corners
+        data["ilot_applets_mode"] = modes
+        save_json(STYLE_FILE, data)
+        print(json.dumps(get_full_config_state()))
+    elif action == "ilot_applets_reset":
+        data = load_json(STYLE_FILE)
+        data.pop("ilot_applets_order", None)
+        data.pop("ilot_applets_corner", None)
+        data.pop("ilot_applets_mode", None)
         save_json(STYLE_FILE, data)
         print(json.dumps(get_full_config_state()))
     elif action == "diag_info":

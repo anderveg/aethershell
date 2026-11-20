@@ -113,6 +113,8 @@ QtObject {
     property string ilotShowClock: "both"
     property var ilotAppletsMode: ({})
     property var ilotAppletsOrder: []
+    property var ilotAppletsCorner: ({})
+    property bool ilotCoinsGroupes: false
     property int ilotAppletsRev: 0
     property bool majSeulementSiDispo: false
     property string majTerminalMode: "float"
@@ -137,8 +139,18 @@ QtObject {
         if (root.ilotAppletsMode && root.ilotAppletsMode[id] !== undefined) {
             return root.normIlotMode(root.ilotAppletsMode[id], "off")
         }
+        if (id === "horloge") return root.ilotShowClock
+        if (id === "workspaces") return root.ilotShowWorkspaces
         const defExp = ["systray", "minimise", "luminosite", "batterie"]
         return defExp.indexOf(id) !== -1 ? "expanded" : "off"
+    }
+
+    function ilotAppletCornerFor(id) {
+        const _ = root.ilotAppletsRev
+        if (!root.ilotAppletsCorner || typeof root.ilotAppletsCorner !== "object") return ""
+        const c = String(root.ilotAppletsCorner[id] || "")
+        if (c === "top-left" || c === "top-right" || c === "bottom-left" || c === "bottom-right") return c
+        return ""
     }
     property int idleSuspendTimeout: 3600
     onIslandPanelOpenChanged: {
@@ -228,6 +240,7 @@ QtObject {
     // utiliser de pixelSize littéral.
     readonly property string fontUi: "Inter"
     readonly property string fontIcon: "0xProto Nerd Font"
+    readonly property string monoFont: "monospace"
 
     readonly property int text2xs: 9   // exposants, unités
     readonly property int textXs: 11   // métadonnées, unités
@@ -237,6 +250,7 @@ QtObject {
     readonly property int textXl: 18   // heure principale
     readonly property int textXxl: 22  // OSD, grands chiffres
 
+    readonly property int iconXs: 12
     readonly property int iconSm: 14
     readonly property int iconMd: 16
     readonly property int iconLg: 22
@@ -331,6 +345,8 @@ QtObject {
     // au changement de bureau. Faux par défaut, le fond d'écran du démon reste
     // intact tant qu'on ne l'allume pas.
     property bool depthWallpaper: false
+    // Glissement du fond au changement de bureau si la parallaxe est inactive.
+    property bool wallpaperSlide: false
     // Masque de premier plan (CalqueProfondeur.qml) : les widgets de bureau
     // passent derrière les objets proches du fond. Seuil et adoucissement sont
     // ceux du plugin Noctalia, exposés tels quels (0-100 et 0-50).
@@ -568,6 +584,7 @@ QtObject {
         if (typeof data.hypr_rounding === "number") root.hyprRounding = data.hypr_rounding
         if (typeof data.global_opacity === "number") root.globalOpacity = data.global_opacity
         if (typeof data.depth_wallpaper === "boolean") root.depthWallpaper = data.depth_wallpaper
+        if (typeof data.wallpaper_slide === "boolean") root.wallpaperSlide = data.wallpaper_slide
         if (typeof data.panel_accordion === "boolean") root.panelAccordion = data.panel_accordion
         if (typeof data.panel_anim_duration === "number") root.panelAnimDuration = Math.max(80, Math.min(500, Math.round(data.panel_anim_duration)))
         if (typeof data.user_location_ville === "string") root.userLocationVille = data.user_location_ville
@@ -588,7 +605,7 @@ QtObject {
         // Les deux axes, avec l'ancienne clé `bar_gaps_out` en repli : une
         // machine qui n'a pas encore été réglée garde exactement son aspect.
         const margeOut = (typeof data.bar_gaps_out === "number") ? data.bar_gaps_out : 8
-        root.gutterH = Math.round(Math.max(0, Math.min(32,
+        root.gutterH = Math.round(Math.max(0, Math.min(280,
             typeof data.bar_gaps_out_h === "number" ? data.bar_gaps_out_h : margeOut)))
         root.gutterV = Math.round(Math.max(0, Math.min(32,
             typeof data.bar_gaps_out_v === "number" ? data.bar_gaps_out_v : margeOut)))
@@ -641,6 +658,14 @@ QtObject {
             root.ilotAppletsOrder = data.ilot_applets_order
             root.ilotAppletsRev++
         }
+        if (data.ilot_applets_corner && typeof data.ilot_applets_corner === "object") {
+            root.ilotAppletsCorner = data.ilot_applets_corner
+            root.ilotAppletsRev++
+        } else {
+            root.ilotAppletsCorner = ({})
+            root.ilotAppletsRev++
+        }
+        if (typeof data.ilot_coins_groupes === "boolean") root.ilotCoinsGroupes = data.ilot_coins_groupes
         if (typeof data.maj_seulement_si_dispo === "boolean") root.majSeulementSiDispo = data.maj_seulement_si_dispo
         if (typeof data.maj_terminal_mode === "string") {
             root.majTerminalMode = (data.maj_terminal_mode === "tiling") ? "tiling" : "float"

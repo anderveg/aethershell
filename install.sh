@@ -614,7 +614,7 @@ copy_dir_files() {
         if [ -e "$dst/$name" ] && [[ " ${NON_ECRASABLES:-} " == *" $name "* ]]; then
             continue
         fi
-        cp "$f" "$dst/$name"
+        cp -f --remove-destination "$f" "$dst/$name"
     done
 }
 
@@ -732,6 +732,7 @@ pkg_for_bin() {
                 zbarcam) echo "zbar" ;;
                 cc) echo "gcc" ;;
                 matugen) echo "matugen-bin" ;;
+                unimatrix) echo "unimatrix-git" ;;
                 *) echo "$bin" ;;
             esac
             ;;
@@ -849,10 +850,19 @@ install_debian_extra_bins() {
                 matugen)    echo "   - matugen    : 'cargo install matugen' ou binaire GitHub -> ~/.local/bin/matugen" ;;
                 awww)       echo "   - awww       : compiler depuis https://codeberg.org/LGFae/awww -> ~/.local/bin/awww" ;;
                 hyprshot)   echo "   - hyprshot   : copier le script dans ~/.local/bin/hyprshot" ;;
+                unimatrix)  install_unimatrix_local || echo "   - unimatrix  : curl -fsSL https://raw.githubusercontent.com/will8211/unimatrix/master/unimatrix.py -o ~/.local/bin/unimatrix && chmod +x ~/.local/bin/unimatrix" ;;
                 *)          echo "   - $item     : installer manuellement dans ~/.local/bin/" ;;
             esac
         done
     fi
+}
+
+install_unimatrix_local() {
+    command -v unimatrix >/dev/null 2>&1 && return 0
+    command -v curl >/dev/null 2>&1 || return 1
+    mkdir -p "$HOME/.local/bin"
+    curl -fsSL "https://raw.githubusercontent.com/will8211/unimatrix/master/unimatrix.py" -o "$HOME/.local/bin/unimatrix" \
+        && chmod +x "$HOME/.local/bin/unimatrix"
 }
 
 install_missing_dependencies() {
@@ -899,7 +909,14 @@ install_missing_dependencies() {
             ;;
         dnf)
             local need_copr=0
+            local need_unimatrix=0
+            local -a dnf_pkgs=()
             for p in "${unique_pkgs[@]}"; do
+                if [ "$p" = "unimatrix" ]; then
+                    need_unimatrix=1
+                    continue
+                fi
+                dnf_pkgs+=("$p")
                 case "$p" in
                     quickshell|matugen|awww|hyprshot|hyprsunset) need_copr=1 ;;
                 esac
@@ -916,7 +933,12 @@ install_missing_dependencies() {
                         ;;
                 esac
             fi
-            sudo dnf install -y "${unique_pkgs[@]}" python3-pillow python3-numpy pipewire-devel || return 1
+            if [ "${#dnf_pkgs[@]}" -gt 0 ]; then
+                sudo dnf install -y "${dnf_pkgs[@]}" python3-pillow python3-numpy pipewire-devel || return 1
+            fi
+            if [ "$need_unimatrix" -eq 1 ]; then
+                install_unimatrix_local || return 1
+            fi
             ;;
         apt)
             if grep -qi "ubuntu" /etc/os-release 2>/dev/null; then
@@ -1461,7 +1483,7 @@ preflight_diff() {
 
     # 6. Systemd services
     if [ -d "$DEV_DIR/systemd" ]; then
-        for f in "$DEV_DIR/systemd"/*.service; do
+        for f in "$DEV_DIR/systemd"/*.service "$DEV_DIR/systemd"/*.timer; do
             [ -f "$f" ] || continue
             name="$(basename "$f")"
             dst="$HOME/.config/systemd/user/$name"
@@ -1875,14 +1897,19 @@ deploy_new_env() {
     poser_flou_gtk4
     # Index des applications de la pilule spotlight : données de la machine,
     # pas du dépôt — régénérées à chaque déploiement (et à chaque ouverture).
-    if [ -f "$CORE_DIR/app_index.py" ]; then
+    if [ -x "$CORE_DIR/as-core" ]; then
+        "$CORE_DIR/as-core" app-index --quiet || true
+    elif [ -f "$CORE_DIR/app_index.py" ]; then
         python3 "$CORE_DIR/app_index.py" --quiet || true
     fi
     build_pwscope_if_ready
 
     # Fichiers générés à partir des JSON préservés (app_vars.json, autostart.json) :
     # la copie ci-dessus peut poser la version du dépôt, on réécrit la vraie.
-    if [ -f "$CORE_DIR/config_manager.py" ]; then
+    if [ -x "$CORE_DIR/as-core" ]; then
+        "$CORE_DIR/as-core" config sync_generated >/dev/null 2>&1 \
+            || echo "  ⚠️  régénération de programs.lua / autostart_cmds.txt impossible"
+    elif [ -f "$CORE_DIR/config_manager.py" ]; then
         python3 "$CORE_DIR/config_manager.py" sync_generated >/dev/null 2>&1 \
             || echo "  ⚠️  régénération de programs.lua / autostart_cmds.txt impossible"
     fi
@@ -1890,6 +1917,7 @@ deploy_new_env() {
         cp "$CORE_DIR/secrets.example.json" "$CORE_DIR/secrets.json"
     fi
     chmod +x "$CORE_DIR/"*.sh
+    [ -f "$CORE_DIR/as-core" ] && chmod +x "$CORE_DIR/as-core"
 
     # Tous les composants de la racine, en bloc. La liste fixe oubliait chaque
     # nouveau fichier (Popup.qml, HermesPopup.qml) alors que le qmldir, lui,
@@ -1983,7 +2011,7 @@ deploy_new_env() {
     # de plantage. Versionnées ici, installées par le déploiement.
     if [ -d "$DEV_DIR/systemd" ]; then
         local unite
-        for unite in "$DEV_DIR/systemd/"*.service; do
+        for unite in "$DEV_DIR/systemd/"*.service "$DEV_DIR/systemd/"*.timer; do
             [ -f "$unite" ] || continue
             cp -f "$unite" "$HOME/.config/systemd/user/"
             echo "  ↪ unité installée : $(basename "$unite")"

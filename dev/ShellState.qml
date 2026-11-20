@@ -59,7 +59,7 @@ QtObject {
 
     property Process wallpaperSondeProc: Process {
         command: ["awww", "query"]
-        running: Theme.depthWallpaper || Theme.depthMask
+        running: Theme.depthWallpaper || Theme.depthMask || Theme.wallpaperSlide
         stdout: StdioCollector {
             onStreamFinished: {
                 if (Date.now() < root.wallpaperLockUntil) return
@@ -77,7 +77,7 @@ QtObject {
     property Timer wallpaperSondeTimer: Timer {
         interval: 2500
         repeat: true
-        running: Theme.depthWallpaper || Theme.depthMask
+        running: Theme.depthWallpaper || Theme.depthMask || Theme.wallpaperSlide
         triggeredOnStart: true
         onTriggered: root.rafraichirWallpaper()
     }
@@ -149,6 +149,7 @@ QtObject {
     property var barAppletsCatalogue: []
     property var barAppletsActifs: ({})
     property int barAppletsRev: 0
+    property real ilotWidth: 160
 
     readonly property var barAnciens: ({
         "gauche": "haut:debut", "centre": "haut:milieu", "droite": "haut:fin",
@@ -254,6 +255,7 @@ QtObject {
             const cat = root.barAppletsCatalogue[i]
             if (!cat || !cat.id || cat.fixe) continue
             if (cat.id === "visualiseur" || cat.id === "workspaces" || cat.id === "horloge" || cat.id === "musique") continue
+            if (Theme.ilotAppletCornerFor(cat.id) !== "") continue
             const mode = Theme.ilotAppletModeFor(cat.id)
             if (!Theme.ilotVisibleIn(mode, state)) continue
 
@@ -263,6 +265,26 @@ QtObject {
             if (side === "left" && itemIle !== "haut:debut") continue
             if (side === "right" && itemIle === "haut:debut") continue
 
+            liste.push(root._buildAppletEntry(cat, choix, itemIle))
+        }
+        return root._sortApplets(liste)
+    }
+
+    function appletsPourCoinIlot(corner) {
+        const _ = root.barAppletsRev + Theme.ilotAppletsRev
+        if (!corner || !root.barAppletsCatalogue.length) return []
+        const liste = []
+        for (let i = 0; i < root.barAppletsCatalogue.length; i++) {
+            const cat = root.barAppletsCatalogue[i]
+            if (!cat || !cat.id || cat.fixe) continue
+            if (cat.id === "visualiseur" || cat.id === "musique") continue
+            if (Theme.ilotAppletCornerFor(cat.id) !== corner) continue
+            const mode = Theme.ilotAppletModeFor(cat.id)
+            if (mode === "off") continue
+
+            const choix = root.barAppletsActifs[cat.id] || ({})
+            let itemIle = String(choix.ile || cat.ile || "haut:fin")
+            itemIle = root.barAnciens[itemIle] || itemIle
             liste.push(root._buildAppletEntry(cat, choix, itemIle))
         }
         return root._sortApplets(liste)
@@ -295,13 +317,13 @@ QtObject {
         root.doNotDisturb = found.dnd
         SystemServices.caffeineActif = found.caffeine
         Theme.widgetsBureauVisibles = found.widgets
-        Quickshell.execDetached(["python3", Quickshell.shellPath("core/config_manager.py"), "style", "do_not_disturb", found.dnd ? "true" : "false"])
+        Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "config", "style", "do_not_disturb", found.dnd ? "true" : "false"])
         Quickshell.execDetached(["powerprofilesctl", "set", found.power])
         if (found.night) {
-            Quickshell.execDetached(["python3", Quickshell.shellPath("core/nuit_service.py"), "temperature", String(found.nightTemp)])
-            Quickshell.execDetached(["python3", Quickshell.shellPath("core/nuit_service.py"), "activer"])
+            Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "nuit", "temperature", String(found.nightTemp)])
+            Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "nuit", "activer"])
         } else {
-            Quickshell.execDetached(["python3", Quickshell.shellPath("core/nuit_service.py"), "desactiver"])
+            Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "nuit", "desactiver"])
         }
         return true
     }

@@ -19,12 +19,11 @@ Column {
     // Plusieurs onglets restent montés depuis qu'on ne les décharge plus en
     // quittant : sans ce masque, ils s'empilaient les uns sur les autres
     // (le `visible:` du panneau avait été retiré à la découpe).
-    visible: root ? root.currentTab === 4 : false
+    visible: root ? root.currentTab === 3 : false
     width: mainFlickable ? mainFlickable.width : 0
 
     readonly property var sections: ({
         "ecrans_moniteurs": secEcrans,
-        "ecrans_profils": secProfils,
         "systeme_horloge": secHorloge,
         "systeme_nuit": secNuit,
         "ecrans_captures": secCaptures,
@@ -51,7 +50,7 @@ Column {
     function refreshDiag(src) {
         if (src) bloc.diagLogSource = src
         if (diagProc.running) return
-        diagProc.command = ["python3", Quickshell.shellPath("core/config_manager.py"),
+        diagProc.command = [Quickshell.shellPath("core/as-core"), "config",
                             "diag_info", bloc.diagLogSource]
         diagProc.running = true
     }
@@ -117,7 +116,7 @@ Column {
 
     function verifierMaj(force) {
         if (procMaj.running) return
-        procMaj.command = ["python3", Quickshell.shellPath("core/maj_shell.py")]
+        procMaj.command = [Quickshell.shellPath("core/as-core"), "maj-shell"]
                           .concat(force ? ["--force"] : [])
         procMaj.running = true
     }
@@ -207,12 +206,12 @@ Column {
 
 spacing: 12
 
-// Tiroir : moniteurs détectés, moniteur principal, résolution et
-// fréquence.
+// Tiroir : moniteurs détectés, moniteur principal, résolution, fréquence,
+// mise à l'échelle et rotation.
 CollapsibleSection {
     id: secEcrans
     objectName: "secEcrans"
-    title: "Moniteurs & résolution"
+    title: "Moniteurs, résolution & échelle"
     summary: root.selectedMonitorName + " · " + root.monitorsList.length + " écran(s)"
     icon: "monitor"
     expanded: root.sectionOpen("ecrans_moniteurs", false)
@@ -488,142 +487,121 @@ Column {
     }
 }
 
-// Scale factor selector (Mouse only)
-}
-
-// Tiroir : mise à l'échelle, profils multi-écrans et mode tablette.
-CollapsibleSection {
-    id: secProfils
-    objectName: "secProfils"
-    title: "Profils & rotation"
-    summary: root.isLaptop ? "portable" : "fixe"
-    icon: "tablet"
-    expanded: root.sectionOpen("ecrans_profils", false)
-    onToggled: expanded => {
-        root.setPanelSection("ecrans_profils", expanded)
-        if (expanded && Theme.panelAccordion) root.fermerAutresTiroirs("ecrans_profils")
-    }
-
-Row {
-    spacing: 10
-    Text {
-        anchors.verticalCenter: parent.verticalCenter
-        width: parent.width - (3 * 58 + 3 * 10 + 8)
-        text: "Mise à l'échelle (Scale) de " + root.selectedMonitorName + " :"
-        color: Theme.fg
-        font.pixelSize: Theme.textSm
-        elide: Text.ElideRight
-    }
-
-    ConfigSegmented {
-        choices: [
-            { code: "1",    label: "1x" },
-            { code: "1.25", label: "1.25x" },
-            { code: "1.5",  label: "1.5x" }
-        ]
-        currentCode: {
-            const s = root.currentMonitorObj ? Number(root.currentMonitorObj.scale) : 1
-            if (Math.abs(s - 1.25) < 0.05) return "1.25"
-            if (Math.abs(s - 1.5) < 0.05) return "1.5"
-            return "1"
-        }
-        onSelected: function(code) {
-            const m = root.currentMonitorObj
-            const curMode = m ? (m.width + "x" + m.height + "@" + m.refreshRate) : "preferred"
-            root.runConfigCmd(["monitor_mode", root.selectedMonitorName, curMode, code])
-        }
-    }
-}
-
-// Section réservée au portable : profils multi-écrans et rotation tablette
-Column {
-    visible: root.isLaptop
-    width: parent.width
-    spacing: 10
-
-    Text {
-        text: "Profils Multi-Écrans & Mode Tablette (portable uniquement)"
-        color: Theme.accent
-        font.pixelSize: Theme.textMd
-        font.bold: true
-    }
-
+    // Mise à l'échelle (Scale)
     Row {
-        spacing: 8
         width: parent.width
+        spacing: 10
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            width: Math.max(120, parent.width - (3 * 58 + 3 * 10 + 8))
+            text: "Mise à l'échelle (Scale) de " + root.selectedMonitorName + " :"
+            color: Theme.fg
+            font.pixelSize: Theme.textSm
+            elide: Text.ElideRight
+        }
 
-        Repeater {
-            model: [
-                { id: "dual", title: "Étendu (TV + laptop)" },
-                { id: "tv", title: "TV uniquement (dock)" },
-                { id: "laptop", title: "Nomade (laptop seul)" }
+        ConfigSegmented {
+            choices: [
+                { code: "1",    label: "1x" },
+                { code: "1.25", label: "1.25x" },
+                { code: "1.5",  label: "1.5x" }
             ]
-
-            Rectangle {
-                required property var modelData
-                width: (parent.width - 16) / 3
-                height: 32
-                radius: Theme.globalRadius
-                color: profMa.containsMouse ? Theme.accent : Theme.surfaceVariant
-                Text {
-                    anchors.centerIn: parent
-                    text: modelData.title
-                    color: profMa.containsMouse ? Theme.bg : Theme.fg
-                    font.pixelSize: Theme.textXs
-                    font.bold: true
-                }
-                MouseArea {
-                    id: profMa
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.runConfigCmd(["monitor_profile", modelData.id])
-                }
+            currentCode: {
+                const s = root.currentMonitorObj ? Number(root.currentMonitorObj.scale) : 1
+                if (Math.abs(s - 1.25) < 0.05) return "1.25"
+                if (Math.abs(s - 1.5) < 0.05) return "1.5"
+                return "1"
+            }
+            onSelected: function(code) {
+                const m = root.currentMonitorObj
+                const curMode = m ? (m.width + "x" + m.height + "@" + m.refreshRate) : "preferred"
+                root.runConfigCmd(["monitor_mode", root.selectedMonitorName, curMode, code])
             }
         }
     }
 
-    Row {
-        spacing: 8
-        Repeater {
-            model: [
-                { t: "0", label: "0° Normal" },
-                { t: "2", label: "180° Tablette" },
-                { t: "1", label: "90° Portrait G" },
-                { t: "3", label: "270° Portrait D" }
-            ]
+    // Section réservée au portable : profils multi-écrans et rotation tablette
+    Column {
+        visible: root.isLaptop
+        width: parent.width
+        spacing: 10
 
-            Rectangle {
-                required property var modelData
-                width: 152
-                height: 28
-                radius: Theme.globalRadius
-                color: rotMa.containsMouse ? Theme.accentMuted : Theme.surfaceVariant
-                Text {
-                    anchors.centerIn: parent
-                    text: modelData.label
-                    color: rotMa.containsMouse ? Theme.bg : Theme.fg
-                    font.pixelSize: Theme.textXs
+        Text {
+            text: "Profils Multi-Écrans & Mode Tablette (portable uniquement)"
+            color: Theme.accent
+            font.pixelSize: Theme.textMd
+            font.bold: true
+        }
+
+        Row {
+            spacing: 8
+            width: parent.width
+
+            Repeater {
+                model: [
+                    { id: "dual", title: "Étendu (TV + laptop)" },
+                    { id: "tv", title: "TV uniquement (dock)" },
+                    { id: "laptop", title: "Nomade (laptop seul)" }
+                ]
+
+                Rectangle {
+                    required property var modelData
+                    width: (parent.width - 16) / 3
+                    height: 32
+                    radius: Theme.globalRadius
+                    color: profMa.containsMouse ? Theme.accent : Theme.surfaceVariant
+                    Text {
+                        anchors.centerIn: parent
+                        text: modelData.title
+                        color: profMa.containsMouse ? Theme.bg : Theme.fg
+                        font.pixelSize: Theme.textXs
+                        font.bold: true
+                    }
+                    MouseArea {
+                        id: profMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.runConfigCmd(["monitor_profile", modelData.id])
+                    }
                 }
-                MouseArea {
-                    id: rotMa
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.runConfigCmd(["rotate", modelData.t])
+            }
+        }
+
+        Row {
+            width: parent.width
+            spacing: 8
+            Repeater {
+                model: [
+                    { t: "0", label: "0° Normal" },
+                    { t: "2", label: "180° Tablette" },
+                    { t: "1", label: "90° Portrait G" },
+                    { t: "3", label: "270° Portrait D" }
+                ]
+
+                Rectangle {
+                    required property var modelData
+                    width: Math.floor((parent.width - 24) / 4)
+                    height: 28
+                    radius: Theme.globalRadius
+                    color: rotMa.containsMouse ? Theme.accentMuted : Theme.surfaceVariant
+                    Text {
+                        anchors.centerIn: parent
+                        text: modelData.label
+                        color: rotMa.containsMouse ? Theme.bg : Theme.fg
+                        font.pixelSize: Theme.textXs
+                    }
+                    MouseArea {
+                        id: rotMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.runConfigCmd(["rotate", modelData.t])
+                    }
                 }
             }
         }
     }
-}
-
-Rectangle {
-    width: parent.width
-    height: 1
-    color: Theme.surfaceVariant
-}
-
-// System Time, Network Shortcut (& Battery 80% Limiter if Laptop)
 }
 
 // Tiroir : énergie, veille, fuseau horaire et batterie
@@ -684,22 +662,23 @@ Column {
                 ]
 
                 Rectangle {
+                    id: idlePillBtn
                     required property var modelData
                     readonly property bool actif: root.idleSuspendTimeout === modelData.value
                     width: idlePillText.implicitWidth + 18
                     height: 28
                     radius: Theme.globalRadius
-                    color: actif ? Theme.accent : Theme.surfaceVariant
+                    color: idlePillBtn.actif ? Theme.accent : Theme.surfaceVariant
                     border.width: 1
-                    border.color: actif ? Theme.accent : Qt.alpha(Theme.fg, 0.15)
+                    border.color: idlePillBtn.actif ? Theme.accent : Qt.alpha(Theme.fg, 0.15)
 
                     Text {
                         id: idlePillText
                         anchors.centerIn: parent
                         text: modelData.label
-                        color: actif ? Theme.bg : Theme.fg
+                        color: idlePillBtn.actif ? Theme.bg : Theme.fg
                         font.pixelSize: Theme.textXs
-                        font.bold: actif
+                        font.bold: idlePillBtn.actif
                     }
 
                     MouseArea {
@@ -835,21 +814,22 @@ CollapsibleSection {
                 model: [2700, 3400, 4000, 5000]
 
                 Rectangle {
+                    id: nuitPillBtn
                     required property var modelData
                     readonly property bool actif: root.nuitTemp === modelData
                     width: 74
                     height: 28
                     radius: Theme.globalRadius
-                    color: actif ? Qt.alpha(Theme.accent, 0.28) : Theme.surfaceVariant
-                    border.color: actif ? Theme.accent : Theme.accentMuted
+                    color: nuitPillBtn.actif ? Qt.alpha(Theme.accent, 0.28) : Theme.surfaceVariant
+                    border.color: nuitPillBtn.actif ? Theme.accent : Theme.accentMuted
                     border.width: 1
 
                     Text {
                         anchors.centerIn: parent
                         text: modelData + " K"
-                        color: actif ? Theme.accent : Qt.alpha(Theme.fg, 0.75)
+                        color: nuitPillBtn.actif ? Theme.accent : Qt.alpha(Theme.fg, 0.75)
                         font.pixelSize: Theme.textXs
-                        font.bold: actif
+                        font.bold: nuitPillBtn.actif
                     }
 
                     MouseArea {
@@ -1534,22 +1514,23 @@ CollapsibleSection {
             ]
 
             Rectangle {
+                id: diagLogBtn
                 required property var modelData
                 readonly property bool actif: bloc.diagLogSource === modelData.code
                 width: logBtnTxt.implicitWidth + 16
                 height: 24
                 radius: Theme.globalRadius
-                color: actif ? Theme.accent : Theme.surfaceVariant
-                border.color: actif ? Theme.accent : Qt.alpha(Theme.fg, 0.15)
+                color: diagLogBtn.actif ? Theme.accent : Theme.surfaceVariant
+                border.color: diagLogBtn.actif ? Theme.accent : Qt.alpha(Theme.fg, 0.15)
                 border.width: 1
 
                 Text {
                     id: logBtnTxt
                     anchors.centerIn: parent
                     text: modelData.label
-                    color: actif ? Theme.bg : Theme.fg
+                    color: diagLogBtn.actif ? Theme.bg : Theme.fg
                     font.pixelSize: Theme.textXs
-                    font.bold: actif
+                    font.bold: diagLogBtn.actif
                 }
 
                 MouseArea {
@@ -1590,7 +1571,7 @@ CollapsibleSection {
                         width: parent.width
                         text: modelData
                         color: Qt.alpha(Theme.fg, 0.85)
-                        font.family: Theme.fontMono
+                        font.family: Theme.monoFont
                         font.pixelSize: 10
                         wrapMode: Text.WrapAnywhere
                     }
@@ -1652,7 +1633,7 @@ CollapsibleSection {
                         anchors.verticalCenter: parent.verticalCenter
                         text: modelData.name
                         color: Theme.fg
-                        font.family: Theme.fontMono
+                        font.family: Theme.monoFont
                         font.pixelSize: 10
                         elide: Text.ElideRight
                     }
@@ -1691,7 +1672,7 @@ CollapsibleSection {
                                     bloc.diagRestoreConfirm = modelData.name
                                 } else if (!diagRestoreProc.running) {
                                     diagRestoreProc.command = [
-                                        "python3", Quickshell.shellPath("core/config_manager.py"),
+                                        Quickshell.shellPath("core/as-core"), "config",
                                         "diag_restore", modelData.name
                                     ]
                                     diagRestoreProc.running = true

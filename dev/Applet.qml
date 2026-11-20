@@ -53,11 +53,13 @@ Item {
     readonly property var barres: (ok && ligne.barres && ligne.barres.length)
                                   ? ligne.barres : []
     // Carte de survol : le contrat peut publier `survol` — la liste de ce que la
-    // barre ne montre pas. Elle s'affiche après un court délai, sans clic et sans
-    // prendre le focus ; le popup complet reste au clic. Deux affordances
-    // distinctes : effleurer pour voir, cliquer pour agir.
-    readonly property var survol: (ok && donnees.survol && donnees.survol.length)
-                                  ? donnees.survol : []
+    // barre ne montre pas. Si une barre individuelle (CPU, RAM, GPU, Disque…)
+    // porte son propre `survol`, le survol de cet élément affiche ses détails.
+    property var barreSurvolee: null
+    readonly property var survol: (barreSurvolee && barreSurvolee.survol && barreSurvolee.survol.length)
+                                  ? barreSurvolee.survol
+                                  : ((ok && donnees.survol && donnees.survol.length)
+                                     ? donnees.survol : [])
     property bool carteSurvol: false
 
     // Clic milieu : les réglages de cet applet, comme un widget qui ouvre ses
@@ -160,7 +162,7 @@ Item {
     function rafraichir(force) {
         if (root.estQml || root.service === "" || root.occupe) return
         root.occupe = true
-        const args = ["python3", Quickshell.shellPath(root.service)]
+        const args = [Quickshell.shellPath("core/as-core"), root.service]
         // Les options de l'applet (quelles mesures, quel dossier…) viennent du
         // registre : le service n'a pas à savoir qui les a choisies.
         const opts = root.applet.options || ({})
@@ -261,6 +263,16 @@ Item {
                     color: parent.couleurTexte(String(modelData.niveau || "ok"))
                     font.pixelSize: Math.round(Theme.textXs * 0.92 * root.echelle)
                     font.features: { "tnum": 1 }
+                }
+
+                HoverHandler {
+                    onHoveredChanged: {
+                        if (hovered) {
+                            root.barreSurvolee = modelData
+                        } else if (root.barreSurvolee && root.barreSurvolee.cle === modelData.cle) {
+                            root.barreSurvolee = null
+                        }
+                    }
                 }
             }
         }
@@ -475,8 +487,11 @@ Item {
         implicitHeight: Math.ceil(chargeur.implicitHeight + Theme.space4 * 2)
         color: "transparent"
         // Un popup externe est dessiné par son îlot : cette fenêtre reste fermée.
-        // En mode îlot dynamique, la météo s'étend directement dans l'îlot.
-        visible: root.ouvert && !root.popupExterne && !root.estQml && !(Theme.barStyle === "island" && root.appletId === "meteo")
+        // En mode îlot dynamique, la météo s'étend directement dans l'îlot sauf
+        // si l'applet météo a été sorti dans un coin.
+        visible: root.ouvert && !root.popupExterne && !root.estQml
+                 && !(Theme.barStyle === "island" && root.appletId === "meteo"
+                      && Theme.ilotAppletCornerFor("meteo") === "")
 
         Rectangle {
             anchors.fill: parent
@@ -558,7 +573,9 @@ Item {
 
     HyprlandFocusGrab {
         // Rien à saisir ici : le popup externe a déjà son propre attrapeur (et la météo en mode îlot aussi).
-        active: root.ouvert && !root.popupExterne && root.pretGrab && !root.estQml && !(Theme.barStyle === "island" && root.appletId === "meteo")
+        active: root.ouvert && !root.popupExterne && root.pretGrab && !root.estQml
+                && !(Theme.barStyle === "island" && root.appletId === "meteo"
+                     && Theme.ilotAppletCornerFor("meteo") === "")
         // La barre fait partie du grab (voir `Theme.fenetresGrab`).
         windows: Theme.fenetresGrab(fenetre, root)
         onCleared: {

@@ -27,13 +27,49 @@ import Quickshell.Wayland
 // qui suit `currentTab`.
 Rectangle {
     id: root
-    width: 740
+    width: 860
     height: parent ? parent.height : 600
     // Fond transparent : le rendu verre + teinte est porté par SurfaceFloutee.
     color: "transparent"
     radius: Theme.globalRadius
-    border.color: Theme.accent
+    border.color: root.dragWidgetType !== "" ? Qt.alpha(Theme.accent, 0.25) : Theme.accent
     border.width: 1
+
+    property string dragWidgetType: ""
+    property real dragPointerX: 0
+    property real dragPointerY: 0
+    property string dragCapsuleId: ""
+    property string dragCapsuleLabel: ""
+
+    function widgetSourceFor(t) {
+        const s = String(t || "")
+        if (!s) return ""
+        const partages = ["deepseek", "ollama", "antigravity"]
+        return "widgets/" + (partages.indexOf(s) >= 0 ? "llm" : s) + ".qml"
+    }
+
+    function widgetOptionsFor(t) {
+        const s = String(t || "")
+        const partages = ["deepseek", "ollama", "antigravity"]
+        if (partages.indexOf(s) >= 0) return ({ provider: s })
+        return ({})
+    }
+
+    function dropWidgetAt(wtype, dropX, dropY) {
+        const sx = Math.max(8, Math.round(dropX))
+        const sy = Math.max(Theme.barHeight + 8, Math.round(dropY))
+        const liste = root.widgetsList || []
+        for (let i = 0; i < liste.length; ++i) {
+            if (String(liste[i].type) === String(wtype)) {
+                if (liste[i].enabled === false) {
+                    root.runConfigCmd(["widget_toggle", String(liste[i].id)])
+                }
+                root.runConfigCmd(["widget_move", String(liste[i].id), String(sx), String(sy)])
+                return
+            }
+        }
+        root.runConfigCmd(["widget_add", String(wtype), "1", String(sx), String(sy)])
+    }
 
     focus: true
     Keys.onEscapePressed: event => {
@@ -68,6 +104,51 @@ Rectangle {
     // Thème du greeter sélectionné dans l'onglet Connexion. Porté ici parce que
     // le composant de l'onglet est déchargé dès qu'on le quitte.
     property string greeterSelected: ""
+    property var iconesEtat: ({ ok: false, actif: "", themes: [] })
+    property string iconesMessage: ""
+
+    Process {
+        id: iconesProc
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const d = JSON.parse(text.trim())
+                    if (d && d.ok) {
+                        root.iconesEtat = d
+                        root.iconesMessage = d.message ? String(d.message) : ""
+                    } else if (d && d.error) {
+                        root.iconesMessage = String(d.error)
+                    }
+                } catch (e) {}
+            }
+        }
+    }
+
+    function rafraichirIcones() {
+        iconesProc.command = [Quickshell.shellPath("core/as-core"), "icones", "list"]
+        iconesProc.running = false
+        iconesProc.running = true
+    }
+
+    function appliquerThemeIcones(id) {
+        root.iconesMessage = "Application de « " + id + " »…"
+        iconesProc.command = [Quickshell.shellPath("core/as-core"), "icones", "apply", String(id)]
+        iconesProc.running = false
+        iconesProc.running = true
+    }
+
+    function installerPackIcones(chemin) {
+        root.iconesMessage = "Installation de l'archive…"
+        iconesProc.command = [Quickshell.shellPath("core/as-core"), "icones", "install", String(chemin)]
+        iconesProc.running = false
+        iconesProc.running = true
+    }
+
+    function supprimerPackIcones(id) {
+        iconesProc.command = [Quickshell.shellPath("core/as-core"), "icones", "remove", String(id)]
+        iconesProc.running = false
+        iconesProc.running = true
+    }
 
     // Recherche : requête courante, alimentée par le champ de la §3.
     property string searchQuery: ""
@@ -76,33 +157,35 @@ Rectangle {
 
     // Index d'ancres : une entrée par réglage notable. Le champ redirige vers
     // l'onglet et la section, puis fait défiler jusqu'à la ligne ciblée.
+    readonly property var tabLabels: ["Apparence", "Barre & Îlot", "Bureau", "Système", "Services"]
+
     readonly property var searchIndex: [
         { label: "Thème de l'écran de connexion", words: "connexion greeter sddm ecran login theme de connexion",
-          tab: 7, section: "greeter_theme", target: "secGreeter" },
-        { label: "Quotas IA", words: "quotas ia cle api token deepseek ollama antigravity secrets connexion fournisseur", tab: 8,
+          tab: 0, section: "greeter_theme", target: "secGreeter" },
+        { label: "Quotas IA", words: "quotas ia cle api token deepseek ollama antigravity secrets connexion fournisseur", tab: 4,
           section: "widgets_api", target: "secApiKeys" },
-        { label: "Notifications (ne pas déranger)", words: "notification dnd ne pas deranger toast silencieux cloche", tab: 6,
+        { label: "Notifications (ne pas déranger)", words: "notification dnd ne pas deranger toast silencieux cloche", tab: 4,
           section: "quickshell_notifications", target: "secNotifs" },
-        { label: "Localisation (ville, coordonnées, fuseau)", words: "localisation ville position coordonnees latitude longitude fuseau timezone meteo", tab: 8,
+        { label: "Localisation (ville, coordonnées, fuseau)", words: "localisation ville position coordonnees latitude longitude fuseau timezone meteo", tab: 4,
           section: "donnees_localisation", target: "secLocalisation" },
-        { label: "Calendrier Nextcloud", words: "nextcloud calendrier caldav identifiants agenda compte", tab: 8,
+        { label: "Calendrier Nextcloud", words: "nextcloud calendrier caldav identifiants agenda compte", tab: 4,
           section: "quickshell_calendrier", target: "secCalendrier" },
-        { label: "Homelab (Proxmox)", words: "proxmox homelab serveur noeud vm jeton api token", tab: 8,
+        { label: "Homelab (Proxmox)", words: "proxmox homelab serveur noeud vm jeton api token", tab: 4,
           section: "widgets_homelab", target: "secHomelab" },
         { label: "Îlot dynamique (mode, animation, projets)", words: "ilot dynamique pilule animation projets kanban bordure hauteur",
-          tab: 2, section: "ilot_config", target: "secIlotConfig" },
+          tab: 1, section: "ilot_config", target: "secIlotConfig" },
         { label: "Indicateurs de la pilule (VPN, capture, Live Activity...)", words: "ilot indicateurs pilule vpn capture live activity media planka workspaces horloge",
-          tab: 2, section: "ilot_indicateurs", target: "secIlotIndicateurs" },
-        { label: "Applets de l'îlot (systray, musique, nuit, usb...)", words: "ilot applets systray musique audio nuit batterie volume reseau wifi usb repos etendu",
-          tab: 2, section: "ilot_applets", target: "secIlotApplets" },
+          tab: 1, section: "ilot_indicateurs", target: "secIlotIndicateurs" },
+        { label: "Applets de l'îlot (systray, système, média, nuit, usb...)", words: "ilot applets systray systeme musique audio nuit batterie volume reseau wifi usb repos etendu",
+          tab: 1, section: "ilot_applets", target: "secIlotApplets" },
         { label: "Applets de la barre", words: "applets barre ilot ordre position echelle cloche volume reseau",
           tab: 1, section: "quickshell_applets", target: "secApplets" },
         { label: "Barre et surfaces du shell", words: "barre hauteur opacite flou arrondi ilot popups bordure",
           tab: 0, section: "quickshell_barre", target: "secBarre" },
         { label: "Widgets du bureau", words: "widgets bureau horloge date meteo workspace",
-          tab: 3, section: "widgets", target: "secWidgets" },
+          tab: 2, section: "widgets", target: "secWidgets" },
         { label: "Position du lanceur", words: "lanceur position capsule haut bas centre gauche droite",
-          tab: 3, section: "widgets", target: "secWidgets" },
+          tab: 2, section: "widgets", target: "secWidgets" },
         { label: "Thème et fond d'écran", words: "theme fond ecran wallpaper couleur",
           tab: 0, section: "esthetique_theme", target: "secTheme" },
         { label: "Jeux de couleurs Matugen", words: "matugen palette preset couleurs saturation",
@@ -111,10 +194,14 @@ Rectangle {
           tab: 0, section: "esthetique_theme", target: "secTheme" },
         { label: "Dossier des fonds d'écran", words: "dossier wallpaper repertoire images",
           tab: 0, section: "esthetique_fonds", target: "wallpaperDirRow" },
+        { label: "Glissement du fond d'écran", words: "glissement slide wallpaper parallaxe bureau",
+          tab: 0, section: "esthetique_fonds", target: "wallpaperSlideRow" },
         { label: "Masque de profondeur du fond", words: "masque profondeur relief parallaxe wallpaper widgets seuil adouci",
           tab: 0, section: "esthetique_fonds", target: "masqueProfondeurRow" },
+        { label: "Thèmes et packs d'icônes", words: "icones icone pack theme qt6ct gtk papirus archive zip tar",
+          tab: 0, section: "esthetique_icones", target: "secIcones" },
         { label: "Dossier des captures d'écran", words: "capture ecran screenshot dossier chemin enregistrement image",
-          tab: 4, section: "ecrans_captures", target: "screenshotsDirRow" },
+          tab: 3, section: "ecrans_captures", target: "screenshotsDirRow" },
         { label: "Gaps internes et externes", words: "gaps espacement interieur exterieur marge",
           tab: 0, section: "esthetique_aspect", target: "gapsRow" },
         { label: "Bordures des fenêtres", words: "bordure border epaisseur",
@@ -148,27 +235,27 @@ Rectangle {
         { label: "Flou des surfaces du shell", words: "flou shell layer rule seuil ignore alpha popups",
           tab: 0, section: "quickshell_barre", target: "shellBlurRow" },
         { label: "Écrans, résolution, taux de rafraîchissement", words: "ecran moniteur resolution taux hz echelle scale",
-          tab: 4, section: "", target: "monitorsRow" },
+          tab: 3, section: "", target: "monitorsRow" },
         { label: "Fuseau horaire et synchronisation NTP", words: "fuseau timezone heure ntp synchronisation horloge",
-          tab: 4, section: "", target: "timezoneRow" },
+          tab: 3, section: "", target: "timezoneRow" },
         { label: "Mise à jour du shell", words: "mise a jour version installateur curl update github aethershell terminal",
-          tab: 4, section: "systeme_maj", target: "shellMajRow" },
+          tab: 3, section: "systeme_maj", target: "shellMajRow" },
         { label: "Diagnostic, journaux & sauvegardes", words: "diagnostic logs journaux journalctl services systemd backup hq sauvegarde restaurer",
-          tab: 4, section: "systeme_diag", target: "secDiagnostic" },
+          tab: 3, section: "systeme_diag", target: "secDiagnostic" },
         { label: "Mise en veille automatique", words: "mise en veille veille inactivité suspend sleep ecran timer energie heure",
-          tab: 4, section: "systeme_horloge", target: "idleTimeoutRow" },
+          tab: 3, section: "systeme_horloge", target: "idleTimeoutRow" },
         { label: "Disposition du clavier", words: "clavier layout azerty qwerty langue",
-          tab: 5, section: "", target: "kbdRow" },
+          tab: 3, section: "", target: "kbdRow" },
         { label: "Raccourcis Hyprland", words: "raccourcis binds touches clavier hyprland",
-          tab: 5, section: "", target: "bindsCol" },
+          tab: 3, section: "", target: "bindsCol" },
         { label: "Programmes par défaut des raccourcis", words: "applications variables programmes defaut terminal navigateur editeur fichiers chemins",
-          tab: 5, section: "apps_programs", target: "secApps" },
+          tab: 4, section: "apps_programs", target: "secApps" },
         { label: "Historique des lancements", words: "historique lancements recents pilule spotlight memoire",
           tab: 2, section: "widgets_pilule", target: "launchHistoryRow" },
         { label: "Cible du clic sur une notification", words: "notification notifications clic titre cible lien fichier video image dossier commande", 
-          tab: 5, section: "quickshell_notifications", target: "secNotifs" },
+          tab: 4, section: "quickshell_notifications", target: "secNotifs" },
         { label: "Programmes lancés au démarrage", words: "applications autostart demarrage lancement daemon",
-          tab: 5, section: "apps_autostart", target: "secAutostart" }
+          tab: 4, section: "apps_autostart", target: "secAutostart" }
     ]
 
     // Redirige vers l'onglet et la section du réglage, puis défile jusqu'à lui.
@@ -227,18 +314,17 @@ Rectangle {
     // une section cachée. Neuf sections manquaient.
     readonly property var ongletDeSection: ({
         "esthetique_theme": 0, "esthetique_fonds": 0, "esthetique_aspect": 0,
-        "quickshell_barre": 0,
+        "esthetique_icones": 0, "quickshell_barre": 0, "greeter_theme": 0,
         "quickshell_applets": 1, "quickshell_barres": 1, "quickshell_disques": 1,
         "quickshell_visualiseur": 1,
-        "ilot_config": 2, "ilot_indicateurs": 2, "ilot_applets": 2,
-        "widgets": 3, "widgets_pilule": 3, "widgets_api": 8,
-        "systeme_nuit": 4, "ecrans_moniteurs": 4, "ecrans_profils": 4, "systeme_horloge": 4,
-        "ecrans_captures": 4, "systeme_maj": 4, "systeme_diag": 4,
-        "clavier_disposition": 5, "clavier_binds": 5,
-        "apps_programs": 6, "apps_autostart": 6, "quickshell_notifications": 6,
-        "greeter_theme": 7,
-        "quickshell_calendrier": 8, "taches_fichiers": 8, "widgets_homelab": 8,
-        "donnees_localisation": 8
+        "ilot_config": 1, "ilot_indicateurs": 1, "ilot_applets": 1,
+        "widgets": 2, "widgets_pilule": 2,
+        "systeme_nuit": 3, "ecrans_moniteurs": 3, "systeme_horloge": 3,
+        "ecrans_captures": 3, "systeme_maj": 3, "systeme_diag": 3,
+        "clavier_disposition": 3, "clavier_binds": 3,
+        "apps_programs": 4, "apps_autostart": 4, "quickshell_notifications": 4,
+        "quickshell_calendrier": 4, "taches_fichiers": 4, "widgets_homelab": 4,
+        "donnees_localisation": 4, "widgets_api": 4
     })
 
     // Écrit la localisation : quatre clés, une par champ, dans style_vars.json.
@@ -252,7 +338,7 @@ Rectangle {
     // Géocodage de la ville saisie, par le service météo (Open-Meteo, sans clé).
     function geocoder(ville) {
         if (String(ville || "").trim() === "") return
-        geocodage.command = ["python3", Quickshell.shellPath("core/weather_service.py"),
+        geocodage.command = [Quickshell.shellPath("core/as-core"), "weather",
                              "--geocode", String(ville)]
         geocodage.running = true
     }
@@ -288,14 +374,10 @@ Rectangle {
     function hauteurOnglet(n) {
         let h = 0
         if (n === 0) h = ongletApparence.item ? ongletApparence.item.implicitHeight : 0
-        else if (n === 1) h = ongletBarres.item ? ongletBarres.item.implicitHeight : 0
-        else if (n === 2) h = ongletIlot.item ? ongletIlot.item.implicitHeight : 0
-        else if (n === 3) h = ongletBureau.item ? ongletBureau.item.implicitHeight : 0
-        else if (n === 4) h = ongletEcrans.item ? ongletEcrans.item.implicitHeight : 0
-        else if (n === 5) h = ongletClavier.item ? ongletClavier.item.implicitHeight : 0
-        else if (n === 6) h = ongletApps.item ? ongletApps.item.implicitHeight : 0
-        else if (n === 7) h = ongletConnexion.item ? ongletConnexion.item.implicitHeight : 0
-        else if (n === 8) h = ongletDonnees.item ? ongletDonnees.item.implicitHeight : 0
+        else if (n === 1) h = ongletBarreIlot.item ? ongletBarreIlot.item.implicitHeight : 0
+        else if (n === 2) h = ongletBureau.item ? ongletBureau.item.implicitHeight : 0
+        else if (n === 3) h = ongletSysteme.item ? ongletSysteme.item.implicitHeight : 0
+        else if (n === 4) h = ongletServices.item ? ongletServices.item.implicitHeight : 0
         return h
     }
 
@@ -305,6 +387,8 @@ Rectangle {
         const y = target.mapToItem(mainFlickable.contentItem, 0, 0).y
         const maxY = Math.max(0, mainFlickable.contentHeight - mainFlickable.height)
         mainFlickable.contentY = Math.max(0, Math.min(y - 12, maxY))
+        root.highlightTarget = name
+        highlightTimer.restart()
     }
 
     property string scrollTargetName: ""
@@ -321,7 +405,7 @@ Rectangle {
     }
 
     property string highlightTarget: ""
-    Timer { id: highlightTimer; interval: 700; onTriggered: root.highlightTarget = "" }
+    Timer { id: highlightTimer; interval: 1100; onTriggered: root.highlightTarget = "" }
 
     // Sections dépliées par défaut : tout est visible sous le champ de recherche,
     // sauf ce que l'utilisateur a explicitement replié.
@@ -438,7 +522,6 @@ Rectangle {
         { type: "todo",    label: "Tâches" },
         { type: "presse_papiers", label: "Presse-papiers" },
         { type: "deepseek", label: "DeepSeek" },
-        { type: "ollama",   label: "Ollama Cloud" },
         { type: "antigravity", label: "Antigravity" },
         // Fusion des trois précédents : un seul widget, blocs empilés.
         { type: "comptes",  label: "Quotas IA" }
@@ -530,7 +613,7 @@ Rectangle {
 
     Process {
         id: appletsEtatProc
-        command: ["python3", Quickshell.shellPath("core/bar_applets.py"), "state"]
+        command: [Quickshell.shellPath("core/as-core"), "bar-applets", "state"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
@@ -553,7 +636,7 @@ Rectangle {
 
     Process {
         id: ncEtatProc
-        command: ["python3", Quickshell.shellPath("core/calendrier_config.py"), "etat"]
+        command: [Quickshell.shellPath("core/as-core"), "calendrier-config", "etat"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try { root.ncEtat = JSON.parse(text.trim()) } catch (e) { root.ncEtat = ({}) }
@@ -586,7 +669,7 @@ Rectangle {
             return
         }
         root.ncStatut = "Enregistrement…"
-        ncEcritProc.command = ["python3", Quickshell.shellPath("core/calendrier_config.py"),
+        ncEcritProc.command = [Quickshell.shellPath("core/as-core"), "calendrier-config",
                                "definir", champ, v]
         ncEcritProc.running = true
     }
@@ -663,7 +746,7 @@ Rectangle {
     // installés » ne montrerait que les palettes déjà présentes.
     Process {
         id: scanThemes
-        command: ["python3", Quickshell.shellPath("core/themes_scan.py"), "--sync"]
+        command: [Quickshell.shellPath("core/as-core"), "themes-scan", "--sync"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: {
@@ -682,7 +765,7 @@ Rectangle {
 
     Process {
         id: installThemeProc
-        command: ["python3", Quickshell.shellPath("core/installer_theme_couleur.py"), ""]
+        command: [Quickshell.shellPath("core/as-core"), "installer-theme-couleur", ""]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
@@ -709,7 +792,7 @@ Rectangle {
         if (!chemin || root.themeInstallBusy) return
         root.themeInstallBusy = true
         root.themeInstallStatus = "Installation du thème..."
-        installThemeProc.command = ["python3", Quickshell.shellPath("core/installer_theme_couleur.py"), String(chemin), "--activate"]
+        installThemeProc.command = [Quickshell.shellPath("core/as-core"), "installer-theme-couleur", String(chemin), "--activate"]
         installThemeProc.running = true
     }
 
@@ -786,7 +869,7 @@ Rectangle {
     }
 
     function appletCommande(args) {
-        appletsCmdProc.command = ["python3", Quickshell.shellPath("core/bar_applets.py")].concat(args)
+        appletsCmdProc.command = [Quickshell.shellPath("core/as-core"), "bar-applets"].concat(args)
         appletsCmdProc.running = true
     }
 
@@ -795,7 +878,7 @@ Rectangle {
 
     Process {
         id: disquesListeProc
-        command: ["python3", Quickshell.shellPath("core/disques_applet.py"), "liste"]
+        command: [Quickshell.shellPath("core/as-core"), "disques", "liste"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
@@ -885,7 +968,7 @@ Rectangle {
     // « ReferenceError: secTheme is not defined ». On les demande donc à l'onglet
     // chargé, qui expose `sections` (nom de tiroir → objet) et `cibles` (nom
     // d'ancre → objet). La liste grandit au fil des extractions.
-    readonly property var ongletsDeportes: [ ongletApparence, ongletBarres, ongletIlot, ongletBureau, ongletEcrans, ongletClavier, ongletApps, ongletConnexion, ongletDonnees ]
+    readonly property var ongletsDeportes: [ ongletApparence, ongletBarreIlot, ongletBureau, ongletSysteme, ongletServices ]
 
     function tiroirDe(nom) {
         if (root.tiroirs[nom]) return root.tiroirs[nom]
@@ -1020,7 +1103,7 @@ Rectangle {
     property var cmdQueue: []
 
     function startConfigCmd(args) {
-        cmdProc.command = ["python3", Quickshell.shellPath("core/config_manager.py")].concat(args)
+        cmdProc.command = [Quickshell.shellPath("core/as-core"), "config"].concat(args)
         cmdProc.running = true
     }
 
@@ -1064,12 +1147,14 @@ Rectangle {
             if (running) {
                 root.depsEtat = "vérification…"
                 root.depsDetail = ""
+                Theme.configPanelYieldFocus = true
             }
         }
         stderr: SplitParser {
             onRead: donnee => root.depsDetail = String(donnee)
         }
         onExited: code => {
+            Theme.configPanelYieldFocus = false
             root.depsEtat = code === 0 ? "à jour" : "incomplet (code " + code + ")"
         }
     }
@@ -1077,7 +1162,7 @@ Rectangle {
     function installerDependances() {
         if (depsProc.running)
             return
-        depsProc.command = ["python3", Quickshell.shellPath("core/deps_install.py")]
+        depsProc.command = [Quickshell.shellPath("core/as-core"), "deps-install"]
         depsProc.running = true
     }
 
@@ -1239,7 +1324,7 @@ Rectangle {
 
     Process {
         id: stateProc
-        command: ["python3", Quickshell.shellPath("core/config_manager.py"), "state"]
+        command: [Quickshell.shellPath("core/as-core"), "config", "state"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
@@ -1278,7 +1363,7 @@ Rectangle {
         id: cleApiFile
         path: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/qs-api-key.json"
         atomicWrites: true
-        printErrors: true
+        printErrors: false
         onSaved: root.envoyerCleApi()
         onSaveFailed: err => {
             if (root.pendingProvider) root.etatCle(root.pendingProvider.id, "écriture impossible (" + err + ")")
@@ -1291,13 +1376,13 @@ Rectangle {
         id: homelabSecretFile
         path: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/qs-homelab-secret.json"
         atomicWrites: true
-        printErrors: true
+        printErrors: false
         onSaved: homelabSecretProc.running = true
     }
 
     Process {
         id: homelabSecretProc
-        command: ["python3", Quickshell.shellPath("core/config_manager.py"),
+        command: [Quickshell.shellPath("core/as-core"), "config",
                   "api_key_set_file", homelabSecretFile.path]
         stdout: StdioCollector {
             onStreamFinished: root.refreshConfigState()
@@ -1331,13 +1416,13 @@ Rectangle {
 
     function reglerDnd(actif) {
         root.dndActif = actif
-        dndProc.command = ["python3", Quickshell.shellPath("core/config_manager.py"),
+        dndProc.command = [Quickshell.shellPath("core/as-core"), "config",
                            "style", "do_not_disturb", actif ? "true" : "false"]
         dndProc.running = true
     }
 
     function reglerNuit(args) {
-        nuitProc.command = ["python3", Quickshell.shellPath("core/nuit_service.py")].concat(args)
+        nuitProc.command = [Quickshell.shellPath("core/as-core"), "nuit"].concat(args)
         nuitProc.running = true
     }
 
@@ -1352,7 +1437,7 @@ Rectangle {
     // fichier qui fait foi, et deux panneaux ouverts ne peuvent pas diverger.
     Process {
         id: todoListProc
-        command: ["python3", Quickshell.shellPath("core/config_manager.py"), "todo_list"]
+        command: [Quickshell.shellPath("core/as-core"), "config", "todo_list"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
@@ -1366,7 +1451,7 @@ Rectangle {
     }
 
     function homelabSet(cle, valeur) {
-        homelabProc.command = ["python3", Quickshell.shellPath("core/config_manager.py"),
+        homelabProc.command = [Quickshell.shellPath("core/as-core"), "config",
                                "homelab_set", cle, valeur]
         homelabProc.running = true
     }
@@ -1382,7 +1467,7 @@ Rectangle {
 
     Process {
         id: plankaTestProc
-        command: ["python3", Quickshell.shellPath("core/config_manager.py"), "planka_test"]
+        command: [Quickshell.shellPath("core/as-core"), "config", "planka_test"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
@@ -1431,7 +1516,7 @@ Rectangle {
     }
 
     function envoyerCleApi() {
-        cleApiProc.command = ["python3", Quickshell.shellPath("core/config_manager.py"),
+        cleApiProc.command = [Quickshell.shellPath("core/as-core"), "config",
                               "api_key_set_file", cleApiFile.path]
         cleApiProc.running = true
     }
@@ -1451,7 +1536,7 @@ Rectangle {
                     // Une clé mal copiée (préfixe perdu, jeton d'un autre champ) ne
                     // se voit qu'à l'usage : on interroge l'API dans la foulée, via
                     // le script que le fournisseur déclare.
-                    testCleProc.command = ["python3", Quickshell.shellPath(provider.service), "--force"]
+                    testCleProc.command = [Quickshell.shellPath("core/as-core"), provider.service, "--force"]
                     testCleProc.running = true
                 } else {
                     root.etatCle(provider.id, "refusé : " + (r.erreur || "valeur invalide"))
@@ -1490,6 +1575,12 @@ Rectangle {
         function onConfigPanelVisibleChanged() {
             if (Theme.configPanelVisible) {
                 root.refreshConfigState()
+                root.majOnglets()
+            } else {
+                root.dragWidgetType = ""
+                root.dragCapsuleId = ""
+                root.dragCapsuleLabel = ""
+                root.libererOnglets()
             }
         }
     }
@@ -1503,15 +1594,11 @@ Rectangle {
     // défilement est perdue, la mémoire revient.
     function defsOnglets() {
         return [
-            [0, ongletApparence, "OngletApparence.qml", {}],
-            [1, ongletBarres, "OngletBarres.qml", { disquesListeProc: disquesListeProc }],
-            [2, ongletIlot, "OngletIlot.qml", {}],
-            [3, ongletBureau, "OngletBureau.qml", {}],
-            [4, ongletEcrans, "OngletEcrans.qml", {}],
-            [5, ongletClavier, "OngletClavier.qml", {}],
-            [6, ongletApps, "OngletApps.qml", {}],
-            [7, ongletConnexion, "OngletConnexion.qml", {}],
-            [8, ongletDonnees, "OngletDonnees.qml", { ncEtatProc: ncEtatProc }]
+            [0, ongletApparence, "OngletSubHub.qml", { tabIndex: 0, sourceA: "OngletApparence.qml", sourceB: "OngletConnexion.qml" }],
+            [1, ongletBarreIlot, "OngletBarreIlot.qml", { disquesListeProc: disquesListeProc }],
+            [2, ongletBureau, "OngletBureau.qml", {}],
+            [3, ongletSysteme, "OngletSubHub.qml", { tabIndex: 3, sourceA: "OngletEcrans.qml", sourceB: "OngletClavier.qml" }],
+            [4, ongletServices, "OngletSubHub.qml", { tabIndex: 4, sourceA: "OngletDonnees.qml", sourceB: "OngletApps.qml", propsA: { ncEtatProc: ncEtatProc } }]
         ]
     }
 
@@ -1551,21 +1638,6 @@ Rectangle {
 
     onCurrentTabChanged: root.majOnglets()
 
-    Connections {
-        target: Theme
-        function onConfigPanelVisibleChanged() {
-            // La réouverture doit recharger : `libererOnglets()` a tout déchargé à
-            // la fermeture, et rouvrir sur le même onglet ne change pas
-            // `currentTab` — donc `onCurrentTabChanged` ne se déclenche pas et le
-            // panneau restait vide, réduit à son rail.
-            if (Theme.configPanelVisible) {
-                root.majOnglets()
-            } else {
-                root.libererOnglets()
-            }
-        }
-    }
-
     Component.onCompleted: {
         refreshConfigState()
         appletsRafraichir()
@@ -1593,6 +1665,8 @@ Rectangle {
     // ────────────────────────────────────────────────────────────────────────
     Item {
         id: panelHeader
+        opacity: root.dragWidgetType !== "" ? 0.12 : 1.0
+        Behavior on opacity { NumberAnimation { duration: 120 } }
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
@@ -1643,6 +1717,8 @@ Rectangle {
     // ────────────────────────────────────────────────────────────────────────
     Rectangle {
         id: searchBar
+        opacity: root.dragWidgetType !== "" ? 0.12 : 1.0
+        Behavior on opacity { NumberAnimation { duration: 120 } }
         anchors.top: panelHeader.bottom
         anchors.topMargin: Theme.space3
         anchors.left: parent.left
@@ -1763,12 +1839,23 @@ Rectangle {
                     Text {
                         anchors.left: parent.left
                         anchors.leftMargin: Theme.space2
+                        anchors.right: tagOnglet.left
+                        anchors.rightMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - Theme.space4
                         text: modelData.label
                         color: parent.active ? Theme.bg : Theme.fg
                         font.pixelSize: Theme.textXs
                         elide: Text.ElideRight
+                    }
+
+                    Text {
+                        id: tagOnglet
+                        anchors.right: parent.right
+                        anchors.rightMargin: Theme.space2
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: root.tabLabels[modelData.tab] || ""
+                        color: parent.active ? Qt.alpha(Theme.bg, 0.78) : Qt.alpha(Theme.fg, 0.45)
+                        font.pixelSize: Theme.text2xs
                     }
 
                     MouseArea {
@@ -1783,33 +1870,29 @@ Rectangle {
         }
     }
 
-    // Rail vertical d'onglets : icône + libellé, pour ne plus deviner huit
-    // pictogrammes abstraits (voir tmp/MOCKUP_00, §1.1).
-    Column {
+    // Barre horizontale d'onglets en haut : profite de la largeur du panneau
+    // pour afficher les 5 pôles côte à côte (icône + libellé).
+    Row {
         id: navRail
+        opacity: root.dragWidgetType !== "" ? 0.12 : 1.0
+        Behavior on opacity { NumberAnimation { duration: 120 } }
         anchors.top: searchBar.bottom
         anchors.topMargin: Theme.space3
         anchors.left: parent.left
-        anchors.leftMargin: Theme.space3
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: Theme.space4
-        width: 168
+        anchors.leftMargin: Theme.space4
+        anchors.right: parent.right
+        anchors.rightMargin: Theme.space4
+        height: 36
         spacing: Theme.space2
         z: 5
 
         Repeater {
-            // Ordre et noms de tmp/MOCKUP_00 §2.1. Les contenus suivront dans
-            // les étapes suivantes : ici seule la charpente change.
             model: [
-                { icon: "palette", label: "Apparence" },
-                { icon: "cog", label: "Barre" },
-                { icon: "widgets", label: "Îlot dynamique" },
-                { icon: "widgets", label: "Bureau & Lanceur" },
-                { icon: "monitor", label: root.isLaptop ? "Écrans & Système" : "Écrans & Système" },
-                { icon: "keyboard", label: "Clavier & Binds" },
-                { icon: "rocket", label: "Apps & Alertes" },
-                { icon: "lock", label: "Connexion" },
-                { icon: "cloud-check", label: "Données & Comptes" }
+                { icon: "palette",     label: "Apparence" },
+                { icon: "widgets",     label: "Barre & Îlot" },
+                { icon: "monitor",     label: "Bureau" },
+                { icon: "cog",         label: "Système" },
+                { icon: "cloud-check", label: "Services" }
             ]
 
             Rectangle {
@@ -1818,7 +1901,7 @@ Rectangle {
                 required property var modelData
                 readonly property bool active: root.currentTab === index
 
-                width: 168
+                width: Math.floor((navRail.width - navRail.spacing * 4) / 5)
                 height: 36
                 radius: Theme.globalRadius
                 color: active
@@ -1828,10 +1911,8 @@ Rectangle {
                 border.width: 1
 
                 Row {
-                    anchors.left: parent.left
-                    anchors.leftMargin: 10
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 10
+                    anchors.centerIn: parent
+                    spacing: 8
 
                     Icon {
                         anchors.verticalCenter: parent.verticalCenter
@@ -1842,12 +1923,12 @@ Rectangle {
                     }
 
                     Text {
-                        width: 120
                         anchors.verticalCenter: parent.verticalCenter
                         text: railBtn.modelData.label
                         color: railBtn.active ? Theme.bg : Theme.fg
                         opacity: railBtn.active ? 1 : 0.86
                         font.pixelSize: Theme.textSm
+                        font.bold: railBtn.active
                         elide: Text.ElideRight
                     }
                 }
@@ -1868,11 +1949,14 @@ Rectangle {
     // ────────────────────────────────────────────────────────────────────────
     Item {
         id: tabContentArea
-        anchors.top: navRail.top
-        anchors.left: navRail.right
+        opacity: root.dragWidgetType !== "" ? 0.12 : 1.0
+        Behavior on opacity { NumberAnimation { duration: 120 } }
+        anchors.top: navRail.bottom
+        anchors.topMargin: Theme.space3
+        anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.leftMargin: Theme.space3
+        anchors.leftMargin: Theme.space4
         anchors.rightMargin: Theme.space4
         anchors.bottomMargin: Theme.space4
         clip: true
@@ -1946,88 +2030,50 @@ Rectangle {
             // Le tiroir « Barre & surfaces » est dans cet onglet ; les barres annexes,
             // les applets et le visualiseur sont dans « Barres & Applets ».
             // ═══════════════════════════════════════════════════════════════════════════
+        // Pôle 0 : Apparence & Thème (Apparence + Connexion/Greeter)
         Loader {
             id: ongletApparence
             width: mainFlickable.width
         }
-        // ═════════════════════════════════════════════════════════════════════
-        // TAB 1: GESTION QUICKSHELL — barres annexes, applets et visualiseur.
-        // La barre elle-même (îlots, panneau, popups) est dans l'onglet « Bureau ».
-        // ═════════════════════════════════════════════════════════════════════
-        // ── Onglet « Barres & Applets » ──────────────────────────────────────────────
-        // Corps dans OngletBarres.qml, instancie a l'ouverture de l'onglet.
+
+        // Pôle 1 : Barre & Îlot (unifié avec affichage contextuel)
         Loader {
-            id: ongletBarres
+            id: ongletBarreIlot
             width: mainFlickable.width
         }
 
-        // ── Onglet « Îlot dynamique » ──────────────────────────────────────────────
-        Loader {
-            id: ongletIlot
-            width: mainFlickable.width
-        }
-
-
-        // ═══════════════════════════════════════════════════════════════════════════
-        // TAB 1: WIDGETS DU BUREAU (sur les workspaces, réglages par widget)
-        // ═══════════════════════════════════════════════════════════════════════════
-        // ── Onglet « Bureau & Lanceur » ──────────────────────────────────────────────
-        // Corps dans OngletBureau.qml, instancie a l'ouverture de l'onglet.
+        // Pôle 2 : Bureau & Widgets
         Loader {
             id: ongletBureau
             width: mainFlickable.width
         }
 
-        // ═══════════════════════════════════════════════════════════════════════════
-        // TAB HOMELAB : ce qui parle à l'extérieur — Nextcloud d'un côté, Proxmox de
-        // l'autre. Sortis de l'onglet Quickshell, où ils n'avaient rien à faire : la
-        // barre et les applets se règlent là-bas, pas les accès aux serveurs.
-        // ═══════════════════════════════════════════════════════════════════════════
-        // ── Onglet « Données & Comptes » ──────────────────────────────────────────────
-        // Corps dans OngletDonnees.qml, instancie a l'ouverture de l'onglet.
+        // Pôle 3 : Système (Écrans, Clavier & Binds, Nuit, MAJ, Diagnostic)
         Loader {
-            id: ongletDonnees
+            id: ongletSysteme
             width: mainFlickable.width
         }
 
-        // ═══════════════════════════════════════════════════════════════════════════
-        // TAB 2: SYSTÈME & ÉCRANS (adaptatif : machine fixe ou portable)
-        // ═══════════════════════════════════════════════════════════════════════════
-        // ── Onglet « Écrans & Système » ──────────────────────────────────────────────
-        // Corps dans OngletEcrans.qml, instancie a l'ouverture de l'onglet.
+        // Pôle 4 : Services & Comptes (Données, API, Homelab, Apps, Autostart)
         Loader {
-            id: ongletEcrans
+            id: ongletServices
             width: mainFlickable.width
         }
 
-        // ═══════════════════════════════════════════════════════════════════════════
-        // TAB 3: CONTRÔLES, CLAVIER & RACCOURCIS (binds.lua)
-        // ═══════════════════════════════════════════════════════════════════════════
-        // ── Onglet « Clavier & Binds » ──────────────────────────────────────────────
-        // Corps dans OngletClavier.qml, instancie a l'ouverture de l'onglet.
-        Loader {
-            id: ongletClavier
+        // Surbrillance temporaire sur la ligne ciblée par la recherche
+        Rectangle {
+            readonly property var cibleObj: root.highlightTarget !== "" ? root.cibleDe(root.highlightTarget) : null
+            visible: cibleObj !== null
+            x: 0
+            y: cibleObj ? cibleObj.mapToItem(mainFlickable.contentItem, 0, 0).y - 3 : 0
             width: mainFlickable.width
+            height: cibleObj ? (cibleObj.height + 6) : 0
+            radius: Theme.globalRadius
+            color: Qt.alpha(Theme.accent, 0.12)
+            border.color: Theme.accent
+            border.width: 1
+            z: 50
         }
-
-        // ═══════════════════════════════════════════════════════════════════════════
-        // TAB 4: VARIABLES DYNAMIQUES & APPLICATIONS (app_vars.json <-> programs.lua)
-        // ═══════════════════════════════════════════════════════════════════════════
-        // ── Onglet « Apps & Alertes » ──────────────────────────────────────────────
-        // Corps dans OngletApps.qml, instancie a l'ouverture de l'onglet.
-        Loader {
-            id: ongletApps
-            width: mainFlickable.width
-        }
-
-            // Onglet Connexion : le greeter est un composant séparé (grille de
-            // miniatures + backend), posé dans un tiroir comme le reste.
-            // ── Onglet « Connexion » ──────────────────────────────────────────────
-            // Corps dans OngletConnexion.qml, instancie a l'ouverture de l'onglet.
-            Loader {
-                id: ongletConnexion
-                width: mainFlickable.width
-            }
     }   // end Flickable mainFlickable
     }   // end Item tabContentArea
 
@@ -2141,7 +2187,65 @@ Rectangle {
         } else if (c === "lock_bg_image") {
             root.runConfigCmd(["style", "lock_bg_image", String(chemin)])
             root.runConfigCmd(["style", "lock_bg_mode", "image"])
+        } else if (c === "icon_pack") {
+            root.installerPackIcones(chemin)
         }
         root.selecteurFichierCible = ""
+    }
+
+    // Aperçu flottant pendant le glisser-déposer d'un widget vers le bureau.
+    Rectangle {
+        id: dragGhost
+        z: 9999
+        visible: root.dragWidgetType !== ""
+        x: root.dragPointerX - width / 2
+        y: root.dragPointerY - height / 2
+        width: Math.max(80, Math.round((dragGhostLoader.item ? dragGhostLoader.item.implicitWidth : 160) + Theme.padH * 2))
+        height: Math.max(48, Math.round((dragGhostLoader.item ? dragGhostLoader.item.implicitHeight : 80) + Theme.padH * 2))
+        radius: Theme.globalRadius
+        color: Qt.alpha(Theme.surfaceBg, 0.85)
+        border.color: Theme.accent
+        border.width: 2
+
+        Loader {
+            id: dragGhostLoader
+            anchors.centerIn: parent
+            enabled: false
+            source: root.dragWidgetType !== "" ? root.widgetSourceFor(root.dragWidgetType) : ""
+            onLoaded: {
+                if (!item) return
+                item.options = root.widgetOptionsFor(root.dragWidgetType)
+                item.widgetId = ""
+            }
+        }
+    }
+
+    function dragGhostScreenPos() {
+        const p = dragGhost.mapToItem(null, 0, 0)
+        return ({ x: p.x, y: p.y })
+    }
+
+    // Pilule flottante pendant le glisser-déposer d'un applet entre capsules.
+    Rectangle {
+        id: dragCapsuleGhost
+        z: 9999
+        visible: root.dragCapsuleId !== ""
+        x: root.dragPointerX - width / 2
+        y: root.dragPointerY - height / 2
+        width: Math.max(130, dragCapTxt.implicitWidth + 28)
+        height: 32
+        radius: Theme.globalRadius
+        color: Theme.accent
+        border.color: Theme.bg
+        border.width: 1
+
+        Text {
+            id: dragCapTxt
+            anchors.centerIn: parent
+            text: root.dragCapsuleLabel
+            color: Theme.bg
+            font.pixelSize: Theme.textXs
+            font.bold: true
+        }
     }
 }
