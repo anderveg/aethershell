@@ -593,7 +593,7 @@ Item {
         } else if (act === "eteindre") {
             Quickshell.execDetached(["systemctl", "poweroff"])
         } else if (act === "timer" && entry.asArg) {
-            ShellState.startTimer(entry.asArg, "")
+            LiveActivityStore.startTimer(entry.asArg, "")
         } else if (act === "matrix") {
             const opts = entry.asArg || ({})
             const args = [Quickshell.shellPath("core/as-core"), "matrix"]
@@ -663,18 +663,18 @@ Item {
                 color: "#ef4444"
             })
         }
-        if (ShellState.timerRunning) {
-            const pct = ShellState.timerTotalSec > 0
-                ? Math.max(0, Math.min(100, Math.round(100 * (ShellState.timerTotalSec - ShellState.timerRemainingSec) / ShellState.timerTotalSec)))
+        if (LiveActivityStore.timerRunning) {
+            const pct = LiveActivityStore.timerTotalSec > 0
+                ? Math.max(0, Math.min(100, Math.round(100 * (LiveActivityStore.timerTotalSec - LiveActivityStore.timerRemainingSec) / LiveActivityStore.timerTotalSec)))
                 : 0
             list.push({
                 id: "timer",
                 kind: "timer",
-                title: (ShellState.timerPaused ? "⏸ " : "") + root.formatLiveDuration(ShellState.timerRemainingSec),
-                subtitle: ShellState.timerLabel,
-                etaText: "Reste ~ " + root.formatLiveDuration(ShellState.timerRemainingSec),
+                title: (LiveActivityStore.timerPaused ? "⏸ " : "") + root.formatLiveDuration(LiveActivityStore.timerRemainingSec),
+                subtitle: LiveActivityStore.timerLabel,
+                etaText: "Reste ~ " + root.formatLiveDuration(LiveActivityStore.timerRemainingSec),
                 progress: pct,
-                paused: ShellState.timerPaused,
+                paused: LiveActivityStore.timerPaused,
                 color: Theme.accent
             })
         }
@@ -725,7 +725,7 @@ Item {
                 color: Theme.info
             })
         }
-        const ipcs = Array.isArray(ShellState.ipcActivities) ? ShellState.ipcActivities : []
+        const ipcs = Array.isArray(LiveActivityStore.ipcActivities) ? LiveActivityStore.ipcActivities : []
         for (let j = 0; j < ipcs.length; j++) {
             const x = ipcs[j]
             if (!x || !x.id) continue
@@ -1261,7 +1261,7 @@ Item {
             // Applets configurés en mode « Repos » ou « Les deux »
             AppletRow {
                 id: compactApplets
-                directModel: ShellState.appletsPourIlot("compact", "all")
+                directModel: IslandAppletLayout.appletsForPill("compact", "all")
                 visible: compactApplets.applets.length > 0
                 anchors.verticalCenter: parent.verticalCenter
             }
@@ -1390,7 +1390,7 @@ Item {
 
             AppletRow {
                 id: leftApplets
-                directModel: ShellState.appletsPourIlot("expanded", "left")
+                directModel: IslandAppletLayout.appletsForPill("expanded", "left")
                 visible: applets.length > 0
                 anchors.verticalCenter: parent.verticalCenter
             }
@@ -1476,7 +1476,7 @@ Item {
             // Côté Droit : Applets droite
             AppletRow {
                 id: rightApplets
-                directModel: ShellState.appletsPourIlot("expanded", "right")
+                directModel: IslandAppletLayout.appletsForPill("expanded", "right")
                 visible: applets.length > 0
                 anchors.verticalCenter: parent.verticalCenter
             }

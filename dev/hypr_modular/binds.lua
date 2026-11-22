@@ -8,7 +8,7 @@ hl.bind(mainMod .. " + Q", hl.dsp.window.close(), { description = "fermer la fen
 hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("quickshell ipc -n call shell minimiser"), { description = "mettre la fenêtre de côté" })
 hl.bind(mainMod .. " + SHIFT + D", hl.dsp.exec_cmd("quickshell ipc -n call shell rappelerDerniere"), { description = "rappeler la dernière fenêtre de côté" })
 hl.bind(mainMod .. " + V", hl.dsp.window.float({ action = "toggle" }), { description = "fenêtre flottante" })
-hl.bind(mainMod .. " + SHIFT + V", hl.dsp.exec_cmd("python3 $HOME/.config/quickshell/core/workspace_float_toggle.py"), { description = "basculer tout le bureau flottant / tiling" })
+hl.bind(mainMod .. " + SHIFT + V", hl.dsp.exec_cmd("$HOME/.config/quickshell/core/as-core workspace-float-toggle"), { description = "basculer tout le bureau flottant / tiling" })
 hl.bind(mainMod .. " + F", hl.dsp.window.float({ action = "toggle" }), { description = "fenêtre flottante" })  -- essentiel
 hl.bind(mainMod .. " + SHIFT + F", hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle" }), { description = "plein écran" })
 hl.bind(mainMod .. " + CTRL + F", hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" }), { description = "maximiser" })
@@ -126,6 +126,7 @@ hl.bind(mainMod .. " + SHIFT + comma", hl.dsp.exec_cmd("hyprctl dispatch movetow
 -- SUPER + clic ne peut pas servir (déjà pris par le glisser de fenêtre) et
 -- `mouse.modifiers` vaut 0 côté surface : c'est donc Hyprland qui porte le geste.
 hl.bind(mainMod .. " + SHIFT + mouse:272", hl.dsp.exec_cmd("quickshell ipc -n call shell placeWidget"), { mouse = true, description = "déplacer un widget" })
+hl.bind(mainMod .. " + CTRL + mouse:272", hl.dsp.exec_cmd("quickshell ipc -n call shell resizeWidget"), { mouse = true, description = "redimensionner un widget" })
 -- Sortie de l'aperçu plein écran du greeter (fenêtre de test SDDM). Le mode
 -- test n'a aucun socket d'authentification et n'obéit pas à Qt.quit() : la
 -- fenêtre est plein écran et avale le clavier, donc Échap est traité par le

@@ -147,8 +147,9 @@ Item {
         }
     }
 
-    Component.onCompleted: {
-        ShellState.islandNavHook = root.handleNav
+    Connections {
+        target: ShellState
+        function onIslandNavRequested(action) { root.handleNav(action) }
     }
 
     RowLayout {

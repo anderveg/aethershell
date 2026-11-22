@@ -912,7 +912,7 @@ CollapsibleSection {
                     font.pixelSize: Theme.textXs
                     selectByMouse: true
                     clip: true
-                    onTextEdited: root.todoErreur = ""
+                    onTextEdited: ConfigStore.todoErreur = ""
                     onAccepted: nouveauTodoChemin.forceActiveFocus()
                     Text {
                         anchors.fill: parent
@@ -943,7 +943,7 @@ CollapsibleSection {
                     font.pixelSize: Theme.textXs
                     selectByMouse: true
                     clip: true
-                    onTextEdited: root.todoErreur = ""
+                    onTextEdited: ConfigStore.todoErreur = ""
                     onAccepted: root.ajouterTodo()
                     Text {
                         anchors.fill: parent

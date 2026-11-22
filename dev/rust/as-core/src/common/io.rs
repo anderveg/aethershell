@@ -17,7 +17,7 @@ pub fn read_json_value(path: &Path) -> Value {
     read_json::<Value>(path).unwrap_or_else(|| Value::Object(Map::new()))
 }
 
-pub fn write_json_atomic<T: Serialize + ?Sized>(path: &Path, data: &T, mode: u32) -> io::Result<()> {
+fn write_bytes_atomic(path: &Path, bytes: &[u8], trailing_newline: bool, mode: u32) -> io::Result<()> {
     let _lock = FileLock::acquire(path)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
@@ -26,9 +26,6 @@ pub fn write_json_atomic<T: Serialize + ?Sized>(path: &Path, data: &T, mode: u32
     tmp_os.push(format!(".tmp.{}", std::process::id()));
     let tmp_path = PathBuf::from(tmp_os);
 
-    let json = serde_json::to_string_pretty(data)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
     {
         let mut f = OpenOptions::new()
             .create(true)
@@ -36,12 +33,24 @@ pub fn write_json_atomic<T: Serialize + ?Sized>(path: &Path, data: &T, mode: u32
             .truncate(true)
             .mode(mode)
             .open(&tmp_path)?;
-        f.write_all(json.as_bytes())?;
-        f.write_all(b"\n")?;
+        f.write_all(bytes)?;
+        if trailing_newline && !bytes.ends_with(b"\n") {
+            f.write_all(b"\n")?;
+        }
         f.sync_all()?;
     }
     fs::rename(&tmp_path, path)?;
     Ok(())
+}
+
+pub fn write_text_atomic(path: &Path, content: &str, mode: u32) -> io::Result<()> {
+    write_bytes_atomic(path, content.as_bytes(), false, mode)
+}
+
+pub fn write_json_atomic<T: Serialize + ?Sized>(path: &Path, data: &T, mode: u32) -> io::Result<()> {
+    let json = serde_json::to_string_pretty(data)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    write_bytes_atomic(path, json.as_bytes(), true, mode)
 }
 
 pub fn write_private_json<T: Serialize + ?Sized>(path: &Path, data: &T) -> io::Result<()> {
@@ -86,5 +95,58 @@ pub fn parse_options_arg(args: &[String]) -> Map<String, Value> {
 pub fn tie_to_parent_death() {
     unsafe {
         libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
+    }
+}
+
+#[allow(dead_code)]
+pub fn now_f64() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0)
+}
+
+#[allow(dead_code)]
+pub fn now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+#[allow(dead_code)]
+pub fn local_tm(secs: i64) -> libc::tm {
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    let t = secs as libc::time_t;
+    unsafe { libc::localtime_r(&t, &mut tm) };
+    tm
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_options_arg_formats() {
+        let a = vec!["--options={\"k\":1}".to_string()];
+        assert_eq!(parse_options_arg(&a).get("k").and_then(|v| v.as_i64()), Some(1));
+
+        let b = vec!["--options".to_string(), "{\"ok\":true}".to_string()];
+        assert_eq!(parse_options_arg(&b).get("ok").and_then(|v| v.as_bool()), Some(true));
+
+        let c = vec!["--options=invalid".to_string()];
+        assert!(parse_options_arg(&c).is_empty());
+    }
+
+    #[test]
+    fn writes_and_reads_json_atomically_in_tempdir() {
+        let dir = std::env::temp_dir().join(format!("as_core_io_test_{}", std::process::id()));
+        let p = dir.join("sample.json");
+        let payload = serde_json::json!({"hello": "world", "n": 42});
+        write_json_atomic(&p, &payload, 0o644).expect("atomic write");
+        let loaded = read_json_value(&p);
+        assert_eq!(loaded["hello"], "world");
+        assert_eq!(loaded["n"], 42);
+        let _ = fs::remove_dir_all(&dir);
     }
 }

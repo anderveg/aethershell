@@ -14,6 +14,8 @@ Item {
     id: root
     property var options: ({})
     property string widgetId: ""
+    property real widgetW: 0
+    property real widgetH: 0
     property bool ouvert: false
     onOuvertChanged: if (ouvert) rafraichir()
 
@@ -44,7 +46,7 @@ Item {
         if (root.confirmation === cle) {
             root.confirmation = ""
             root.messageAction = "redémarrage de " + String(g.nom || g.id) + "…"
-            actionProc.command = ["python3", Quickshell.shellPath("core/homelab_applet.py"),
+            actionProc.command = [Quickshell.shellPath("core/as-core"), "homelab",
                                   "--action", "reboot", "--type", String(g.type),
                                   "--node", String(g.noeud), "--vmid", String(g.id)]
             actionProc.running = true
@@ -100,7 +102,7 @@ Item {
 
     Process {
         id: proc
-        command: ["python3", Quickshell.shellPath("core/homelab_applet.py"), "--force"]
+        command: [Quickshell.shellPath("core/as-core"), "homelab", "--force"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
@@ -119,8 +121,11 @@ Item {
         }
     }
 
-    implicitWidth: Math.round(246 * echelle)
-    implicitHeight: colonne.implicitHeight
+    readonly property bool showUnits: widgetH === 0 || widgetH >= Math.round(115 * echelle)
+    readonly property bool showHosts: widgetH === 0 || widgetH >= Math.round(165 * echelle)
+
+    implicitWidth: widgetW > 0 ? Math.max(Math.round(200 * echelle), Math.round(widgetW)) : Math.round(246 * echelle)
+    implicitHeight: widgetH > 0 ? Math.max(colonne.implicitHeight, widgetH) : colonne.implicitHeight
 
     Column {
         id: colonne
@@ -297,6 +302,7 @@ Item {
 
         // ── unités en échec ──────────────────────────────────────────────────
         Row {
+            visible: root.showUnits
             width: parent.width
 
             Text {
@@ -319,13 +325,14 @@ Item {
 
         // ── hôtes ────────────────────────────────────────────────────────────
         Rectangle {
+            visible: root.showHosts
             width: parent.width
             height: root.hotes.length > 0 ? 1 : 0
             color: Qt.alpha(Theme.fg, 0.09)
         }
 
         Repeater {
-            model: root.hotes
+            model: root.showHosts ? root.hotes : []
 
             Row {
                 required property var modelData

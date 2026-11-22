@@ -7,6 +7,8 @@ Item {
     id: root
     property var options: ({})
     property string widgetId: ""
+    property real widgetW: 0
+    property real widgetH: 0
 
     readonly property real echelle: {
         const v = Number(options && options.text_scale)
@@ -19,7 +21,9 @@ Item {
     readonly property var barres: (donnees && donnees.compact && donnees.compact.barres) ? donnees.compact.barres : []
     readonly property var detail: (donnees && donnees.detail) ? donnees.detail : ({})
 
-    readonly property int cardWidth: Math.round(310 * echelle)
+    readonly property int cardWidth: widgetW > 0 ? Math.max(Math.round(220 * echelle), Math.round(widgetW)) : Math.round(310 * echelle)
+    readonly property bool showThreads: widgetH === 0 || widgetH >= Math.round(180 * echelle)
+    readonly property bool showBottomMetrics: widgetH === 0 || widgetH >= Math.round(250 * echelle)
 
     function formatGo(v) {
         const n = Number(v)
@@ -80,7 +84,7 @@ Item {
     Component.onCompleted: SystemServices.metriquesActif = true
 
     implicitWidth: cardWidth
-    implicitHeight: colonne.implicitHeight
+    implicitHeight: widgetH > 0 ? Math.max(colonne.implicitHeight, widgetH) : colonne.implicitHeight
 
     Column {
         id: colonne
@@ -226,7 +230,7 @@ Item {
 
         // ── Threads : barres verticales par cœur logique ─────────────────────
         Column {
-            visible: root.threadsList.length > 0
+            visible: root.showThreads && root.threadsList.length > 0
             width: parent.width
             spacing: Math.round(6 * root.echelle)
 
@@ -286,6 +290,7 @@ Item {
 
         // ── Métriques basses : VRAM, Disk, Power ────────────────────────────
         Column {
+            visible: root.showBottomMetrics
             width: parent.width
             spacing: Math.round(8 * root.echelle)
 

@@ -65,6 +65,10 @@ ConfigToggle 1.0 ConfigToggle.qml
 singleton SystemServices 1.0 SystemServices.qml
 singleton LauncherEngine 1.0 LauncherEngine.qml
 singleton ShellState 1.0 ShellState.qml
+singleton IslandAppletLayout 1.0 IslandAppletLayout.qml
+singleton LiveActivityStore 1.0 LiveActivityStore.qml
+singleton ConfigStore 1.0 ConfigStore.qml
+singleton MinimizedWindows 1.0 MinimizedWindows.qml
 WidgetPressePapiers 1.0 widgets/presse_papiers.qml
 WidgetMeteo 1.0 widgets/meteo.qml
 WidgetDisques 1.0 widgets/disques.qml

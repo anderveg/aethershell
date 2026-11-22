@@ -71,7 +71,7 @@ elif command -v swaybg &> /dev/null; then
 # jusqu'au prochain déploiement — c'est ce qui obligeait à relancer le shell.
 if command -v matugen >/dev/null 2>&1 && [ -x "$DEV_CORE/generate_colors.sh" ]; then
     "$DEV_CORE/generate_colors.sh" "$WALLPAPER" >/dev/null 2>&1 || true
-    [ -x "$DEV_CORE/generate_rofi_theme.sh" ] && "$DEV_CORE/generate_rofi_theme.sh" >/dev/null 2>&1 || true
+    [ -x "$DEV_CORE/sync_theme.sh" ] && "$DEV_CORE/sync_theme.sh" >/dev/null 2>&1 || true
 fi
 
 fi

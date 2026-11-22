@@ -178,14 +178,14 @@ Column {
 
     function verifierRmbg() {
         if (procRmbg.running) return
-        procRmbg.command = ["python3", Quickshell.shellPath("core/parallaxe_layers.py"), "status"]
+        procRmbg.command = [Quickshell.shellPath("core/as-core"), "parallaxe", "status"]
         procRmbg.running = true
     }
 
     function installerOuSupprimerRmbg() {
         if (procRmbg.running) return
         bloc.rmbgErreur = ""
-        procRmbg.command = ["python3", Quickshell.shellPath("core/parallaxe_layers.py"),
+        procRmbg.command = [Quickshell.shellPath("core/as-core"), "parallaxe",
                             bloc.rmbgInstalle ? "remove" : "setup"]
         procRmbg.running = true
     }
@@ -294,7 +294,7 @@ Row {
             MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
-                onClicked: root.selectedMonitorName = monCard.modelData.name
+                onClicked: ConfigStore.selectedMonitorName = monCard.modelData.name
             }
         }
     }
@@ -777,6 +777,299 @@ Column {
         }
     }
 }
+}
+
+// Tiroir : écran de veille terminal (hypridle + as matrix ss)
+CollapsibleSection {
+    id: secVeille
+    objectName: "secVeille"
+    title: "Écran de veille"
+    summary: root.screensaverTimeout > 0
+        ? (root.screensaverLabel + " · " + root.screensaverApp)
+        : "Désactivé"
+    icon: "monitor"
+    expanded: root.sectionOpen("systeme_veille", false)
+    onToggled: expanded => {
+        root.setPanelSection("systeme_veille", expanded)
+        if (expanded && Theme.panelAccordion) root.fermerAutresTiroirs("systeme_veille")
+    }
+
+    Column {
+        width: parent.width
+        spacing: 12
+
+        Column {
+            width: parent.width
+            spacing: 6
+
+            Row {
+                width: parent.width
+                spacing: 8
+
+                Text {
+                    text: "Délai d'inactivité :"
+                    color: Theme.accent
+                    font.pixelSize: Theme.textSm
+                    font.bold: true
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "lancement automatique (hypridle)"
+                    color: Qt.alpha(Theme.fg, 0.55)
+                    font.pixelSize: Theme.textXs
+                }
+            }
+
+            Flow {
+                width: parent.width
+                spacing: 6
+
+                Repeater {
+                    model: [
+                        { label: "1 min", value: 60 },
+                        { label: "2 min", value: 120 },
+                        { label: "3 min", value: 180 },
+                        { label: "5 min", value: 300 },
+                        { label: "10 min", value: 600 },
+                        { label: "15 min (défaut)", value: 900 },
+                        { label: "30 min", value: 1800 },
+                        { label: "Désactivé", value: 0 }
+                    ]
+
+                    Rectangle {
+                        id: ssDelayBtn
+                        required property var modelData
+                        readonly property bool actif: root.screensaverTimeout === modelData.value
+                        width: ssDelayTxt.implicitWidth + 18
+                        height: 28
+                        radius: Theme.globalRadius
+                        color: ssDelayBtn.actif ? Theme.accent : Theme.surfaceVariant
+                        border.width: 1
+                        border.color: ssDelayBtn.actif ? Theme.accent : Qt.alpha(Theme.fg, 0.15)
+
+                        Text {
+                            id: ssDelayTxt
+                            anchors.centerIn: parent
+                            text: ssDelayBtn.modelData.label
+                            color: ssDelayBtn.actif ? Theme.bg : Theme.fg
+                            font.pixelSize: Theme.textXs
+                            font.bold: ssDelayBtn.actif
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                root.screensaverTimeout = ssDelayBtn.modelData.value
+                                root.runConfigCmd(["screensaver_timeout", String(ssDelayBtn.modelData.value)])
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Column {
+            width: parent.width
+            spacing: 6
+
+            Row {
+                width: parent.width
+                spacing: 8
+
+                Text {
+                    text: "Animation terminal :"
+                    color: Theme.accent
+                    font.pixelSize: Theme.textSm
+                    font.bold: true
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "fond noir strict · touche ou souris pour quitter"
+                    color: Qt.alpha(Theme.fg, 0.55)
+                    font.pixelSize: Theme.textXs
+                }
+            }
+
+            Flow {
+                width: parent.width
+                spacing: 6
+
+                Repeater {
+                    model: root.screensaverApps
+
+                    Rectangle {
+                        id: ssAppBtn
+                        required property var modelData
+                        readonly property bool installe: modelData.installed === true
+                        readonly property bool actif: root.screensaverApp === modelData.id
+                        width: ssAppTxt.implicitWidth + 18
+                        height: 28
+                        radius: Theme.globalRadius
+                        opacity: ssAppBtn.installe ? 1.0 : 0.45
+                        color: ssAppBtn.actif ? Theme.accent : Theme.surfaceVariant
+                        border.width: 1
+                        border.color: ssAppBtn.actif ? Theme.accent : Qt.alpha(Theme.fg, 0.15)
+
+                        Text {
+                            id: ssAppTxt
+                            anchors.centerIn: parent
+                            text: ssAppBtn.modelData.label + (ssAppBtn.installe ? "" : " (absent)")
+                            color: ssAppBtn.actif ? Theme.bg : Theme.fg
+                            font.pixelSize: Theme.textXs
+                            font.bold: ssAppBtn.actif
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            enabled: ssAppBtn.installe
+                            cursorShape: ssAppBtn.installe ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            onClicked: {
+                                root.screensaverApp = ssAppBtn.modelData.id
+                                root.runConfigCmd(["screensaver_app", ssAppBtn.modelData.id])
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Column {
+            width: parent.width
+            spacing: 6
+
+            Row {
+                width: parent.width
+                spacing: 8
+
+                Text {
+                    text: "Vitesse d'animation :"
+                    color: Theme.accent
+                    font.pixelSize: Theme.textSm
+                    font.bold: true
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Matrix, tuyaux, bonsaï et lavat"
+                    color: Qt.alpha(Theme.fg, 0.55)
+                    font.pixelSize: Theme.textXs
+                }
+            }
+
+            Flow {
+                width: parent.width
+                spacing: 6
+
+                Repeater {
+                    model: [
+                        { id: "slow", label: "Lent" },
+                        { id: "normal", label: "Normal" },
+                        { id: "fast", label: "Rapide" }
+                    ]
+
+                    Rectangle {
+                        id: ssSpeedBtn
+                        required property var modelData
+                        readonly property bool actif: root.screensaverSpeed === modelData.id
+                        width: ssSpeedTxt.implicitWidth + 18
+                        height: 28
+                        radius: Theme.globalRadius
+                        color: ssSpeedBtn.actif ? Theme.accent : Theme.surfaceVariant
+                        border.width: 1
+                        border.color: ssSpeedBtn.actif ? Theme.accent : Qt.alpha(Theme.fg, 0.15)
+
+                        Text {
+                            id: ssSpeedTxt
+                            anchors.centerIn: parent
+                            text: ssSpeedBtn.modelData.label
+                            color: ssSpeedBtn.actif ? Theme.bg : Theme.fg
+                            font.pixelSize: Theme.textXs
+                            font.bold: ssSpeedBtn.actif
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                root.screensaverSpeed = ssSpeedBtn.modelData.id
+                                root.runConfigCmd(["screensaver_speed", ssSpeedBtn.modelData.id])
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            width: parent.width
+            height: 40
+            radius: Theme.globalRadius
+            color: root.screensaverRandomColors ? Qt.alpha(Theme.accent, 0.18) : Theme.surfaceVariant
+            border.color: root.screensaverRandomColors ? Theme.accent : Qt.alpha(Theme.fg, 0.15)
+            border.width: 1
+
+            Row {
+                anchors.fill: parent
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                spacing: 8
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.screensaverRandomColors ? "Couleurs aléatoires : ON" : "Couleurs aléatoires : OFF"
+                    color: root.screensaverRandomColors ? Theme.accent : Theme.fg
+                    font.pixelSize: Theme.textXs
+                    font.bold: true
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "palette ou arc-en-ciel à chaque lancement"
+                    color: Qt.alpha(Theme.fg, 0.55)
+                    font.pixelSize: Theme.text2xs
+                }
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    root.screensaverRandomColors = !root.screensaverRandomColors
+                    root.runConfigCmd(["screensaver_random_colors", root.screensaverRandomColors ? "true" : "false"])
+                }
+            }
+        }
+
+        Rectangle {
+            width: parent.width
+            height: 36
+            radius: Theme.globalRadius
+            color: testSsMa.containsMouse ? Theme.accent : Theme.surfaceVariant
+            border.color: Theme.accent
+            border.width: 1
+
+            Text {
+                anchors.centerIn: parent
+                text: "Tester l'écran de veille maintenant"
+                color: testSsMa.containsMouse ? Theme.bg : Theme.accent
+                font.pixelSize: Theme.textXs
+                font.bold: true
+            }
+
+            MouseArea {
+                id: testSsMa
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: Quickshell.execDetached([
+                    Quickshell.shellPath("core/as-core"), "matrix", "--ss"
+                ])
+            }
+        }
+    }
 }
 
 // Mode nuit : le filtre chaud de l'écran. Une plage horaire vide

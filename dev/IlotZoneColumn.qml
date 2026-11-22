@@ -11,7 +11,7 @@ Rectangle {
     property real minHeight: 104
 
     readonly property string zoneCode: modelData.code
-    readonly property var items: ilotBloc ? ilotBloc.ilotAppletsInZone(zoneCode) : []
+    readonly property var items: IslandAppletLayout.appletsInZone(zoneCode)
     readonly property bool isDropTarget: Boolean(panelRoot && ilotBloc && panelRoot.dragCapsuleId !== "" && ilotBloc.hoverIlotZone === zoneCode)
 
     width: colWidth
@@ -176,7 +176,7 @@ Rectangle {
 
                         onReleased: {
                             if (dragging && zCol.panelRoot && zCol.ilotBloc) {
-                                const sk = zCol.ilotBloc.ilotStyleKeyForId(cardWrap.modelData.id)
+                                const sk = IslandAppletLayout.styleKeyForId(cardWrap.modelData.id)
                                 if (!sk) {
                                     const hit = zCol.ilotBloc.findIlotZoneDrop(zCol.panelRoot.dragPointerX, zCol.panelRoot.dragPointerY)
                                     if (hit) {
@@ -270,7 +270,7 @@ Rectangle {
                         Text {
                             id: modeTxt
                             anchors.centerIn: parent
-                            text: zCol.ilotBloc ? zCol.ilotBloc.ilotModeShort(cardWrap.modelData.mode) : ""
+                            text: IslandAppletLayout.modeShortLabel(cardWrap.modelData.mode)
                             color: Theme.accent
                             font.pixelSize: 9
                             font.bold: true
@@ -279,9 +279,9 @@ Rectangle {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: if (zCol.panelRoot && zCol.ilotBloc) {
-                                const sk = zCol.ilotBloc.ilotStyleKeyForId(cardWrap.modelData.id)
-                                const nm = zCol.ilotBloc.nextIlotMode(cardWrap.modelData.mode)
+                            onClicked: if (zCol.panelRoot) {
+                                const sk = IslandAppletLayout.styleKeyForId(cardWrap.modelData.id)
+                                const nm = IslandAppletLayout.nextMode(cardWrap.modelData.mode)
                                 if (sk) zCol.panelRoot.runConfigCmd(["style", sk, nm])
                                 else zCol.panelRoot.runConfigCmd(["ilot_applet_mode", cardWrap.modelData.id, nm])
                             }
@@ -310,8 +310,8 @@ Rectangle {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: if (zCol.panelRoot && zCol.ilotBloc) {
-                                const sk = zCol.ilotBloc.ilotStyleKeyForId(cardWrap.modelData.id)
+                            onClicked: if (zCol.panelRoot) {
+                                const sk = IslandAppletLayout.styleKeyForId(cardWrap.modelData.id)
                                 if (sk) zCol.panelRoot.runConfigCmd(["style", sk, "off"])
                                 else zCol.panelRoot.runConfigCmd(["ilot_applet_mode", cardWrap.modelData.id, "off"])
                             }

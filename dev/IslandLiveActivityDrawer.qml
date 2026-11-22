@@ -56,7 +56,7 @@ Item {
                     cursorShape: Qt.PointingHandCursor
                     onEntered: p5Btn.hovered = true
                     onExited: p5Btn.hovered = false
-                    onClicked: { p5Btn.hovered = false; ShellState.startTimer(5, "Minuteur 5m") }
+                    onClicked: { p5Btn.hovered = false; LiveActivityStore.startTimer(5, "Minuteur 5m") }
                 }
             }
 
@@ -74,7 +74,7 @@ Item {
                     cursorShape: Qt.PointingHandCursor
                     onEntered: p25Btn.hovered = true
                     onExited: p25Btn.hovered = false
-                    onClicked: { p25Btn.hovered = false; ShellState.startTimer(25, "Pomodoro 25m") }
+                    onClicked: { p25Btn.hovered = false; LiveActivityStore.startTimer(25, "Pomodoro 25m") }
                 }
             }
 
@@ -106,7 +106,7 @@ Item {
                         onAccepted: {
                             const m = parseInt(text, 10)
                             if (!isNaN(m) && m > 0) {
-                                ShellState.startTimer(m, "Minuteur " + m + "m")
+                                LiveActivityStore.startTimer(m, "Minuteur " + m + "m")
                                 text = ""
                             }
                         }
@@ -135,7 +135,7 @@ Item {
                             onClicked: {
                                 const m = parseInt(customTimerInput.text, 10)
                                 if (!isNaN(m) && m > 0) {
-                                    ShellState.startTimer(m, "Minuteur " + m + "m")
+                                    LiveActivityStore.startTimer(m, "Minuteur " + m + "m")
                                     customTimerInput.text = ""
                                 } else {
                                     customTimerInput.forceActiveFocus()
@@ -281,7 +281,7 @@ Item {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: ShellState.togglePauseTimer()
+                                onClicked: LiveActivityStore.togglePauseTimer()
                             }
                         }
 
@@ -307,9 +307,9 @@ Item {
                                     if (modelData.kind === "record") {
                                         Quickshell.execDetached(["pkill", "-INT", "-x", "wf-recorder"])
                                     } else if (modelData.kind === "timer") {
-                                        ShellState.stopTimer()
+                                        LiveActivityStore.stopTimer()
                                     } else if (modelData.kind === "ipc") {
-                                        ShellState.handleLiveActivity("stop", modelData.id, "", -1)
+                                        LiveActivityStore.handleLiveActivity("stop", modelData.id, "", -1)
                                     }
                                 }
                             }

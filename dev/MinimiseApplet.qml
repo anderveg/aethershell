@@ -44,7 +44,7 @@ Item {
         for (let i = 0; i < tops.length; i++) {
             const t = tops[i]
             if (!t || !t.address) continue
-            if (!ShellState.estMinimisee(t)) continue
+            if (!MinimizedWindows.estMinimisee(t)) continue
             const client = t.lastIpcObject || ({})
             liste.push({
                 adresse: String(t.address),
@@ -55,7 +55,7 @@ Item {
         // L'ordre de la session vient de `Theme` ; ce qui est arrivé sur le
         // workspace spécial par un autre chemin se range à la fin.
         const rang = function (adresse) {
-            const i = ShellState.ordreMinimisees.indexOf(ShellState.cleAdresse(adresse))
+            const i = MinimizedWindows.ordreMinimisees.indexOf(MinimizedWindows.cleAdresse(adresse))
             return i < 0 ? 1000 : i
         }
         liste.sort(function (a, b) { return rang(a.adresse) - rang(b.adresse) })
@@ -141,7 +141,7 @@ Item {
 
     // ── rappel ───────────────────────────────────────────────────────────────
     function rappeler(adresse) {
-        ShellState.rappelerFenetre(adresse)
+        MinimizedWindows.rappelerFenetre(adresse)
     }
 
     // ── suivi vivant ─────────────────────────────────────────────────────────

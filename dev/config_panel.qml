@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Hyprland
 import Quickshell.Wayland
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -58,17 +59,26 @@ Rectangle {
     function dropWidgetAt(wtype, dropX, dropY) {
         const sx = Math.max(8, Math.round(dropX))
         const sy = Math.max(Theme.barHeight + 8, Math.round(dropY))
+        const wsId = (Hyprland.focusedWorkspace && Number(Hyprland.focusedWorkspace.id) > 0)
+            ? Number(Hyprland.focusedWorkspace.id) : 1
         const liste = root.widgetsList || []
         for (let i = 0; i < liste.length; ++i) {
             if (String(liste[i].type) === String(wtype)) {
                 if (liste[i].enabled === false) {
                     root.runConfigCmd(["widget_toggle", String(liste[i].id)])
                 }
+                const brut = (liste[i].workspaces && liste[i].workspaces.length > 0)
+                    ? liste[i].workspaces : [liste[i].workspace]
+                const wss = brut.map(Number).filter(n => !isNaN(n))
+                if (wss.indexOf(0) < 0 && wss.indexOf(wsId) < 0) {
+                    wss.push(wsId)
+                    root.runConfigCmd(["widget_workspaces", String(liste[i].id), wss.join(",")])
+                }
                 root.runConfigCmd(["widget_move", String(liste[i].id), String(sx), String(sy)])
                 return
             }
         }
-        root.runConfigCmd(["widget_add", String(wtype), "1", String(sx), String(sy)])
+        root.runConfigCmd(["widget_add", String(wtype), String(wsId), String(sx), String(sy)])
     }
 
     focus: true
@@ -420,33 +430,27 @@ Rectangle {
     property int currentTab: 0 // 0: Bureau, 1: Quickshell, 2: Widgets, 3: Système & Écrans,
                                // 4: Contrôles, 5: Applications, 6: Connexion
 
-    // State synced with config_manager.py & FileViews
-    property string hostName: "Machine"
-    property bool isLaptop: false
-    property string screenshotsDir: "$HOME/Images/Screenshots/"
-    property string kbLayout: Theme.kbLayout || "fr"
-    property var workspaceKeys: ["ampersand", "eacute", "quotedbl", "apostrophe", "parenleft"]
+    // State synced with ConfigStore (`as-core config`)
+    readonly property string hostName: ConfigStore.hostName
+    readonly property bool isLaptop: ConfigStore.isLaptop
+    readonly property string screenshotsDir: ConfigStore.screenshotsDir
+    readonly property string kbLayout: ConfigStore.kbLayout
+    readonly property var workspaceKeys: ConfigStore.workspaceKeys
 
-    property int gapsIn: 2
-    property int gapsOut: 8
-    property int borderSize: 2
-    property int hyprRounding: 2
-    property real hyprRoundingPower: 2.0
-    // Clés d'API : le panneau ne connaît que leur présence et leurs 4 derniers
-    // caractères — la valeur elle-même ne remonte jamais du fichier.
-    property var apiKeys: ({})
-    // Proxmox : l'applet et le widget homelab s'en servent. Le secret du jeton
-    // n'est jamais rendu par config_manager, seulement ses quatre derniers
-    // caractères — le panneau ne peut donc pas l'afficher, même par erreur.
-    property string homelabUrl: ""
-    property string homelabTokenId: ""
-    property string homelabTokenTail: ""
-    property bool homelabTokenPresent: false
-    // Fichiers suivis par l'applet et le widget « Tâches » (core/todo.json).
-    property var todoFichiers: []
-    property string todoFocus: ""
-    property string todoErreur: ""
-    property bool todoSurveillance: false
+    readonly property int gapsIn: ConfigStore.gapsIn
+    readonly property int gapsOut: ConfigStore.gapsOut
+    readonly property int borderSize: ConfigStore.borderSize
+    readonly property int hyprRounding: ConfigStore.hyprRounding
+    readonly property real hyprRoundingPower: ConfigStore.hyprRoundingPower
+    readonly property var apiKeys: ConfigStore.apiKeys
+    readonly property string homelabUrl: ConfigStore.homelabUrl
+    readonly property string homelabTokenId: ConfigStore.homelabTokenId
+    readonly property string homelabTokenTail: ConfigStore.homelabTokenTail
+    readonly property bool homelabTokenPresent: ConfigStore.homelabTokenPresent
+    readonly property var todoFichiers: ConfigStore.todoFichiers
+    readonly property string todoFocus: ConfigStore.todoFocus
+    readonly property string todoErreur: ConfigStore.todoErreur
+    readonly property bool todoSurveillance: ConfigStore.todoSurveillance
 
     function rechargerTodo() {
         todoListProc.running = false
@@ -456,22 +460,15 @@ Rectangle {
     function ajouterTodo() {
         const chemin = nouveauTodoChemin.text.trim()
         if (chemin === "") return
-        root.todoErreur = ""
-        root.runConfigCmd(["todo_add", nouveauTodoNom.text.trim(), chemin])
+        ConfigStore.todoErreur = ""
+        ConfigStore.runCmd(["todo_add", nouveauTodoNom.text.trim(), chemin])
     }
-    // Mode nuit (onglet Système & Écrans) : température, plage, état.
-    property int nuitTemp: 4000
-    property bool nuitAllumee: false
-    // Ne pas déranger : même drapeau que la cloche de la barre et le centre de
-    // notifications (style_vars.json → do_not_disturb).
-    property bool dndActif: false
-    property string nuitDe: ""
-    property string nuitA: ""
-    // Fournisseurs LLM (core/llm_providers.json) : une ligne par entrée, dans
-    // l'ordre du fichier. Ajouter un service ne touche pas à ce panneau.
-    property var llmProviders: []
-    // Message par fournisseur : un état partagé ferait apparaître « clé refusée »
-    // sous Ollama alors qu'on vient d'enregistrer celle de DeepSeek.
+    readonly property int nuitTemp: ConfigStore.nuitTemp
+    readonly property bool nuitAllumee: ConfigStore.nuitAllumee
+    readonly property bool dndActif: ConfigStore.dndActif
+    readonly property string nuitDe: ConfigStore.nuitDe
+    readonly property string nuitA: ConfigStore.nuitA
+    readonly property var llmProviders: ConfigStore.llmProviders
     property var cleEtats: ({})
     property var pendingProvider: null
     property var pendingChamp: null
@@ -482,11 +479,11 @@ Rectangle {
         copie[id] = message
         root.cleEtats = copie
     }
-    property var monitorsList: []
-    property string selectedMonitorName: "HDMI-A-1"
-    property string timezoneStr: "Europe/Paris"
-    property bool ntpSynced: true
-    property int idleSuspendTimeout: 3600
+    readonly property var monitorsList: ConfigStore.monitorsList
+    readonly property string selectedMonitorName: ConfigStore.selectedMonitorName
+    readonly property string timezoneStr: ConfigStore.timezoneStr
+    readonly property bool ntpSynced: ConfigStore.ntpSynced
+    readonly property int idleSuspendTimeout: ConfigStore.idleSuspendTimeout
     readonly property string idleSuspendLabel: {
         const s = root.idleSuspendTimeout
         if (s === 900) return "15 min"
@@ -499,9 +496,19 @@ Rectangle {
         if (s >= 3600) return (s / 3600).toFixed(s % 3600 === 0 ? 0 : 1) + " h"
         return "1 heure"
     }
-    property var bindsList: []
-    // Widgets de bureau (core/widgets.json) et position de la capsule du lanceur.
-    property var widgetsList: []
+    readonly property int screensaverTimeout: ConfigStore.screensaverTimeout
+    readonly property string screensaverApp: ConfigStore.screensaverApp
+    readonly property bool screensaverRandomColors: ConfigStore.screensaverRandomColors
+    readonly property string screensaverSpeed: ConfigStore.screensaverSpeed
+    readonly property var screensaverApps: ConfigStore.screensaverApps
+    readonly property string screensaverLabel: {
+        const s = root.screensaverTimeout
+        if (s <= 0) return "Désactivé"
+        if (s < 60) return s + " s"
+        return Math.round(s / 60) + " min"
+    }
+    readonly property var bindsList: ConfigStore.bindsList
+    readonly property var widgetsList: ConfigStore.widgetsList
     // Une seule instance par nature de widget : elle est posée sur un bureau
     // ou sur tous (workspace 0), jamais deux fois. Le sélecteur du panneau est
     // donc une liste de cases à cocher, pas des boutons « ajouter ».
@@ -510,7 +517,8 @@ Rectangle {
         { type: "date",    label: "Date" },
         { type: "meteo",   label: "Météo" },
         { type: "combo",   label: "Aperçu du jour" },
-        { type: "musique", label: "Musique", icon: "music", preview: "Morceau & pochette" },
+        { type: "musique",     label: "Musique", icon: "music", preview: "Morceau & pochette" },
+        { type: "visualiseur", label: "Visualiseur audio", icon: "music", preview: "Onde & spectre" },
         { type: "notes",   label: "Notes rapides", icon: "widgets", preview: "Post-it synchronisé" },
         { type: "sticker", label: "Sticker / Image", icon: "palette", preview: "PNG / SVG / WebP" },
         { type: "systeme", label: "Système" },
@@ -891,11 +899,9 @@ Rectangle {
         }
     }
 
-    property string launcherPosition: "bas-centre"
-    property var appVarsModel: []
-    // Cible du clic sur une notification (core/notif_targets.json) : lignes
-    // dérivées pour la section « Cible du clic sur une notification ».
-    property var notifTargets: ({ "apps": ({}), "types": ({}), "url": "Browser" })
+    readonly property string launcherPosition: ConfigStore.launcherPosition
+    readonly property var appVarsModel: ConfigStore.appVarsModel
+    readonly property var notifTargets: ConfigStore.notifTargets
     readonly property var notifTypeRows: [
         { nature: "video",  label: "Vidéo",   alias: String(root.notifTargets.types.video || "") },
         { nature: "image",  label: "Image",   alias: String(root.notifTargets.types.image || "") },
@@ -913,38 +919,33 @@ Rectangle {
         }
         return out
     }
-    property var autostartModel: []
+    readonly property var autostartModel: ConfigStore.autostartModel
     property bool batLimit80: false
 
     // Selected color key for live hex editing in Appearance tab
     property string selectedColorKey: "accent"
     property string selectedColorHex: Theme.accent
-    property string wallpaperDir: Theme.wallpaperDir || "$HOME/Images/wallpapers/"
-    property string matugenScheme: "scheme-tonal-spot"
-    property real matugenContrast: 0
-    property bool blurEnabled: true
-    property bool launchHistory: false
-    property int blurSize: 3
-    property int blurPasses: 3
-    property real blurVibrancy: 0.17
+    readonly property string wallpaperDir: ConfigStore.wallpaperDir
+    readonly property string matugenScheme: ConfigStore.matugenScheme
+    readonly property real matugenContrast: ConfigStore.matugenContrast
+    readonly property bool blurEnabled: ConfigStore.blurEnabled
+    readonly property bool launchHistory: ConfigStore.launchHistory
+    readonly property int blurSize: ConfigStore.blurSize
+    readonly property int blurPasses: ConfigStore.blurPasses
+    readonly property real blurVibrancy: ConfigStore.blurVibrancy
 
-    // Flou des surfaces layer-shell du shell (layer rules de general.lua)
-    property bool shellBlurEnabled: true
-    property bool barBorder: true
-    // Espaces entre les îlots de la barre du haut : transparents et sans flou
-    property bool barGapsTransparent: false
-    // Visualiseur audio (style_vars) : capture et dessin.
-    property int vizFps: 30
-    property int vizCols: 96
-    property real vizSensibilite: 1.0
-    property real vizLissage: 0.2
-    property real vizEpaisseur: 1.4
-    property string vizCouleur: "accent"
-    property string vizCouleurIsland: "complement"
-    property string vizStyleClassic: "onde"
-    property string vizStyleIsland: "barres"
-    // Jetons proposés au visualiseur — les mêmes que VIZ_COULEURS dans
-    // core/config_manager.py, qui refuse tout le reste.
+    readonly property bool shellBlurEnabled: ConfigStore.shellBlurEnabled
+    readonly property bool barBorder: ConfigStore.barBorder
+    readonly property bool barGapsTransparent: ConfigStore.barGapsTransparent
+    readonly property int vizFps: ConfigStore.vizFps
+    readonly property int vizCols: ConfigStore.vizCols
+    readonly property real vizSensibilite: ConfigStore.vizSensibilite
+    readonly property real vizLissage: ConfigStore.vizLissage
+    readonly property real vizEpaisseur: ConfigStore.vizEpaisseur
+    readonly property string vizCouleur: ConfigStore.vizCouleur
+    readonly property string vizCouleurIsland: ConfigStore.vizCouleurIsland
+    readonly property string vizStyleClassic: ConfigStore.vizStyleClassic
+    readonly property string vizStyleIsland: ConfigStore.vizStyleIsland
     readonly property var vizCouleurs: [
         { code: "accent", nom: "Accent" },
         { code: "accentMuted", nom: "Accent 2" },
@@ -953,10 +954,10 @@ Rectangle {
         { code: "warn", nom: "Alerte" },
         { code: "success", nom: "Succès" }
     ]
-    property real shellBlurAlpha: 0.4
-    property bool shellBlurPopups: true
-    property int resizeStep: 15
-    property var panelSections: ({})
+    readonly property real shellBlurAlpha: ConfigStore.shellBlurAlpha
+    readonly property bool shellBlurPopups: ConfigStore.shellBlurPopups
+    readonly property int resizeStep: ConfigStore.resizeStep
+    readonly property var panelSections: ConfigStore.panelSections
 
     // Table nom de section → objet, pour pouvoir replier les tiroirs d'un onglet.
     // Les sections sont nommées parce qu'une section réécrit elle-même son
@@ -1067,10 +1068,10 @@ Rectangle {
             }
         }
         s[name] = expanded
-        root.panelSections = s
-        root.runConfigCmd(["panel_section", name, String(expanded)])
+        ConfigStore.panelSections = s
+        ConfigStore.runCmd(["panel_section", name, String(expanded)])
         for (let i = 0; i < fermes.length; ++i)
-            root.runConfigCmd(["panel_section", fermes[i], "false"])
+            ConfigStore.runCmd(["panel_section", fermes[i], "false"])
         root.rafraichirTiroirs()
         majEnteteCollant()
         if (expanded) recentrage.restart()
@@ -1086,49 +1087,28 @@ Rectangle {
             if (autre === cle) continue
             if (root.ongletDeSection[autre] !== onglet) continue
             if (root.sectionOpen(autre, false) === false) continue
-            const s = Object.assign({}, root.panelSections)
+            const s = Object.assign({}, ConfigStore.panelSections)
             s[autre] = false
-            root.panelSections = s
-            root.runConfigCmd(["panel_section", autre, "false"])
+            ConfigStore.panelSections = s
+            ConfigStore.runCmd(["panel_section", autre, "false"])
         }
         root.rafraichirTiroirs()
     }
 
     function refreshConfigState() {
-        if (!stateProc.running) stateProc.running = true
+        ConfigStore.refresh()
     }
 
-    // Commands run one at a time, in order: clicks made while one is running are queued
-    // instead of being silently dropped.
-    property var cmdQueue: []
+    function resumeChemin(chemin) { return ConfigStore.resumeChemin(chemin) }
+    function cheminAbsolu(chemin) { return ConfigStore.cheminAbsolu(chemin) }
+    function abregerHome(chemin) { return ConfigStore.abregerHome(chemin) }
 
-    function startConfigCmd(args) {
-        cmdProc.command = [Quickshell.shellPath("core/as-core"), "config"].concat(args)
-        cmdProc.running = true
-    }
-
-    // Résumé de tiroir : un chemin du thème (`$HOME/...`) se lit mieux en `~`.
-    function resumeChemin(chemin) {
-        const s = String(chemin || "")
-        return s.replace(/^\$HOME/, "~").replace(/\/$/, "")
-    }
-
-    // Chemins des réglages → chemin absolu. Les valeurs du thème commencent par
-    // `$HOME` ou `~` ; les sélecteurs de dossier/fichier travaillent en absolu.
-    function cheminAbsolu(chemin) {
-        let s = String(chemin || "")
-        if (s.indexOf("$HOME") === 0) s = Quickshell.env("HOME") + s.substring(5)
-        else if (s.indexOf("~") === 0) s = Quickshell.env("HOME") + s.substring(1)
-        return s.replace(/\/$/, "")
-    }
-
-    function abregerHome(chemin) {
-        const home = Quickshell.env("HOME")
-        const s = String(chemin || "")
-        if (home && s.indexOf(home) === 0) {
-            return "~" + s.substring(home.length)
+    Connections {
+        target: ConfigStore
+        function onTodoAddedOk() {
+            nouveauTodoNom.text = ""
+            nouveauTodoChemin.text = ""
         }
-        return s
     }
 
     // Sélecteur unifié de fichier / dossier (SelecteurFichier.qml).
@@ -1167,140 +1147,7 @@ Rectangle {
     }
 
     function runConfigCmd(args) {
-        if (!cmdProc.running) {
-            startConfigCmd(args)
-            return
-        }
-        const q = cmdQueue.slice()
-        q.push(args)
-        cmdQueue = q
-    }
-
-    function applyStateJson(data) {
-        if (!data) return
-        if (typeof data.hostname === "string" && data.hostname.length > 0) {
-            root.hostName = data.hostname.charAt(0).toUpperCase() + data.hostname.slice(1)
-        }
-        if (typeof data.is_laptop === "boolean") {
-            root.isLaptop = data.is_laptop
-        }
-        if (typeof data.kb_layout === "string") {
-            root.kbLayout = data.kb_layout
-        }
-        if (typeof data.wallpaper_dir === "string" && data.wallpaper_dir.length > 0) {
-            root.wallpaperDir = data.wallpaper_dir
-        }
-        if (typeof data.screenshots_dir === "string" && data.screenshots_dir.length > 0) {
-            root.screenshotsDir = data.screenshots_dir
-        }
-        if (typeof data.matugen_scheme === "string" && data.matugen_scheme.length > 0) {
-            root.matugenScheme = data.matugen_scheme
-        }
-        if (typeof data.matugen_contrast === "number") {
-            root.matugenContrast = data.matugen_contrast
-        }
-        if (typeof data.blur_enabled === "boolean") root.blurEnabled = data.blur_enabled
-        if (typeof data.blur_size === "number") root.blurSize = data.blur_size
-        if (typeof data.blur_passes === "number") root.blurPasses = data.blur_passes
-        if (typeof data.blur_vibrancy === "number") root.blurVibrancy = data.blur_vibrancy
-        if (typeof data.shell_blur_enabled === "boolean") root.shellBlurEnabled = data.shell_blur_enabled
-        if (typeof data.bar_border === "boolean") root.barBorder = data.bar_border
-        if (typeof data.bar_gaps_transparent === "boolean") root.barGapsTransparent = data.bar_gaps_transparent
-        if (typeof data.viz_fps === "number") root.vizFps = data.viz_fps
-        if (typeof data.viz_cols === "number") root.vizCols = data.viz_cols
-        if (typeof data.viz_sensibilite === "number") root.vizSensibilite = data.viz_sensibilite
-        if (typeof data.viz_lissage === "number") root.vizLissage = data.viz_lissage
-        if (typeof data.viz_epaisseur === "number") root.vizEpaisseur = data.viz_epaisseur
-        if (typeof data.viz_couleur === "string") root.vizCouleur = data.viz_couleur
-        if (typeof data.viz_couleur_island === "string") root.vizCouleurIsland = data.viz_couleur_island
-        if (typeof data.viz_style_classic === "string") root.vizStyleClassic = data.viz_style_classic
-        if (typeof data.viz_style_island === "string") root.vizStyleIsland = data.viz_style_island
-        if (typeof data.shell_blur_alpha === "number") root.shellBlurAlpha = data.shell_blur_alpha
-        if (typeof data.shell_blur_popups === "boolean") root.shellBlurPopups = data.shell_blur_popups
-        if (typeof data.launch_history === "boolean") root.launchHistory = data.launch_history
-        if (typeof data.resize_step === "number") root.resizeStep = data.resize_step
-        if (data.panel_sections) root.panelSections = data.panel_sections
-        if (Array.isArray(data.workspace_keys)) {
-            root.workspaceKeys = data.workspace_keys
-        }
-        if (data.gaps) {
-            if (typeof data.gaps.gaps_in === "number") root.gapsIn = data.gaps.gaps_in
-            if (typeof data.gaps.gaps_out === "number") root.gapsOut = data.gaps.gaps_out
-            if (typeof data.gaps.border_size === "number") root.borderSize = data.gaps.border_size
-        }
-        if (typeof data.hypr_rounding === "number") root.hyprRounding = data.hypr_rounding
-        if (data.api_keys && typeof data.api_keys === "object") root.apiKeys = data.api_keys
-        if (typeof data.do_not_disturb === "boolean") root.dndActif = data.do_not_disturb
-        if (data.night && typeof data.night === "object") {
-            if (typeof data.night.temperature === "number") root.nuitTemp = data.night.temperature
-            root.nuitAllumee = data.night.mode === true
-            root.nuitDe = String(data.night.from || "")
-            root.nuitA = String(data.night.to || "")
-        }
-        if (data.homelab && typeof data.homelab === "object") {
-            root.homelabUrl = String(data.homelab.proxmox_url || "")
-            root.homelabTokenId = String(data.homelab.proxmox_token_id || "")
-            root.homelabTokenTail = String(data.homelab.jeton_tail || "")
-            root.homelabTokenPresent = data.homelab.jeton_present === true
-        }
-        if (data.todo && typeof data.todo === "object") {
-            root.todoFichiers = Array.isArray(data.todo.fichiers) ? data.todo.fichiers : []
-            root.todoFocus = String(data.todo.focus || "")
-            root.todoSurveillance = Boolean(data.todo.surveillance)
-            if (typeof data.todo.erreur === "string") {
-                root.todoErreur = data.todo.erreur
-                if (data.todo.erreur === "") {
-                    nouveauTodoNom.text = ""
-                    nouveauTodoChemin.text = ""
-                }
-            }
-        }
-        if (Array.isArray(data.llm_providers)) root.llmProviders = data.llm_providers
-        if (typeof data.hypr_rounding_power === "number")
-            root.hyprRoundingPower = data.hypr_rounding_power
-        if (data.display) {
-            root.monitorsList = data.display.monitors || []
-            if (root.monitorsList.length > 0) {
-                let found = false
-                for (let i = 0; i < root.monitorsList.length; i++) {
-                    if (root.monitorsList[i].name === root.selectedMonitorName) {
-                        found = true
-                        break
-                    }
-                }
-                if (!found) {
-                    root.selectedMonitorName = root.monitorsList[0].name
-                }
-            }
-            if (data.display.timezone) root.timezoneStr = data.display.timezone
-            if (typeof data.display.ntp === "boolean") root.ntpSynced = data.display.ntp
-        }
-        if (typeof data.idle_suspend_timeout === "number") root.idleSuspendTimeout = data.idle_suspend_timeout
-        if (Array.isArray(data.widgets)) root.widgetsList = data.widgets
-        if (typeof data.launcher_position === "string") root.launcherPosition = data.launcher_position
-        if (Array.isArray(data.binds)) {
-            root.bindsList = data.binds
-        }
-        // Les cibles de notification viennent de `state` (une seule source) :
-        // auparavant un FileView du panneau les relisait de son cote.
-        if (data.notif_targets && typeof data.notif_targets === "object") {
-            const nt = data.notif_targets
-            root.notifTargets = {
-                "apps": (nt.apps && typeof nt.apps === "object") ? nt.apps : ({}),
-                "types": (nt.types && typeof nt.types === "object") ? nt.types : ({}),
-                "url": (typeof nt.url === "string") ? nt.url : "Browser"
-            }
-        }
-        if (data.apps) {
-            const arr = []
-            for (const k in data.apps) {
-                arr.push({ alias: k, cmd: data.apps[k] })
-            }
-            root.appVarsModel = arr
-        }
-        if (Array.isArray(data.autostart)) {
-            root.autostartModel = data.autostart
-        }
+        ConfigStore.runCmd(args)
     }
 
     readonly property var currentMonitorObj: {
@@ -1320,41 +1167,6 @@ Rectangle {
             return m.availableModes
         }
         return ["preferred", "3840x2160@30", "1920x1080@120", "1920x1080@60", "1280x720@60"]
-    }
-
-    Process {
-        id: stateProc
-        command: [Quickshell.shellPath("core/as-core"), "config", "state"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    root.applyStateJson(JSON.parse(text.trim()))
-                } catch (e) {}
-            }
-        }
-    }
-
-    Process {
-        id: cmdProc
-        onExited: {
-            if (root.cmdQueue.length > 0) {
-                const q = root.cmdQueue.slice()
-                const next = q.shift()
-                root.cmdQueue = q
-                root.startConfigCmd(next)
-            }
-        }
-        stdout: StdioCollector {
-            onStreamFinished: {
-                // Intermediate result: a newer command is queued, its own output will be applied
-                if (root.cmdQueue.length > 0) return
-                try {
-                    root.applyStateJson(JSON.parse(text.trim()))
-                } catch (e) {
-                    root.refreshConfigState()
-                }
-            }
-        }
     }
 
     // Clé d'API : écrite dans un fichier du répertoire runtime, puis remise à

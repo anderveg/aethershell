@@ -460,7 +460,7 @@ Item {
 
                                             Text {
                                                 text: modelData.appName
-                                                width: Math.min(implicitWidth, notifCardCol.width - 78)
+                                                width: Math.min(implicitWidth, notifCardCol.width - 96)
                                                 color: Theme.accent
                                                 font.pixelSize: Theme.textXs
                                                 font.bold: true
@@ -479,21 +479,45 @@ Item {
                                             }
                                         }
 
-                                        Icon {
+                                        Row {
                                             anchors.right: parent.right
                                             anchors.verticalCenter: parent.verticalCenter
-                                            glyph: "close"
-                                            size: 10
-                                            color: closeMa.containsMouse ? Theme.error : Qt.alpha(Theme.fg, 0.5)
-                                            opacityLevel: 1
+                                            spacing: 10
 
-                                            MouseArea {
-                                                id: closeMa
-                                                anchors.fill: parent
-                                                anchors.margins: -4
-                                                hoverEnabled: true
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: root.oublier(modelData)
+                                            Icon {
+                                                readonly property bool appSilencieuse: Boolean(modelData.appName && ShellState.quietNotifApps.indexOf(modelData.appName) >= 0)
+                                                visible: Boolean(modelData.appName)
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                glyph: "bell-off"
+                                                size: 11
+                                                color: appSilencieuse ? Theme.accent : (muteMa.containsMouse ? Theme.warn : Qt.alpha(Theme.fg, 0.45))
+                                                opacityLevel: 1
+
+                                                MouseArea {
+                                                    id: muteMa
+                                                    anchors.fill: parent
+                                                    anchors.margins: -4
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: NotifService.setToastQuiet(modelData.appName, !parent.appSilencieuse)
+                                                }
+                                            }
+
+                                            Icon {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                glyph: "close"
+                                                size: 10
+                                                color: closeMa.containsMouse ? Theme.error : Qt.alpha(Theme.fg, 0.5)
+                                                opacityLevel: 1
+
+                                                MouseArea {
+                                                    id: closeMa
+                                                    anchors.fill: parent
+                                                    anchors.margins: -4
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: root.oublier(modelData)
+                                                }
                                             }
                                         }
                                     }

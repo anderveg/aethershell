@@ -108,9 +108,11 @@ notify_capture() {
 
 start_recording() {
     local geometry="$1"
+    local audio_flag="$2"
     local file="${SCREENSHOTS_DIR}/Video_${TIMESTAMP}.mp4"
     local wflog="${LOG_DIR}/wf-recorder.log"
-    local pid i
+    local pid i sink enc
+    local -a wf_args=()
 
     if [ -n "$(any_recording_pid)" ]; then
         notify-send -a "Captures" -i "media-record" "Enregistrement vidéo" \
@@ -128,11 +130,24 @@ start_recording() {
     # Pas de setsid : le script sort aussitôt et wf-recorder est réadopté par
     # init, mais on garde `$!`, donc le pid exact — c'est lui que `record-stop`
     # signale. wf-recorder ne touche pas au terminal, il survit à la sortie.
-    if [ -n "$geometry" ]; then
-        wf-recorder -g "$geometry" -f "$file" >"$wflog" 2>&1 &
-    else
-        wf-recorder -f "$file" >"$wflog" 2>&1 &
+    [ -n "$geometry" ] && wf_args+=(-g "$geometry")
+    enc="$(ffmpeg -encoders 2>/dev/null || true)"
+    if printf '%s\n' "$enc" | grep -q ' libx264 '; then
+        wf_args+=(-c libx264 -p preset=superfast -p crf=20)
     fi
+    if [ "$audio_flag" = "--audio" ]; then
+        sink="$(pactl get-default-sink 2>/dev/null || true)"
+        if [ -n "$sink" ]; then
+            wf_args+=(--audio="${sink}.monitor")
+        else
+            wf_args+=(-a)
+        fi
+        if printf '%s\n' "$enc" | grep -q ' aac '; then
+            wf_args+=(-C aac)
+        fi
+    fi
+    wf_args+=(-f "$file")
+    wf-recorder "${wf_args[@]}" >"$wflog" 2>&1 &
     pid=$!
     disown "$pid" 2>/dev/null || true
     printf '%s\n%s\n' "$pid" "$file" > "$RECORD_STATE"
@@ -292,11 +307,11 @@ except Exception:
         ;;
     record-region)
         GEOM="$(pick_geometry)" || exit 1
-        start_recording "$GEOM"
+        start_recording "$GEOM" "${2:-}"
         exit 0
         ;;
     record|record-full)
-        start_recording ""
+        start_recording "" "${2:-}"
         exit 0
         ;;
     record-stop)

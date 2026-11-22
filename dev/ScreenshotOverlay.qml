@@ -9,9 +9,11 @@ Item {
     id: root
     required property var targetScreen
     property string pendingCapture: ""
+    property bool pendingAudio: false
 
-    Component.onCompleted: {
-        ShellState.captureHook = function(mode) { root.requestCapture(mode) }
+    Connections {
+        target: ShellState
+        function onCaptureRequested(mode) { root.requestCapture(mode, false) }
     }
 
     Timer {
@@ -19,14 +21,15 @@ Item {
         interval: 340
         onTriggered: {
             if (root.pendingCapture === "") return
-            Quickshell.execDetached([
-                "bash", Quickshell.shellPath("core/screenshot.sh"), root.pendingCapture
-            ])
+            const cmd = ["bash", Quickshell.shellPath("core/screenshot.sh"), root.pendingCapture]
+            if (root.pendingAudio) cmd.push("--audio")
+            Quickshell.execDetached(cmd)
             root.pendingCapture = ""
+            root.pendingAudio = false
         }
     }
 
-    function requestCapture(mode) {
+    function requestCapture(mode, withAudio) {
         if (mode === "record-stop") {
             Theme.screenshotPickerVisible = false
             Quickshell.execDetached([
@@ -35,6 +38,7 @@ Item {
             return
         }
         root.pendingCapture = mode
+        root.pendingAudio = Boolean(withAudio)
         Theme.screenshotPickerVisible = false
         captureLaunchTimer.restart()
     }
@@ -95,11 +99,11 @@ Item {
                 NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
             }
 
-            onRegionRequested: root.requestCapture("region")
-            onFullRequested: root.requestCapture("full")
-            onRecordRegionRequested: root.requestCapture("record-region")
-            onRecordFullRequested: root.requestCapture("record-full")
-            onRecordStopRequested: root.requestCapture("record-stop")
+            onRegionRequested: root.requestCapture("region", false)
+            onFullRequested: root.requestCapture("full", false)
+            onRecordRegionRequested: withAudio => root.requestCapture("record-region", withAudio)
+            onRecordFullRequested: withAudio => root.requestCapture("record-full", withAudio)
+            onRecordStopRequested: root.requestCapture("record-stop", false)
         }
 
         Process {

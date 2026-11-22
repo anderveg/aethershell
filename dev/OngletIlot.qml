@@ -30,124 +30,12 @@ Column {
         { code: "both",     label: "Les deux" }
     ]
 
-    readonly property var ilotCatalogue: [
-        { id: "horloge",        label: "Horloge",           icone: "clock" },
-        { id: "workspaces",     label: "Workspaces",        icone: "monitor" },
-        { id: "systray",        label: "Systray",           icone: "widgets" },
-        { id: "nuit",           label: "Mode nuit",         icone: "weather-night" },
-        { id: "luminosite",     label: "Luminosité",        icone: "sun" },
-        { id: "batterie",       label: "Batterie",          icone: "battery" },
-        { id: "minimise",       label: "Minimisées",        icone: "window-minimize" },
-        { id: "volume",         label: "Volume",            icone: "volume-high" },
-        { id: "reseau",         label: "Wi-Fi / Réseau",    icone: "wifi" },
-        { id: "notifications",  label: "Notifications",     icone: "bell" },
-        { id: "maj",            label: "Mises à jour",      icone: "download" },
-        { id: "todo",           label: "Tâches Todo",       icone: "check-circle" },
-        { id: "meteo",          label: "Météo",             icone: "cloud" },
-        { id: "presse-papiers", label: "Presse-papiers",    icone: "clipboard" },
-        { id: "usb",            label: "USB",               icone: "usb" },
-        { id: "systeme",        label: "Système",           icone: "cpu" },
-        { id: "comptes",        label: "Comptes LLM",       icone: "wallet" },
-        { id: "ilot_media",     label: "Titre média en cours", icone: "music",   styleKey: "ilot_show_media" },
-        { id: "ilot_planka",    label: "Échéance Kanban",      icone: "columns", styleKey: "ilot_show_planka" }
-    ]
-
-    function ilotModeForItem(it) {
-        if (it && it.styleKey === "ilot_show_media") return Theme.ilotShowMedia
-        if (it && it.styleKey === "ilot_show_planka") return Theme.ilotShowPlanka
-        return Theme.ilotAppletModeFor(it ? it.id : "")
-    }
-
-    function ilotStyleKeyForId(id) {
-        for (let i = 0; i < ilotCatalogue.length; ++i) {
-            if (ilotCatalogue[i].id === id) return ilotCatalogue[i].styleKey || ""
-        }
-        return ""
-    }
-
     property string ilotAddZone: ""
     property bool ilotAddingOpen: false
     property bool majOptsOpen: false
     property string hoverIlotZone: "__none__"
     property int hoverIlotIdx: -1
     property var zoneRefs: ({})
-
-    function ilotSideFor(id) {
-        if (id === "workspaces") return 0
-        if (id === "horloge") return 2
-        if (id === "ilot_media") return 2
-        if (id === "ilot_planka") return 4
-        const catList = ShellState.barAppletsCatalogue || []
-        const actifs = ShellState.barAppletsActifs || ({})
-        const anciens = ShellState.barAnciens || ({})
-        let catIle = "haut:fin"
-        for (let i = 0; i < catList.length; ++i) {
-            if (String(catList[i].id || "") === id) {
-                catIle = String(catList[i].ile || "haut:fin")
-                break
-            }
-        }
-        const choix = actifs[id] || ({})
-        let itemIle = String(choix.ile || catIle)
-        itemIle = anciens[itemIle] || itemIle
-        return itemIle === "haut:debut" ? 1 : 3
-    }
-
-    function ilotAppletsInZone(zoneCode) {
-        const _ = Theme.ilotAppletsRev + ShellState.barAppletsRev
-        const order = Theme.ilotAppletsOrder || []
-        const byId = ({})
-        for (let i = 0; i < ilotCatalogue.length; ++i) {
-            byId[ilotCatalogue[i].id] = ilotCatalogue[i]
-        }
-        const seen = ({})
-        const out = []
-        function pushIf(id) {
-            if (seen[id] || !byId[id]) return
-            seen[id] = true
-            const it = byId[id]
-            const mode = ilotModeForItem(it)
-            if (mode === "off") return
-            const corner = it.styleKey ? "" : Theme.ilotAppletCornerFor(id)
-            if (corner !== zoneCode) return
-            out.push({ id: id, label: it.label, icone: it.icone, mode: mode, styleKey: it.styleKey || "" })
-        }
-        for (let i = 0; i < order.length; ++i) pushIf(String(order[i]))
-        for (let i = 0; i < ilotCatalogue.length; ++i) pushIf(ilotCatalogue[i].id)
-        if (zoneCode === "") {
-            const idxMap = ({})
-            for (let i = 0; i < out.length; ++i) idxMap[out[i].id] = i
-            out.sort(function(a, b) {
-                const sa = ilotSideFor(a.id)
-                const sb = ilotSideFor(b.id)
-                if (sa !== sb) return sa - sb
-                return idxMap[a.id] - idxMap[b.id]
-            })
-        }
-        return out
-    }
-
-    function ilotInactiveApplets() {
-        const _ = Theme.ilotAppletsRev
-        const out = []
-        for (let i = 0; i < ilotCatalogue.length; ++i) {
-            const it = ilotCatalogue[i]
-            if (ilotModeForItem(it) === "off") out.push(it)
-        }
-        return out
-    }
-
-    function nextIlotMode(cur) {
-        if (cur === "compact") return "expanded"
-        if (cur === "expanded") return "both"
-        return "compact"
-    }
-
-    function ilotModeShort(cur) {
-        if (cur === "compact") return "Repos"
-        if (cur === "expanded") return "Étendu"
-        return "2"
-    }
 
     function findIlotZoneDrop(px, py) {
         const zones = ["", "top-left", "top-right", "bottom-left", "bottom-right"]
@@ -157,7 +45,7 @@ Column {
             if (!col || !root) continue
             const pt = root.mapToItem(col, px, py)
             if (pt.x >= 0 && pt.x <= col.width && pt.y >= 0 && pt.y <= col.height) {
-                const count = bloc.ilotAppletsInZone(z).length
+                const count = IslandAppletLayout.appletsInZone(z).length
                 const idx = Math.max(0, Math.min(count, Math.round((pt.y - 34) / 36)))
                 return ({ zone: z, idx: idx })
             }
@@ -612,11 +500,7 @@ Column {
                 spacing: 6
 
                 Text {
-                    readonly property string zLabel: bloc.ilotAddZone === "" ? "Îlot (Pilule)"
-                        : (bloc.ilotAddZone === "top-left" ? "Haut Gauche"
-                        : (bloc.ilotAddZone === "top-right" ? "Haut Droite"
-                        : (bloc.ilotAddZone === "bottom-left" ? "Bas Gauche" : "Bas Droite")))
-                    text: "Ajouter un applet dans « " + zLabel + " » :"
+                    text: "Ajouter un applet dans « " + IslandAppletLayout.zoneLabel(bloc.ilotAddZone) + " » :"
                     color: Theme.accent
                     font.pixelSize: Theme.textXs
                     font.bold: true
@@ -627,7 +511,7 @@ Column {
                     spacing: 6
 
                     Repeater {
-                        model: bloc.ilotInactiveApplets()
+                        model: IslandAppletLayout.inactiveApplets()
 
                         Rectangle {
                             id: addChipRect
@@ -681,7 +565,7 @@ Column {
                                 }
 
                                 onReleased: {
-                                    const sk = bloc.ilotStyleKeyForId(addChipRect.modelData.id)
+                                    const sk = IslandAppletLayout.styleKeyForId(addChipRect.modelData.id)
                                     if (dragging && root) {
                                         const hit = bloc.findIlotZoneDrop(root.dragPointerX, root.dragPointerY)
                                         if (hit) {
@@ -721,7 +605,7 @@ Column {
                     }
 
                     Text {
-                        visible: bloc.ilotInactiveApplets().length === 0
+                        visible: IslandAppletLayout.inactiveApplets().length === 0
                         text: "Tous les applets sont déjà affichés."
                         color: Qt.alpha(Theme.fg, 0.55)
                         font.pixelSize: Theme.text2xs

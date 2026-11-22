@@ -22,7 +22,10 @@ Item {
     Keys.onRightPressed: root.handleNav("next")
     Keys.onReturnPressed: root.handleNav("apply")
 
-    Component.onCompleted: ShellState.themeNavHook = root.handleNav
+    Connections {
+        target: ShellState
+        function onThemeNavRequested(action) { root.handleNav(action) }
+    }
 
     Process {
         id: themesScanProc

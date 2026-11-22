@@ -44,7 +44,7 @@ STYLE_FILE = BASE_DIR / "style_vars.json"
 sys.path.insert(0, str(BASE_DIR))
 import verrou_etat  # noqa: E402  (verrou des ecritures de style_vars.json)
 CACHE_FILE = BASE_DIR / "palette_cache.json"
-ROFI_GEN = BASE_DIR / "generate_rofi_theme.sh"
+ROFI_GEN = BASE_DIR / "sync_theme.sh"
 
 DOSSIERS = [Path.home() / ".local" / "share" / "color-schemes",
             Path("/usr/share/color-schemes")]

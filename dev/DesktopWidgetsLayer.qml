@@ -17,11 +17,30 @@ Item {
     property bool placingArmed: false
     readonly property bool placing: placingWindow !== null
 
+    property var resizeTargetWindow: null
+    property var resizingWindow: null
+    property real resizingX: 0
+    property real resizingY: 0
+    property real resizingW: 0
+    property real resizingH: 0
+    property real resizingStartX: 0
+    property real resizingStartY: 0
+    property real resizingOrigX: 0
+    property real resizingOrigY: 0
+    property real resizingOrigW: 0
+    property real resizingOrigH: 0
+    property string resizingCorner: "br"
+    property bool resizingArmed: false
+    readonly property bool resizing: resizingWindow !== null
+    property string findWidgetMode: "move"
+
     property var widgetWindows: []
 
     property string menuWidgetId: ""
     property real menuWidgetX: 0
     property real menuWidgetY: 0
+    property real menuWidgetW: 0
+    property real menuWidgetH: 0
     readonly property var menuWidget: {
         if (menuWidgetId === "") return ({})
         const l = ShellState.widgets || []
@@ -30,15 +49,29 @@ Item {
         return ({})
     }
 
-    Component.onCompleted: {
-        ShellState.placeWidgetHook = function() { root.startPlacementFromCursor() }
-        ShellState.widgetMenuHook = function(id) {
+    Connections {
+        target: ShellState
+        function onPlaceWidgetRequested() { root.startPlacementFromCursor() }
+        function onResizeWidgetRequested() { root.startResizeFromCursor() }
+        function onWidgetMenuRequested(id) {
             if (String(id) === "") { root.menuWidgetId = ""; return }
+            for (let i = 0; i < root.widgetWindows.length; ++i) {
+                const win = root.widgetWindows[i]
+                if (!win || String(win.w.id) !== String(id)) continue
+                root.menuWidgetX = Number(win.w.x) || 0
+                root.menuWidgetY = Number(win.w.y) || 0
+                root.menuWidgetW = win.implicitWidth
+                root.menuWidgetH = win.implicitHeight
+                root.menuWidgetId = String(id)
+                return
+            }
             const l = ShellState.widgets || []
             for (let i = 0; i < l.length; ++i) {
                 if (String(l[i].id) !== String(id)) continue
                 root.menuWidgetX = Number(l[i].x) || 0
                 root.menuWidgetY = Number(l[i].y) || 0
+                root.menuWidgetW = 0
+                root.menuWidgetH = 0
                 root.menuWidgetId = String(id)
                 return
             }
@@ -65,7 +98,22 @@ Item {
             if (placingWindow) endPlacement(false)
             return
         }
+        if (resizingWindow) endResize(false)
         if (placingWindow) { endPlacement(false); return }
+        findWidgetMode = "move"
+        findWidgetProc.running = true
+    }
+
+    function startResizeFromCursor() {
+        if (Theme.widgetsLocked) {
+            if (resizingWindow) endResize(false)
+            resizeTargetWindow = null
+            return
+        }
+        if (placingWindow) endPlacement(false)
+        if (resizingWindow) { endResize(false); return }
+        if (resizeTargetWindow) { resizeTargetWindow = null; return }
+        findWidgetMode = "resize"
         findWidgetProc.running = true
     }
 
@@ -85,7 +133,11 @@ Item {
                     const wy = Number(win.w.y) || 0
                     if (cx >= wx && cx <= wx + win.implicitWidth
                             && cy >= wy && cy <= wy + win.implicitHeight) {
-                        root.beginPlacement(win, cx - wx, cy - wy)
+                        if (root.findWidgetMode === "resize") {
+                            root.resizeTargetWindow = (root.resizeTargetWindow === win) ? null : win
+                        } else {
+                            root.beginPlacement(win, cx - wx, cy - wy)
+                        }
                         return
                     }
                 }
@@ -103,10 +155,17 @@ Item {
         placementArmTimer.restart()
     }
 
+    property string pendingMoveId: ""
+    property real pendingX: 0
+    property real pendingY: 0
+
     function endPlacement(commit) {
         if (commit && placingWindow) {
-            const fx = Theme.widgetsSnapGrid ? Math.round(placingX / 16) * 16 : Math.round(placingX)
-            const fy = Theme.widgetsSnapGrid ? Math.round(placingY / 16) * 16 : Math.round(placingY)
+            const fx = Theme.widgetsSnapGrid ? Math.round(placingX / 32) * 32 : Math.round(placingX)
+            const fy = Theme.widgetsSnapGrid ? Math.round(placingY / 32) * 32 : Math.round(placingY)
+            pendingMoveId = String(placingWindow.w.id || "")
+            pendingX = fx
+            pendingY = fy
             moveWidget(placingWindow.w.id, fx, fy)
         }
         placingWindow = null
@@ -118,7 +177,16 @@ Item {
         onTriggered: root.placingArmed = true
     }
 
-    Process { id: moveWidgetProc }
+    Process {
+        id: moveWidgetProc
+        onExited: pendingClearTimer.restart()
+    }
+
+    Timer {
+        id: pendingClearTimer
+        interval: 120
+        onTriggered: root.pendingMoveId = ""
+    }
 
     function moveWidget(id, x, y) {
         if (!id) return
@@ -127,6 +195,80 @@ Item {
             "widget_move", String(id), String(Math.round(x)), String(Math.round(y))
         ]
         moveWidgetProc.running = true
+    }
+
+    property string pendingResizeId: ""
+    property real pendingW: 0
+    property real pendingH: 0
+
+    function beginResize(win, startX, startY, corner) {
+        const ox = Number(win.w.x) || 0
+        const oy = Number(win.w.y) || 0
+        const ow = win.implicitWidth
+        const oh = win.implicitHeight
+        resizingOrigX = ox
+        resizingOrigY = oy
+        resizingOrigW = ow
+        resizingOrigH = oh
+        resizingX = ox
+        resizingY = oy
+        resizingW = ow
+        resizingH = oh
+        resizingStartX = startX
+        resizingStartY = startY
+        resizingCorner = corner || "br"
+        resizingArmed = false
+        resizingWindow = win
+        resizeArmTimer.restart()
+    }
+
+    function endResize(commit) {
+        if (commit && resizingWindow) {
+            const wid = String(resizingWindow.w.id || "")
+            const fw = Math.max(110, Theme.widgetsSnapGrid ? Math.round(resizingW / 32) * 32 : Math.round(resizingW))
+            const fh = Math.max(48, Theme.widgetsSnapGrid ? Math.round(resizingH / 32) * 32 : Math.round(resizingH))
+            const hasLeft = resizingCorner.indexOf("l") >= 0
+            const hasTop = resizingCorner.indexOf("t") >= 0
+            const fx = hasLeft ? Math.max(0, Math.round(resizingOrigX + resizingOrigW - fw)) : Math.round(resizingOrigX)
+            const fy = hasTop ? Math.max(0, Math.round(resizingOrigY + resizingOrigH - fh)) : Math.round(resizingOrigY)
+            pendingResizeId = wid
+            pendingW = fw
+            pendingH = fh
+            resizeWidget(wid, fw, fh)
+            if (fx !== Math.round(resizingOrigX) || fy !== Math.round(resizingOrigY)) {
+                pendingMoveId = wid
+                pendingX = fx
+                pendingY = fy
+                moveWidget(wid, fx, fy)
+            }
+        }
+        resizingWindow = null
+    }
+
+    Timer {
+        id: resizeArmTimer
+        interval: 220
+        onTriggered: root.resizingArmed = true
+    }
+
+    Process {
+        id: resizeWidgetProc
+        onExited: pendingResizeClearTimer.restart()
+    }
+
+    Timer {
+        id: pendingResizeClearTimer
+        interval: 120
+        onTriggered: root.pendingResizeId = ""
+    }
+
+    function resizeWidget(id, w, h) {
+        if (!id) return
+        resizeWidgetProc.command = [
+            Quickshell.shellPath("core/as-core"), "config",
+            "widget_resize", String(id), String(Math.round(w)), String(Math.round(h))
+        ]
+        resizeWidgetProc.running = true
     }
 
     Variants {
@@ -147,8 +289,13 @@ Item {
             property real liveX: Number(w.x) || 0
             property real liveY: Number(w.y) || 0
             readonly property bool isPlacing: root.placingWindow === widgetWindow
-            margins.top: widgetWindow.isPlacing ? Math.round(root.placingY) : (Number(w.y) || 0)
-            margins.left: widgetWindow.isPlacing ? Math.round(root.placingX) : (Number(w.x) || 0)
+            readonly property bool isPendingMove: root.pendingMoveId !== "" && root.pendingMoveId === String(w.id || "")
+            margins.top: widgetWindow.isPlacing ? Math.round(root.placingY)
+                       : (widgetWindow.isResizing ? Math.round(root.resizingY)
+                       : (widgetWindow.isPendingMove ? Math.round(root.pendingY) : (Number(w.y) || 0)))
+            margins.left: widgetWindow.isPlacing ? Math.round(root.placingX)
+                        : (widgetWindow.isResizing ? Math.round(root.resizingX)
+                        : (widgetWindow.isPendingMove ? Math.round(root.pendingX) : (Number(w.x) || 0)))
             readonly property int pad: 18
             readonly property bool hasOpacity: w.opacity !== undefined && w.opacity !== null
                                                && !isNaN(Number(w.opacity))
@@ -158,8 +305,19 @@ Item {
                 || (!w.style && cardOpacity <= 0.01)
             readonly property bool isGlassStyle: !isTransparentStyle && cardOpacity > 0.01
             readonly property bool broken: widgetLoader.status === Loader.Error
-            implicitWidth: (broken ? brokenText.implicitWidth : widgetLoader.implicitWidth) + pad * 2
-            implicitHeight: (broken ? brokenText.implicitHeight : widgetLoader.implicitHeight) + pad * 2
+            readonly property bool isResizeSelected: root.resizeTargetWindow === widgetWindow
+            readonly property bool isResizing: root.resizingWindow === widgetWindow
+            readonly property bool resizeActive: Theme.widgetsEditMode || isResizeSelected || isResizing
+            readonly property bool isPendingResize: root.pendingResizeId !== "" && root.pendingResizeId === String(w.id || "")
+            readonly property bool hasCustomSize: Number(w.w) > 0 && Number(w.h) > 0
+            readonly property real targetW: isResizing ? root.resizingW
+                : (isPendingResize ? root.pendingW : (hasCustomSize ? Number(w.w) : 0))
+            readonly property real targetH: isResizing ? root.resizingH
+                : (isPendingResize ? root.pendingH : (hasCustomSize ? Number(w.h) : 0))
+            readonly property real contentW: broken ? brokenText.implicitWidth : widgetLoader.implicitWidth
+            readonly property real contentH: broken ? brokenText.implicitHeight : widgetLoader.implicitHeight
+            implicitWidth: targetW > 0 ? Math.max(targetW, contentW + pad * 2) : (contentW + pad * 2)
+            implicitHeight: targetH > 0 ? Math.max(targetH, contentH + pad * 2) : (contentH + pad * 2)
 
             Component.onCompleted: {
                 const list = root.widgetWindows.slice()
@@ -185,9 +343,9 @@ Item {
                 id: carteWidget
                 anchors.fill: parent
                 radius: Theme.globalRadius
-                color: "transparent"
-                border.width: Theme.widgetsEditMode ? 2 : ((widgetWindow.isTransparentStyle || widgetWindow.w.border === false) ? 0 : 1)
-                border.color: Theme.widgetsEditMode ? Theme.accent : Qt.alpha(Theme.accent, 0.16)
+                color: (widgetWindow.isResizeSelected || widgetWindow.isResizing) ? Qt.alpha(Theme.accent, 0.08) : "transparent"
+                border.width: widgetWindow.resizeActive ? 2 : ((widgetWindow.isTransparentStyle || widgetWindow.w.border === false) ? 0 : 1)
+                border.color: widgetWindow.resizeActive ? Theme.accent : Qt.alpha(Theme.accent, 0.16)
 
                 SurfaceFloutee {
                     anchors.fill: parent
@@ -205,6 +363,8 @@ Item {
                     onClicked: {
                         root.menuWidgetX = Number(widgetWindow.w.x) || 0
                         root.menuWidgetY = Number(widgetWindow.w.y) || 0
+                        root.menuWidgetW = widgetWindow.implicitWidth
+                        root.menuWidgetH = widgetWindow.implicitHeight
                         root.menuWidgetId = String(widgetWindow.w.id || "")
                     }
                 }
@@ -247,6 +407,34 @@ Item {
                     }
                 }
 
+                Binding {
+                    target: widgetLoader.item
+                    property: "widgetW"
+                    value: widgetWindow.targetW > 0 ? Math.max(40, widgetWindow.targetW - widgetWindow.pad * 2) : 0
+                    when: widgetLoader.item !== null && ("widgetW" in widgetLoader.item)
+                }
+
+                Binding {
+                    target: widgetLoader.item
+                    property: "widgetH"
+                    value: widgetWindow.targetH > 0 ? Math.max(24, widgetWindow.targetH - widgetWindow.pad * 2) : 0
+                    when: widgetLoader.item !== null && ("widgetH" in widgetLoader.item)
+                }
+
+                Binding {
+                    target: widgetLoader.item
+                    property: "widgetResizing"
+                    value: widgetWindow.resizeActive
+                    when: widgetLoader.item !== null && ("widgetResizing" in widgetLoader.item)
+                }
+
+                Binding {
+                    target: widgetLoader.item
+                    property: "widgetOpacity"
+                    value: widgetWindow.isTransparentStyle ? 0.18 : widgetWindow.cardOpacity
+                    when: widgetLoader.item !== null && ("widgetOpacity" in widgetLoader.item)
+                }
+
                 Connections {
                     target: widgetWindow
                     function onWChanged() {
@@ -257,18 +445,90 @@ Item {
                 }
 
                 Repeater {
-                    model: Theme.widgetsEditMode ? 4 : 0
+                    model: widgetWindow.resizeActive ? 4 : 0
                     delegate: Rectangle {
+                        id: cornerHandle
                         required property int index
-                        width: 7
-                        height: 7
-                        radius: 2
+                        readonly property bool isTop: index < 2
+                        readonly property bool isLeft: index % 2 === 0
+                        readonly property string cornerCode: (isTop ? "t" : "b") + (isLeft ? "l" : "r")
+                        z: 12
+                        width: 12
+                        height: 12
+                        radius: 4
+                        color: cornerMa.containsMouse ? Theme.accent : Qt.alpha(Theme.accent, 0.85)
+                        anchors.top: isTop ? parent.top : undefined
+                        anchors.bottom: !isTop ? parent.bottom : undefined
+                        anchors.left: isLeft ? parent.left : undefined
+                        anchors.right: !isLeft ? parent.right : undefined
+                        anchors.margins: 1
+
+                        MouseArea {
+                            id: cornerMa
+                            anchors.fill: parent
+                            anchors.margins: -6
+                            hoverEnabled: true
+                            cursorShape: (cornerHandle.index === 0 || cornerHandle.index === 3)
+                                ? Qt.SizeFDiagCursor : Qt.SizeBDiagCursor
+                            onPressed: mouse => {
+                                const wx = Number(widgetWindow.w.x) || 0
+                                const wy = Number(widgetWindow.w.y) || 0
+                                const gx = wx + (cornerHandle.isLeft ? 0 : widgetWindow.implicitWidth)
+                                const gy = wy + (cornerHandle.isTop ? 0 : widgetWindow.implicitHeight)
+                                root.beginResize(widgetWindow, gx, gy, cornerHandle.cornerCode)
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    visible: Boolean(widgetWindow.isResizeSelected || widgetWindow.isResizing)
+                    z: 11
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.margins: 14
+                    width: sizeBadgeTxt.implicitWidth + 10
+                    height: 18
+                    radius: 4
+                    color: Qt.alpha(Theme.bg, 0.88)
+                    border.width: 1
+                    border.color: Theme.accent
+                    Text {
+                        id: sizeBadgeTxt
+                        anchors.centerIn: parent
+                        text: Math.round(widgetWindow.implicitWidth) + " × " + Math.round(widgetWindow.implicitHeight)
                         color: Theme.accent
-                        anchors.top: (index < 2) ? parent.top : undefined
-                        anchors.bottom: (index >= 2) ? parent.bottom : undefined
-                        anchors.left: (index % 2 === 0) ? parent.left : undefined
-                        anchors.right: (index % 2 === 1) ? parent.right : undefined
-                        anchors.margins: -2
+                        font.pixelSize: Theme.text2xs
+                        font.bold: true
+                        font.features: { "tnum": 1 }
+                    }
+                }
+
+                Rectangle {
+                    visible: Boolean(widgetWindow.isResizeSelected && !widgetWindow.isResizing && !Theme.widgetsEditMode)
+                    z: 11
+                    anchors.top: parent.top
+                    anchors.right: parent.right
+                    anchors.margins: 14
+                    width: 20
+                    height: 18
+                    radius: 4
+                    color: doneResizeMa.containsMouse ? Theme.accent : Qt.alpha(Theme.bg, 0.88)
+                    border.width: 1
+                    border.color: Theme.accent
+                    Text {
+                        anchors.centerIn: parent
+                        text: "✓"
+                        color: doneResizeMa.containsMouse ? Theme.bg : Theme.accent
+                        font.pixelSize: 11
+                        font.bold: true
+                    }
+                    MouseArea {
+                        id: doneResizeMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.resizeTargetWindow = null
                     }
                 }
 
@@ -392,7 +652,7 @@ Item {
                 Text {
                     id: bannerSnapTxt
                     anchors.centerIn: parent
-                    text: Theme.widgetsSnapGrid ? "Grille 16 px" : "Libre"
+                    text: Theme.widgetsSnapGrid ? "Grille 32 px" : "Libre"
                     font.pixelSize: Theme.text2xs
                     color: Theme.widgetsSnapGrid ? Theme.accent : Theme.fg
                 }
@@ -446,8 +706,10 @@ Item {
                 if (!root.placingWindow) return
                 const maxX = parent.width - root.placingWindow.implicitWidth
                 const maxY = parent.height - root.placingWindow.implicitHeight
-                root.placingX = Math.max(0, Math.min(maxX, mouse.x - root.placingGrabX))
-                root.placingY = Math.max(0, Math.min(maxY, mouse.y - root.placingGrabY))
+                const rawX = Math.max(0, Math.min(maxX, mouse.x - root.placingGrabX))
+                const rawY = Math.max(0, Math.min(maxY, mouse.y - root.placingGrabY))
+                root.placingX = Theme.widgetsSnapGrid ? Math.max(0, Math.min(maxX, Math.round(rawX / 32) * 32)) : rawX
+                root.placingY = Theme.widgetsSnapGrid ? Math.max(0, Math.min(maxY, Math.round(rawY / 32) * 32)) : rawY
             }
 
             onClicked: if (root.placingArmed) root.endPlacement(true)
@@ -458,11 +720,68 @@ Item {
         }
     }
 
+    PanelWindow {
+        id: resizeCatcher
+        visible: root.resizing
+        screen: root.targetScreen
+        anchors { top: true; bottom: true; left: true; right: true }
+        color: "transparent"
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.namespace: "shell-widget-resize"
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: (root.resizingCorner === "tl" || root.resizingCorner === "br")
+                ? Qt.SizeFDiagCursor : Qt.SizeBDiagCursor
+
+            onPositionChanged: mouse => {
+                if (!root.resizingWindow) return
+                const dx = mouse.x - root.resizingStartX
+                const dy = mouse.y - root.resizingStartY
+                const hasLeft = root.resizingCorner.indexOf("l") >= 0
+                const hasTop = root.resizingCorner.indexOf("t") >= 0
+
+                if (hasLeft) {
+                    const maxW = root.resizingOrigX + root.resizingOrigW
+                    const nw = Math.max(110, Math.min(maxW, root.resizingOrigW - dx))
+                    root.resizingW = nw
+                    root.resizingX = root.resizingOrigX + (root.resizingOrigW - nw)
+                } else {
+                    const maxW = parent.width - root.resizingOrigX
+                    root.resizingW = Math.max(110, Math.min(maxW, root.resizingOrigW + dx))
+                    root.resizingX = root.resizingOrigX
+                }
+
+                if (hasTop) {
+                    const maxH = root.resizingOrigY + root.resizingOrigH
+                    const nh = Math.max(48, Math.min(maxH, root.resizingOrigH - dy))
+                    root.resizingH = nh
+                    root.resizingY = root.resizingOrigY + (root.resizingOrigH - nh)
+                } else {
+                    const maxH = parent.height - root.resizingOrigY
+                    root.resizingH = Math.max(48, Math.min(maxH, root.resizingOrigH + dy))
+                    root.resizingY = root.resizingOrigY
+                }
+            }
+
+            onClicked: if (root.resizingArmed) root.endResize(true)
+            onWheel: if (root.resizing) root.endResize(false)
+
+            Keys.onEscapePressed: root.endResize(false)
+            focus: true
+        }
+    }
+
     WidgetMenu {
         ouvert: root.menuWidgetId !== ""
         widget: root.menuWidget
         xEcran: root.menuWidgetX
         yEcran: root.menuWidgetY
+        wEcran: root.menuWidgetW
+        hEcran: root.menuWidgetH
         onFermer: root.menuWidgetId = ""
     }
 }

@@ -19,6 +19,8 @@ Item {
     property var options: ({})
     property bool ouvert: false
     onOuvertChanged: if (ouvert) refresh(false)
+    property real widgetW: 0
+    property real widgetH: 0
 
     // Échelle du texte, réglée par widget depuis le panneau (options.text_scale,
     // en pourcentage). 100 = taille du thème ; les widgets de compte LLM partent
@@ -30,6 +32,17 @@ Item {
     }
     // Renseigné par main.qml : identité de l'entrée dans widgets.json.
     property string widgetId: ""
+
+    readonly property bool showDate: widgetH >= Math.round(105 * echelle)
+    readonly property bool showDetails: widgetH === 0 || widgetH >= Math.round(85 * echelle)
+    readonly property bool showForecast: widgetH === 0 || widgetH >= Math.round(160 * echelle)
+    readonly property string dateTexte: {
+        const d = new Date()
+        const jours = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"]
+        const mois = ["janvier", "février", "mars", "avril", "mai", "juin",
+                      "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+        return jours[d.getDay()] + " " + d.getDate() + " " + mois[d.getMonth()]
+    }
 
     property var meteoLocal: ({})
     property bool loadedLocal: false
@@ -47,15 +60,15 @@ Item {
         return p.slice(1, 6)
     }
 
-    implicitWidth: contentCol.implicitWidth
-    implicitHeight: contentCol.implicitHeight
+    implicitWidth: widgetW > 0 ? Math.max(contentCol.implicitWidth, widgetW) : contentCol.implicitWidth
+    implicitHeight: widgetH > 0 ? Math.max(contentCol.implicitHeight, widgetH) : contentCol.implicitHeight
 
     function refresh(force) {
         if (root.cityOption === "") {
             SystemServices.rafraichirMeteo(force)
             return
         }
-        const args = ["python3", Quickshell.shellPath("core/weather_service.py"),
+        const args = [Quickshell.shellPath("core/as-core"), "weather",
                       "--city", root.cityOption]
         if (force)
             args.push("--force")
@@ -140,9 +153,20 @@ Item {
             }
         }
 
+        // ── date (mode agrandi) ───────────────────────────────────────────
+        Text {
+            visible: root.showDate
+            text: root.dateTexte
+            color: Qt.alpha(Theme.fg, 0.78)
+            font.pixelSize: Math.round(Theme.widgetLabel * 1.05 * root.echelle)
+            font.capitalization: Font.Capitalize
+            style: Text.Raised
+            styleColor: Qt.alpha(Theme.bg, 0.55)
+        }
+
         // ── détails du jour ───────────────────────────────────────────────
         Text {
-            visible: root.ok
+            visible: root.ok && root.showDetails
             text: root.ok
                   ? ("min " + root.nombre(root.meteo.tmin, "°")
                      + " · max " + root.nombre(root.meteo.tmax, "°")
@@ -161,7 +185,7 @@ Item {
 
         // ── trois jours suivants ──────────────────────────────────────────
         Row {
-            visible: root.ok && root.previsions.length > 0
+            visible: root.ok && root.showForecast && root.previsions.length > 0
             spacing: Math.round(10 * root.echelle)
 
             Repeater {

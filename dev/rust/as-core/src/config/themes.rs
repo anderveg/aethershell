@@ -359,7 +359,7 @@ pub fn activer(cle: &str, silencieux: bool) -> i32 {
         let _ = write_json_atomic(&sp, &Value::Object(donnees), 0o644);
     }
 
-    let rofi_gen = core_dir().join("generate_rofi_theme.sh");
+    let rofi_gen = core_dir().join("sync_theme.sh");
     if rofi_gen.is_file() {
         let _ = run_cmd("bash", &[&rofi_gen.to_string_lossy()]);
     }

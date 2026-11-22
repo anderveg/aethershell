@@ -308,7 +308,7 @@ Item {
                                     const d = JSON.parse(text)
                                     for (let i = 0; i < (d.entrees || []).length; ++i) {
                                         const e = d.entrees[i]
-                                        if (root.dossierSeulement && e.type !== "dossier") continue
+                                        if (root.dossierSeulement && !e.est_dossier) continue
                                         modele.append(e)
                                     }
                                     root.erreur = String(d.erreur || "")

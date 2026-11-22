@@ -43,6 +43,17 @@ Item {
         return absX - ix
     }
 
+    function resolveAppName(app, desktop) {
+        const a = String(app || "").trim()
+        if (a !== "") return a
+        const d = String(desktop || "").trim()
+        if (d !== "") {
+            const parts = d.split(".")
+            return parts[parts.length - 1] || d
+        }
+        return "Système"
+    }
+
     function isQuietApp(appName) {
         return Boolean(appName && ShellState.quietNotifApps.indexOf(appName) >= 0)
     }
@@ -79,9 +90,10 @@ Item {
         actionsSupported: true
         persistenceSupported: true
         onNotification: notification => {
+            const desktop = notification.desktopEntry || (notification.hints && notification.hints["desktop-entry"]) || ""
             const entry = {
                 id: notification.id,
-                appName: notification.appName || "Système",
+                appName: service.resolveAppName(notification.appName, desktop),
                 summary: notification.summary || "Notification",
                 body: notification.body || "",
                 time: Qt.formatDateTime(new Date(), "hh:mm"),
@@ -145,7 +157,7 @@ Item {
                 if (!e || !e.id) continue
                 out.push({
                     id: e.id,
-                    appName: e.app || "",
+                    appName: service.resolveAppName(e.app, e.desktop),
                     summary: e.summary || "",
                     body: e.body || "",
                     time: String(e.ts || "").slice(11, 16),
@@ -362,6 +374,23 @@ Item {
         service.notificationsList = []
     }
 
+    function clearAppNotifications(appName) {
+        const target = String(appName || "")
+        const list = service.notificationsList
+        const kept = []
+        for (let i = 0; i < list.length; i++) {
+            const name = String(list[i].appName || "Notification")
+            if (name === target) {
+                if (list[i].raw) {
+                    try { list[i].raw.tracked = false } catch (e) {}
+                }
+            } else {
+                kept.push(list[i])
+            }
+        }
+        service.notificationsList = kept
+    }
+
     function openNotifTarget(entry, closeCentre) {
         if (!service.notifHasTarget(entry)) return false
         const target = entry.target
@@ -405,6 +434,7 @@ Item {
     Component.onCompleted: {
         ShellState.notifOps = ({
             clear: function () { service.clearNotifications() },
+            clearApp: function (nom) { service.clearAppNotifications(nom) },
             forget: function (e) { service.forgetNotif(e) },
             open: function (e, fermer) { service.openNotifTarget(e, fermer) },
             invoke: function (e, ident) { service.invokeNotifAction(e, ident) },
@@ -415,49 +445,51 @@ Item {
             quietToast: function () { service.quietToastSource() }
         })
 
-        ShellState.notifTargetsHook = function() {
-            const out = []
-            const list = service.notificationsList
-            for (let i = 0; i < list.length; i++) {
-                const e = list[i]
-                out.push({
-                    id: String(e.id),
-                    app: e.appName || "",
-                    resume: e.summary || "",
-                    regle: e.target ? String(e.target.rule || "") : "",
-                    type: e.target ? String(e.target.kind || "") : "",
-                    cible: e.target ? String(e.target.display || "") : "",
-                    actions: service.notifActions(e)
-                })
-            }
-            return JSON.stringify(out)
-        }
-        ShellState.notifClearHook = function() {
-            service.clearNotifications()
-            return true
-        }
-        ShellState.notifOpenHook = function() {
-            const list = service.notificationsList
-            for (let i = 0; i < list.length; i++)
-                if (service.notifHasTarget(list[i]))
-                    return service.openNotifTarget(list[i], true)
-            return false
-        }
-        ShellState.notifInvokeHook = function(actionId) {
-            const list = service.notificationsList
-            for (let i = 0; i < list.length; i++) {
-                const acts = service.notifActions(list[i])
-                for (let j = 0; j < acts.length; j++) {
-                    if (String(acts[j].identifier) === String(actionId)) {
-                        const ok = service.invokeNotifAction(list[i], actionId)
-                        if (service.latestToast && service.latestToast.raw === list[i].raw)
-                            service.latestToast = null
-                        return ok
+        ShellState.notifProvider = ({
+            targetsJson: function() {
+                const out = []
+                const list = service.notificationsList
+                for (let i = 0; i < list.length; i++) {
+                    const e = list[i]
+                    out.push({
+                        id: String(e.id),
+                        app: e.appName || "",
+                        resume: e.summary || "",
+                        regle: e.target ? String(e.target.rule || "") : "",
+                        type: e.target ? String(e.target.kind || "") : "",
+                        cible: e.target ? String(e.target.display || "") : "",
+                        actions: service.notifActions(e)
+                    })
+                }
+                return JSON.stringify(out)
+            },
+            clearAll: function() {
+                service.clearNotifications()
+                return true
+            },
+            openLatest: function() {
+                const list = service.notificationsList
+                for (let i = 0; i < list.length; i++)
+                    if (service.notifHasTarget(list[i]))
+                        return service.openNotifTarget(list[i], true)
+                return false
+            },
+            invokeAction: function(actionId) {
+                const list = service.notificationsList
+                for (let i = 0; i < list.length; i++) {
+                    const acts = service.notifActions(list[i])
+                    for (let j = 0; j < acts.length; j++) {
+                        if (String(acts[j].identifier) === String(actionId)) {
+                            const ok = service.invokeNotifAction(list[i], actionId)
+                            if (service.latestToast && service.latestToast.raw === list[i].raw)
+                                service.latestToast = null
+                            return ok
+                        }
                     }
                 }
+                return false
             }
-            return false
-        }
+        })
     }
 
     PopupWindow {

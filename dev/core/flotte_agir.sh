@@ -38,7 +38,7 @@ fi
 
 # 1. Accord de l'utilisateur, par le canal existant. Le CLI bloque jusqu'au
 #    verdict et sort en 0 seulement si l'accord est donné.
-if ! python3 "$ICI/hermes_approbations.py" demander \
+if ! "$ICI/as-core" hermes-approbations demander \
         "relancer la barre de $NOM" \
         --detail "systemctl --user restart quickshell sur $CIBLE" \
         --delai 120 >/dev/null 2>&1; then

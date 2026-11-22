@@ -19,7 +19,7 @@ Plutôt qu'un simple thème de barre, AetherShell regroupe les éléments visuel
 * **Surfaces unifiées & Thémage bout-en-bout** : rendu verre unifié via [`SurfaceFloutee.qml`](dev/SurfaceFloutee.qml) (`shell-blur`), courbes d'animation unifiées (`Theme.panelAnimDuration`), propagation automatique des palettes Matugen vers les terminaux et GTK 3/4 / Qt5ct / Qt6ct, binaire backend unifié en Rust [`as-core`](dev/rust/as-core/) (démon `daemon` et sondes `/proc`/`/sys` sans fork, connecteurs HTTP/SQLite, lanceur, applets) et veilles événementielles (`pactl subscribe`, `udevadm monitor`, `FileView`, `Hyprland.rawEvent`).
 * **Barres annexes optionnelles** : support d'une barre basse et de barres latérales verticales suivant la même logique de composants.
 * **Panneau de configuration unifié** : accessible en un raccourci (`SUPER + SHIFT + H`, tandis que `SUPER + H` déploie le panneau étendu de l'îlot) ou par clic milieu sur n'importe quel applet. Il permet d'ajuster l'apparence (palettes, flous, rayons, opacité), l'îlot dynamique, les applications préférées, les écrans, la minuterie de veille (`hypridle`), le démarrage automatique et les secrets locaux, avec application à chaud sans redémarrer la session.
-* **Widgets de bureau ancrables** : catalogue visuel 2 colonnes (horloge, date, météo, musique, système, tâches, **notes rapides**, **stickers**, quotas IA…), mode d'édition directe sur le bureau (poignées, glisser-déposer, aimantation sur grille `16 px`, échelle et suppression sur place), style `Glass / Carte` ou `Transparent` par widget et filtrage par bureau virtuel.
+* **Widgets de bureau ancrables** : catalogue visuel 2 colonnes (horloge, date, météo, musique, système, tâches, **notes rapides**, **stickers**, quotas IA…), mode d'édition directe sur le bureau (poignées de redimensionnement, glisser-déposer, aimantation sur grille `32 px`, contenu adaptatif et suppression sur place), style `Glass / Carte` ou `Transparent` par widget et filtrage par bureau virtuel.
 * **Visualiseur audio réactif** : intégration discrète d'une onde PipeWire native (`pwscope`) ou de barres spectrales (`cava`), avec extinction automatique après dix secondes de silence pour préserver les ressources GPU/CPU.
 * **Suivi de tâches & intégration Hermes** : gestion locale de checklists Markdown (`- [ ]`) avec sélecteur de fichiers graphique et interrupteur de surveillance optionnel confiant l'exécution des tâches cochées à l'agent Hermes via un worker d'arrière-plan.
 * **Sélecteurs graphiques intégrés** : feuilles modales dessinées directement dans la surface du shell ([`SelecteurDossier.qml`](dev/SelecteurDossier.qml), [`SelecteurFichier.qml`](dev/SelecteurFichier.qml)), contournant la limitation des dialogues Wayland traditionnels qui s'ouvriraient sous la surface de couche (`Overlay`).
@@ -111,7 +111,7 @@ avertissement. Une ligne peut porter une dérogation explicite — `neutralite:o
 * **Compositeur** : [Hyprland](https://hyprland.org) 0.57 ou plus récent (configuration modulaire en Lua) ;
 * **Moteur d'interface** : [Quickshell](https://quickshell.org) 0.3.2 ou supérieur ;
 * **Police d'icônes** : `0xProto Nerd Font` (installeur fourni dans `dev/core/install_fonts.sh`) ;
-* **Dépendances système** : répertoriées par distribution dans [`dev/dependencies.txt`](dev/dependencies.txt) (`rofi`, `matugen`, `wireplumber`, `NetworkManager`, `cava`, etc.).
+* **Dépendances système** : répertoriées par distribution dans [`dev/dependencies.txt`](dev/dependencies.txt) (`matugen`, `wireplumber`, `NetworkManager`, `cava`, etc.).
 
 ---
 

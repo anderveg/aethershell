@@ -12,6 +12,7 @@ Item {
     id: root
 
     property bool themesExpanded: false
+    property var envPresets: []
     readonly property var tousThemes: (Theme.paletteNoms && Theme.paletteNoms.length > 0)
         ? Theme.paletteNoms : ["dynamic", "catppuccin"]
     readonly property var themesAffiches: themesExpanded
@@ -22,14 +23,37 @@ Item {
     }
 
     Process {
+        id: presetProc
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const d = JSON.parse(text.trim())
+                    if (d && Array.isArray(d.presets)) {
+                        root.envPresets = d.presets
+                    } else if (d && d.ok && d.applied) {
+                        ConfigStore.refresh()
+                    }
+                } catch (e) {}
+            }
+        }
+    }
+
+    function runPresetCmd(args) {
+        presetProc.command = [Quickshell.shellPath("core/as-core"), "config"].concat(args)
+        presetProc.running = false
+        presetProc.running = true
+    }
+
+    Process {
         id: themesScanProc
         command: [Quickshell.shellPath("core/as-core"), "themes-scan", "--sync"]
         running: false
     }
 
     onVisibleChanged: {
-        if (visible && Theme.islandPanelOpen && Theme.islandPanelTab === 3 && !themesScanProc.running) {
-            themesScanProc.running = true
+        if (visible && Theme.islandPanelOpen && Theme.islandPanelTab === 3) {
+            if (!themesScanProc.running) themesScanProc.running = true
+            root.runPresetCmd(["preset_list"])
         }
     }
 
@@ -359,6 +383,151 @@ Item {
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.textXs
                 color: Theme.fg
+            }
+        }
+
+        // Profils d'environnement complets (Presets en 1 clic)
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 6
+
+            Text {
+                text: "PROFILS D'ENVIRONNEMENT"
+                font.family: Theme.fontUi
+                font.pixelSize: 10
+                font.weight: Font.Bold
+                color: Qt.alpha(Theme.fg, 0.55)
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 6
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 28
+                    radius: 8
+                    color: Qt.alpha(Theme.surfaceVariant, 0.55)
+                    border.color: presetInput.activeFocus ? Theme.accent : Qt.alpha(Theme.fg, 0.14)
+                    border.width: 1
+
+                    TextInput {
+                        id: presetInput
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        verticalAlignment: TextInput.AlignVCenter
+                        color: Theme.fg
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.textXs
+                        clip: true
+                        onAccepted: {
+                            const n = text.trim()
+                            if (!n) return
+                            root.runPresetCmd(["preset_save", n])
+                            text = ""
+                        }
+
+                        Text {
+                            anchors.fill: parent
+                            verticalAlignment: Text.AlignVCenter
+                            text: "Nom du profil (ex: Travail, Nuit)…"
+                            color: Qt.alpha(Theme.fg, 0.4)
+                            font: parent.font
+                            visible: parent.text === "" && !parent.activeFocus
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.preferredWidth: savePrTxt.implicitWidth + 16
+                    Layout.preferredHeight: 28
+                    radius: 8
+                    color: savePrMa.containsMouse ? Theme.accent : Qt.alpha(Theme.accent, 0.22)
+                    border.color: Theme.accent
+                    border.width: 1
+
+                    Text {
+                        id: savePrTxt
+                        anchors.centerIn: parent
+                        text: "Sauver"
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.textXs
+                        font.weight: Font.Bold
+                        color: savePrMa.containsMouse ? Theme.bg : Theme.fg
+                    }
+
+                    MouseArea {
+                        id: savePrMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            const n = presetInput.text.trim()
+                            if (!n) return
+                            root.runPresetCmd(["preset_save", n])
+                            presetInput.text = ""
+                        }
+                    }
+                }
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                spacing: 6
+                visible: root.envPresets.length > 0
+
+                Repeater {
+                    model: root.envPresets
+                    delegate: Rectangle {
+                        required property var modelData
+                        width: prRow.implicitWidth + 14
+                        height: 26
+                        radius: 8
+                        color: prMa.containsMouse ? Qt.alpha(Theme.accent, 0.22) : Qt.alpha(Theme.surfaceVariant, 0.5)
+                        border.color: Qt.alpha(Theme.fg, 0.14)
+                        border.width: 1
+
+                        Row {
+                            id: prRow
+                            anchors.centerIn: parent
+                            spacing: 6
+
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: modelData.name + " · " + modelData.theme
+                                font.family: Theme.fontUi
+                                font.pixelSize: 11
+                                color: Theme.fg
+                            }
+
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "✕"
+                                font.pixelSize: 10
+                                color: delPrMa.containsMouse ? Theme.error : Qt.alpha(Theme.fg, 0.5)
+
+                                MouseArea {
+                                    id: delPrMa
+                                    anchors.fill: parent
+                                    anchors.margins: -3
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.runPresetCmd(["preset_delete", modelData.name])
+                                }
+                            }
+                        }
+
+                        MouseArea {
+                            id: prMa
+                            anchors.fill: parent
+                            anchors.rightMargin: 18
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.runPresetCmd(["preset_apply", modelData.name])
+                        }
+                    }
+                }
             }
         }
 

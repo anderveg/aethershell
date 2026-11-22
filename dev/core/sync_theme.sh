@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
-# Rofi, Hyprland (colors.lua) & Hyprquickpaper Theme Generator synchronized with style_vars.json
-# Fuzzel a été retiré : la pilule spotlight (spotlight.qml) fait office de lanceur.
+# Hyprland (colors.lua), Hyprlock, Hyprquickpaper, Terminal & GTK/Qt Theme Sync
+# Synchronisé avec style_vars.json.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEV_ROOT="$(dirname "$SCRIPT_DIR")"
 STYLE_VARS="$SCRIPT_DIR/style_vars.json"
-ROFI_DIR="$HOME/.config/rofi"
-ROFI_CONFIG="$ROFI_DIR/config.rasi"
 
 if [ ! -f "$STYLE_VARS" ]; then
     echo "style_vars.json not found at $STYLE_VARS"
@@ -49,171 +47,7 @@ IFS=',' read -r BG FG ACCENT SURFACE SURFACE_VAR ERROR RADIUS OPACITY WARN ACCEN
 ACCENT_NOHASH="${ACCENT#\#}"
 SURFACE_VAR_NOHASH="${SURFACE_VAR#\#}"
 
-# 1. Generate Rofi theme directly into ~/.config/rofi/config.rasi
-mkdir -p "$ROFI_DIR" 2>/dev/null || true
-if [ -d "$ROFI_DIR" ]; then
-cat <<EOF > "$ROFI_CONFIG"
-configuration {
-    modi: "drun,run,window";
-    show-icons: true;
-    terminal: "kitty";
-    drun-display-format: "{name}";
-    location: 0;
-    disable-history: false;
-    sidebar-mode: true;
-    hover-select: true;
-    me-select-entry: "";
-    me-accept-entry: "!MousePrimary";
-    kb-cancel: "Escape,Control+g,MousePrimary";
-}
-
-* {
-    bg: ${BG};
-    fg: ${FG};
-    accent: ${ACCENT};
-    surface: ${SURFACE};
-    surface-var: ${SURFACE_VAR};
-    urgent: ${ERROR};
-    background-color: transparent;
-    text-color: @fg;
-}
-
-window {
-    fullscreen: true;
-    transparency: "real";
-    background-color: #00000044;
-    cursor: "default";
-    padding: 0px;
-    border: 0px;
-    children: [ dummy-top, center-row, dummy-bottom ];
-}
-
-dummy-top {
-    expand: true;
-    background-color: transparent;
-}
-
-dummy-bottom {
-    expand: true;
-    background-color: transparent;
-}
-
-center-row {
-    orientation: horizontal;
-    expand: false;
-    children: [ dummy-left, mainbox, dummy-right ];
-    background-color: transparent;
-}
-
-dummy-left {
-    expand: true;
-    background-color: transparent;
-}
-
-dummy-right {
-    expand: true;
-    background-color: transparent;
-}
-
-mainbox {
-    width: 600px;
-    expand: false;
-    background-color: @bg;
-    border: 2px;
-    border-color: @accent;
-    border-radius: ${RADIUS}px;
-    padding: 20px;
-    spacing: 12px;
-    children: [ inputbar, message, listview, mode-switcher ];
-}
-
-inputbar {
-    background-color: @surface;
-    text-color: @fg;
-    border-radius: ${RADIUS}px;
-    padding: 8px 12px;
-    children: [ prompt, entry ];
-}
-
-prompt {
-    background-color: transparent;
-    text-color: @accent;
-    margin: 0px 8px 0px 0px;
-}
-
-entry {
-    background-color: transparent;
-    text-color: @fg;
-    placeholder: "Rechercher...";
-    placeholder-color: @surface-var;
-}
-
-message {
-    background-color: transparent;
-    padding: 0px;
-}
-
-textbox {
-    text-color: @fg;
-    background-color: @surface;
-    padding: 8px 12px;
-    border-radius: ${RADIUS}px;
-}
-
-listview {
-    background-color: transparent;
-    spacing: 6px;
-    lines: 8;
-    columns: 1;
-}
-
-element {
-    background-color: transparent;
-    padding: 8px 12px;
-    spacing: 10px;
-    border-radius: ${RADIUS}px;
-    cursor: pointer;
-}
-
-element selected {
-    background-color: @accent;
-    text-color: @bg;
-}
-
-element-text {
-    background-color: inherit;
-    text-color: inherit;
-    vertical-align: 0.5;
-    cursor: pointer;
-}
-
-element-icon {
-    size: 24px;
-    background-color: transparent;
-    cursor: pointer;
-}
-
-mode-switcher {
-    spacing: 8px;
-    background-color: transparent;
-}
-
-button {
-    padding: 6px 12px;
-    background-color: @surface;
-    text-color: @fg;
-    border-radius: ${RADIUS}px;
-    cursor: pointer;
-}
-
-button selected {
-    background-color: @accent;
-    text-color: @bg;
-}
-EOF
-fi
-
-# 2. Generate Hyprland Lua colors file (colors.lua)
+# 1. Generate Hyprland Lua colors file (colors.lua)
 HYPR_COLORS_TARGET="$DEV_ROOT/hypr_modular/colors.lua"
 if [[ "$SCRIPT_DIR" == "$HOME/.config/quickshell"* ]]; then
     HYPR_COLORS_TARGET="$HOME/.config/hypr/colors.lua"
@@ -263,7 +97,7 @@ if [ -d "$HYPRLOCK_DIR" ]; then
     BG_NH="${BG#\#}"
     # Suffixes d'alpha : b3 = 0,70 · 8c = 0,55 · e5 = 0,90 · 80 = 0,50
     cat <<EOF > "$HYPRLOCK_COLORS"
-# Généré par core/generate_rofi_theme.sh depuis style_vars.json — ne pas éditer.
+# Généré par core/sync_theme.sh depuis style_vars.json — ne pas éditer.
 # Lu par hyprlock.conf : source = ~/.config/hypr/hyprlock-colors.conf
 
 \$bg = rgb(${BG_NH})
@@ -297,7 +131,7 @@ if color_raw:
         color_line = f"    color = rgb({c})"
 
 lines = [
-    "# Généré par core/generate_rofi_theme.sh depuis style_vars.json — ne pas éditer.",
+    "# Généré par core/sync_theme.sh depuis style_vars.json — ne pas éditer.",
     "# Lu par hyprlock.conf : source = ~/.config/hypr/hyprlock-bg.conf",
     "",
     "background {",
@@ -317,11 +151,15 @@ EOF
 fi
 
 # 5. Synchronise la palette des terminaux (OSC universel + Ghostty, Kitty, Alacritty, Foot)
-if [ -f "$SCRIPT_DIR/generate_terminal_theme.py" ]; then
+if [ -x "$SCRIPT_DIR/as-core" ]; then
+    "$SCRIPT_DIR/as-core" terminal-theme >/dev/null 2>&1 || true
+elif [ -f "$SCRIPT_DIR/generate_terminal_theme.py" ]; then
     python3 "$SCRIPT_DIR/generate_terminal_theme.py" >/dev/null 2>&1 || true
 fi
 
 # 6. Synchronise la palette vers GTK 3/4 et Qt5ct/Qt6ct
-if [ -f "$SCRIPT_DIR/sync_apps_theme.py" ]; then
+if [ -x "$SCRIPT_DIR/as-core" ]; then
+    "$SCRIPT_DIR/as-core" sync-apps-theme >/dev/null 2>&1 || true
+elif [ -f "$SCRIPT_DIR/sync_apps_theme.py" ]; then
     python3 "$SCRIPT_DIR/sync_apps_theme.py" >/dev/null 2>&1 || true
 fi

@@ -174,26 +174,34 @@ fn api_proxmox(
     }
 
     // Proxmox sert un certificat auto-signé par défaut : curl -sk gère -k proprement.
-    let auth_hdr = format!("Authorization: {}", auth);
-    let mut args = vec![
-        "-s",
-        "-k",
-        "-m",
-        "5",
-        "-X",
-        methode,
-        "-H",
-        &auth_hdr,
-        "-H",
-        "Accept: application/json",
-        "-w",
-        "\n%{http_code}",
-        &url,
-    ];
-    if methode == "POST" {
-        args.extend(["-d", ""]);
+    // On passe l'en-tête Authorization (et l'URL) via `curl -K -` (stdin) pour ne rien exposer dans argv / ps.
+    if auth.contains('\n') || auth.contains('\r') || url.contains('\n') || url.contains('\r') {
+        return (None, Some("paramètre invalide".to_string()));
     }
-    let Ok(out) = Command::new("curl").args(&args).output() else {
+    let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+    let mut cfg = format!(
+        "url = \"{}\"\nheader = \"Authorization: {}\"\nheader = \"Accept: application/json\"\n",
+        esc(&url),
+        esc(&auth),
+    );
+    if methode == "POST" {
+        cfg.push_str("data = \"\"\n");
+    }
+    let args = ["-s", "-k", "-m", "5", "-X", methode, "-w", "\n%{http_code}", "-K", "-"];
+    let Ok(mut child) = Command::new("curl")
+        .args(args)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+    else {
+        return (None, Some("injoignable".to_string()));
+    };
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        let _ = stdin.write_all(cfg.as_bytes());
+    }
+    let Ok(out) = child.wait_with_output() else {
         return (None, Some("injoignable".to_string()));
     };
     if !out.status.success() {

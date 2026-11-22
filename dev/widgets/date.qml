@@ -23,6 +23,8 @@ Item {
     property var options: ({})
     // Renseigné par main.qml : identité de l'entrée dans widgets.json.
     property string widgetId: ""
+    property real widgetW: 0
+    property real widgetH: 0
 
     // Échelle du texte, réglée par widget depuis le panneau (options.text_scale,
     // en pourcentage). 100 = taille du thème.
@@ -34,6 +36,7 @@ Item {
 
     // Étendu ou non : état local au widget, il vit tant que le shell tourne.
     property bool ouvert: false
+    readonly property bool calendrierEtendu: ouvert || widgetH >= Math.round(150 * echelle)
 
     readonly property var jours: ["dimanche", "lundi", "mardi", "mercredi",
                                   "jeudi", "vendredi", "samedi"]
@@ -52,10 +55,10 @@ Item {
     // sur le texte seul, donc pas de boucle largeur ↔ contenu comme lorsque la
     // grille se dimensionnait sur la colonne qui la contient.
     readonly property real largeurCalendrier: Math.max(ligne.width,
-                                                       Math.round(196 * echelle))
+                                                       Math.max(Math.round(196 * echelle), widgetW))
 
-    implicitWidth: colonne.implicitWidth
-    implicitHeight: colonne.implicitHeight
+    implicitWidth: widgetW > 0 ? Math.max(colonne.implicitWidth, widgetW) : colonne.implicitWidth
+    implicitHeight: widgetH > 0 ? Math.max(colonne.implicitHeight, widgetH) : colonne.implicitHeight
 
     SystemClock {
         id: clock
@@ -115,7 +118,7 @@ Item {
 
         CalendrierCompact {
             id: calendrier
-            visible: root.ouvert
+            visible: root.calendrierEtendu
             width: root.largeurCalendrier
             echelle: root.echelle
         }

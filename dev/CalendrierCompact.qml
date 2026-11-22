@@ -136,13 +136,33 @@ Item {
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                width: parent.width - 28
+                width: parent.width - 42
                 text: racine.moisNoms[racine.mois - 1] + " " + racine.annee
                 color: Theme.fg
                 font.pixelSize: Math.round(11 * racine.echelle)
                 font.bold: true
                 horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight
             }
+
+            Icon {
+                id: syncIcon
+                anchors.verticalCenter: parent.verticalCenter
+                glyph: "refresh"
+                size: Math.round(11 * racine.echelle)
+                color: racine.statut === "loading" ? Theme.accent : (syncMa.containsMouse ? Theme.accent : Qt.alpha(Theme.fg, 0.55))
+
+                MouseArea {
+                    id: syncMa
+                    anchors.fill: parent
+                    anchors.margins: -4
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: racine.charger(true)
+                }
+            }
+
+            Item { width: 2; height: 1 }
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter

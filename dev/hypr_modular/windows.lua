@@ -57,7 +57,6 @@ hl.window_rule({
     border_size  = 0,
     rounding     = 0,
     no_anim      = true,
-    idle_inhibit = "fullscreen",
 })
 
 -- Demande d'authentification polkit (KDE, Hypr, LXQt) : flottante, centrée,

@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Hyprland
 import "."
 
 // Onglet « Bureau & Lanceur » du panneau de configuration, sorti de config_panel.qml.
@@ -99,7 +100,9 @@ Column {
             }
             return
         }
-        root.runConfigCmd(["widget_add", String(nature), "1", "120", "160"])
+        const wsId = (Hyprland.focusedWorkspace && Number(Hyprland.focusedWorkspace.id) > 0)
+            ? Number(Hyprland.focusedWorkspace.id) : 1
+        root.runConfigCmd(["widget_add", String(nature), String(wsId), "120", "160"])
     }
 
     Process {
@@ -180,7 +183,7 @@ CollapsibleSection {
                 Text {
                     id: snapLbl
                     anchors.centerIn: parent
-                    text: Theme.widgetsSnapGrid ? "Grille 16 px : ON" : "Grille 16 px : OFF"
+                    text: Theme.widgetsSnapGrid ? "Grille 32 px : ON" : "Grille 32 px : OFF"
                     color: Theme.widgetsSnapGrid ? Theme.accent : Qt.alpha(Theme.fg, 0.75)
                     font.pixelSize: Theme.textXs
                     font.bold: Theme.widgetsSnapGrid
@@ -355,7 +358,7 @@ CollapsibleSection {
                             anchors.verticalCenter: parent.verticalCenter
                             glyph: widgetCard.wtype === "date" ? "calendar"
                                    : (widgetCard.wtype === "meteo" ? "cloud"
-                                   : (widgetCard.wtype === "musique" ? "music"
+                                   : (widgetCard.wtype === "musique" || widgetCard.wtype === "visualiseur" ? "music"
                                    : (widgetCard.wtype === "combo" ? "widgets"
                                    : (widgetCard.wtype === "systeme" ? "monitor"
                                    : (widgetCard.wtype === "comptes" ? "wallet"

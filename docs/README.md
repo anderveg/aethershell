@@ -93,7 +93,7 @@ Paths are constructed using variables, never hardcoded:
 * **Compositor**: [Hyprland](https://hyprland.org) 0.57 or newer (modular Lua configuration);
 * **UI Engine**: [Quickshell](https://quickshell.org) 0.3.2 or newer;
 * **Icon Font**: `0xProto Nerd Font` (installer provided in `dev/core/install_fonts.sh`);
-* **System Dependencies**: listed by distribution in [`dev/dependencies.txt`](../dev/dependencies.txt) (`rofi`, `matugen`, `wireplumber`, `NetworkManager`, `cava`, etc.).
+* **System Dependencies**: listed by distribution in [`dev/dependencies.txt`](../dev/dependencies.txt) (`matugen`, `wireplumber`, `NetworkManager`, `cava`, etc.).
 
 ---
 

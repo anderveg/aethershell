@@ -9,6 +9,77 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **`x.yy.x.x`** : ajout de fonctionnalités décisives (ex. : ajout de l'Îlot dynamique).
 - **Version majeure (`y.x.x.x`)** : conservation du schéma déjà en place (proposée lorsque l'ampleur des changements le justifie ; décision finale validée par l'utilisateur).
 
+## [0.4.3.0] — 2026-11-22
+
+### Ajouté
+- **Profils d'environnement complets (« Presets » en 1 clic)** (`dev/rust/as-core/src/config/presets.rs`, `dev/rust/as-core/src/config/config_mgr.rs`, `dev/IslandTabApparence.qml`) :
+  - Capture et restauration atomique de la palette active, du flou/opacité, de la disposition de l'îlot et des widgets bureau dans `core/presets.json` via `as-core config preset_list|preset_save|preset_apply|preset_delete`.
+  - Section dédiée dans l'onglet Apparence de l'Îlot dynamique pour enregistrer, appliquer en un clic ou supprimer un profil.
+- **Groupement des notifications par application & actions rapides** (`dev/IslandTabAlertes.qml`, `dev/NotifService.qml`) :
+  - Piles repliables par application dans l'onglet Alertes de l'Îlot dynamique dès 2 notifications, avec action *Tout effacer* (`clearAppNotifications`) et création de règle `notif_targets` en un clic (`+ Règle` → `notif_app_set`).
+- **Resynchronisation calendrier dans `CalendrierCompact.qml`** : ajout d'un bouton de resynchronisation manuelle (`charger(true)`) dans l'en-tête des widgets et panneaux utilisant `CalendrierCompact.qml`, en complément du bouton et du formulaire d'ajout déjà présents dans `CalendrierPanneau.qml`.
+
+## [0.4.2.2] — 2026-11-22
+
+### Modifié
+- **Approfondissement architectural QML (`dev/IslandAppletLayout.qml`, `dev/ConfigStore.qml`, `dev/LiveActivityStore.qml`, `dev/MinimizedWindows.qml`, `dev/ShellState.qml`, `dev/config_panel.qml`)** :
+  - Unification du catalogue, des icônes par défaut et du placement par zones de l'Îlot dynamique dans le singleton `IslandAppletLayout.qml` (branché sur `DynamicIsland.qml`, `IlotCoinsApplets.qml`, `OngletIlot.qml`, `IlotZoneColumn.qml` et `ShellState.qml`).
+  - Extraction du magasin de configuration `ConfigStore.qml` (`as-core config state` et file séquentielle de commandes) hors de `config_panel.qml`.
+  - Découpage de `ShellState.qml` en modules de domaine (`LiveActivityStore.qml`, `MinimizedWindows.qml`), remplacement des 7 hooks void nullables par des signaux QML + `Connections` et unification des 4 `notif*Hook` en un unique `notifProvider`.
+- **Coutures de testabilité & typage `as-core` (`dev/rust/as-core/`)** :
+  - Ajout de `StyleConfig` (`src/config/style_config.rs`), de la couture `resolve_screensaver_cmd_with` (`matrix.rs`), de `parse_workspace_spec` (`config_mgr.rs`) et d'une suite initiale de 8 tests unitaires `cargo test` (`style_config`, `matrix`, `config_mgr`, `io`).
+- **Bascules `as-core` (`dev/core/sync_theme.sh`, `dev/core/flotte_agir.sh`, `dev/hypr_modular/binds.lua`)** : remplacement des appels `python3` vers `generate_terminal_theme.py`, `sync_apps_theme.py`, `hermes_approbations.py` et `workspace_float_toggle.py` par les sous-commandes `as-core` correspondantes.
+
+### Supprimé
+- **Reliquat Rofi (`dev/core/generate_rofi_theme.sh` → `dev/core/sync_theme.sh`)** : renommage du script en `sync_theme.sh` (avec mise à jour de tous ses appelants dans `install.sh`, `as-core`, `hyprquickpaper` et `hyprlock.conf`) et suppression complète de la génération de `~/.config/rofi/config.rasi`.
+
+## [0.4.2.1] — 2026-11-22
+
+### Sécurité & Corrigé
+- **Jeton Proxmox (`dev/rust/as-core/src/services/homelab.rs`)** : passage de l'en-tête `Authorization` et de l'URL à `curl` via `stdin` (`curl -K -`) au lieu d'arguments de ligne de commande (`argv`), évitant toute exposition dans `ps` ou `/proc/<pid>/cmdline`.
+- **Écran de veille (`dev/hypr_modular/hypridle.conf`, `dev/hypr_modular/windows.lua`, `dev/rust/as-core/src/config/config_mgr.rs`, `dev/rust/as-core/src/applets/matrix.rs`)** :
+  - Arrêt de l'écran de veille avant toute mise en veille (`before_sleep_cmd` et `on-timeout` de `systemctl suspend`) afin qu'il ne réapparaisse pas au réveil.
+  - Délai DPMS par défaut porté à `1200` s (20 min) et décalage automatique à `délai + 300` s lors du réglage de l'écran de veille pour qu'il reste visible avant l'extinction de l'écran.
+  - Suppression de `idle_inhibit = "fullscreen"` sur `matrix-screensaver` afin de ne plus bloquer l'extinction DPMS ni la suspension.
+  - Stockage du fichier PID et de la config `cava` temporaire dans `$XDG_RUNTIME_DIR` avec `O_NOFOLLOW` (`0600`) au lieu de `/tmp`, et vérification de `/proc/<pid>/cmdline` avant `killpg`/`kill`.
+  - Lecture de la position du curseur via le socket UNIX Hyprland (repli `hyprctl`) à 200 ms au lieu de lancer `hyprctl` toutes les 80 ms, et chemin `style_vars.json` unifié (`style_vars_path()`).
+- **Écritures atomiques (`dev/rust/as-core/src/common/io.rs`, `config_mgr.rs`, `config_hypr.rs`)** : ajout de `write_text_atomic` et remplacement des `fs::write` sur les fichiers `.lua`, `.conf` et `autostart_cmds.txt`.
+
+## [0.4.2.0] — 2026-11-22
+
+### Ajouté
+- **Redimensionnement interactif des widgets & contenu adaptatif** (`dev/DesktopWidgetsLayer.qml`, `dev/WidgetMenu.qml`, `dev/ShellState.qml`, `dev/hypr_modular/binds.lua`, `dev/rust/as-core/src/config/config_mgr.rs`) :
+  - Raccourci `SUPER + CTRL + clic` sélectionnant le widget et affichant les 4 poignées d'angle, le badge `L × H` et le bouton `✓`, avec ancrage du bord opposé et persistance `w`/`h` (`widget_resize`).
+  - Bouton *Réinitialiser la taille* dans le menu clic-milieu (`WidgetMenu.qml`).
+  - Grille d'aimantation portée à **32 px** et appliquée en direct pendant le déplacement.
+  - Contenu progressif selon la taille sur `horloge.qml` (`horloge` → `+ date` → `+ météo`), `meteo.qml` (`météo` → `+ date` → `+ prévisions`), `date.qml` (dépliage calendrier), `systeme.qml`, `homelab.qml` et `visualiseur.qml` (avec aperçu placeholder fidèle au mode actif et à l'opacité du fond au repos).
+- **Notifications silencieuses par application** (`dev/NotifsApplet.qml`, `dev/NotifService.qml`, `dev/rust/as-core/src/config/config_mgr.rs`) : bouton cloche barrée sur chaque carte et puces d'apps silencieuses en pied de panneau, avec résolution de `appName` depuis `desktopEntry` (ex. `com.blitzfc.qbz` → `qbz`).
+- **Capture vidéo avec son système** (`dev/screenshot_bar.qml`, `dev/ScreenshotOverlay.qml`, `dev/core/screenshot.sh`) : pastille haut-parleur en face de la section vidéo passant `--audio` (`--audio=<sink>.monitor` via `pactl get-default-sink`) et forçant `libx264` + `aac` dans `wf-recorder` quand disponibles.
+- **Tiroir « Écran de veille » (`hypridle`)** (`dev/OngletEcrans.qml`, `dev/config_panel.qml`, `dev/hypr_modular/hypridle.conf`, `dev/rust/as-core/src/config/config_mgr.rs`, `dev/rust/as-core/src/applets/matrix.rs`) :
+  - Délai d'inactivité configurable (15 min par défaut), animations terminal (`unimatrix`, `cmatrix`, `pipes.sh`, `cbonsai`, `cava`, `asciiquarium`, `lavat`), vitesse (`Lent` / `Normal` / `Rapide`), option *Couleurs aléatoires* (changement toutes les 10 s sur `unimatrix`/`cmatrix`/`lavat`), bouton de test immédiat, fond noir strict (`#000000`, `color0=#000000`, curseur masqué) et fermeture immédiate à la moindre touche ou mouvement souris.
+
+### Corrigé
+- **Sélecteur de dossiers (`dev/SelecteurFichier.qml`)** : filtrage avec `!e.est_dossier` au lieu de `e.type !== "dossier"`, rétablissant l'affichage des sous-dossiers.
+- **Widgets & Visualiseur** : placement du menu clic-milieu sans chevauchement, suppression du clignotement au relâchement, ajout sur le workspace actif (`config_panel.qml`, `OngletBureau.qml`) et activation indépendante du visualiseur barre / îlot / widget (`VisualiseurAudio.qml`).
+- **Écran de veille (`matrix.rs`)** : attachement du terminal de contrôle (`TIOCSCTTY`), attente de géométrie non nulle, `LC_NUMERIC=C` pour `cbonsai -t`, grâce `stdin` de 450 ms au lancement (`ncurses`) et `-o` sur `unimatrix`.
+
+## [0.4.1.0] — 2026-11-21
+
+### Ajouté
+- **Visualiseur audio — 6 nouvelles animations & widget bureau détachable** (`dev/Visualiseur.qml`, `dev/VisualiseurAudio.qml`, `dev/widgets/visualiseur.qml`) :
+  - **Spectre (`cava`)** : `miroir` (barres symétriques), `pics` (barres + crêtes flottantes), `blocs` (matrice LED) et `spectre` (courbe de Bézier lissée avec dégradé).
+  - **Forme d'onde (`pwscope`)** : `ruban` (enveloppe remplie) et `liquide` (3 harmoniques sinusoïdales modulées par l'énergie).
+  - **Widget bureau `visualiseur`** (`dev/widgets/visualiseur.qml`, `dev/config_panel.qml`, `dev/OngletBureau.qml`) permettant de détacher le visualiseur hors de la barre ou de l'îlot.
+  - Sélecteurs mis à jour dans `dev/OngletBarres.qml` (`Flow`) et `dev/IslandTabControles.qml`.
+- **Menu clic molette enrichi sur les widgets (`dev/WidgetMenu.qml`)** : affichage de l'apparence commune (`Glass`/`Transparent`, `Flou`, `Bordure`, `Opacité`, `Taille %`) et des options propres à chaque type de widget (`Secondes`, `Ignorer navigateurs`, `Rendu` du visualiseur, `Tâches cochées`, `Rafraîchir`, `Ville`, `Image`), sans doublons.
+- **Portage complet du reste du Python vers Rust (`as-core`)** :
+  - **Lot 6 (`src/wallfx/`)** : `masque-peinture`, `wallfx` (`contagio` & `perfil`), `depth-mask` et `parallaxe` portés nativement en Rust (`image`, `ort`, `sha2`).
+  - **Configuration & premier lancement (`src/config/`)** : `config_mgr.rs` + `config_hypr.rs` (suppression de la délégation Python), `first_run.rs` (`first_run_state` / `first_run_apply`) et `quick_tools.rs` (`quick-notes`, `wallpaper-list`, `wl-copy`).
+  - **0 appel `python3` restant** dans `dev/*.qml` et `dev/widgets/*.qml`.
+
+### Modifié / Corrigé
+- **Audit & nettoyage du code Rust (`dev/rust/as-core/`)** : suppression des stubs de délégation Python (`wrappers.rs`, `connectors.rs`) et des warnings `rustc` (**0 warning**), factorisation de `expand_home`, `now_f64`, `now_secs` et `local_tm` dans `common/`, `jetons()` sans regex (`app_index.rs`), `Regex::new` sortis des boucles (`config_mgr.rs`), appel direct `depth_mask::generer_brut()` (`parallaxe.rs`) et rétablissement de `SIGPIPE` (`SIG_DFL`) dans `main.rs`.
+
 ## [0.4.0.0] — 2026-11-20
 
 ### Ajouté

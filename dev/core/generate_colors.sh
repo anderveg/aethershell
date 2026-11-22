@@ -128,4 +128,4 @@ os.replace(tmp_path, style_path)
 print(f"Dynamic palette updated in {style_path}")
 EOF
 
-"$SCRIPT_DIR/generate_rofi_theme.sh"
+"$SCRIPT_DIR/sync_theme.sh"

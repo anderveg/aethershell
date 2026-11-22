@@ -498,7 +498,7 @@ MARKER="$CURRENT_HYPR/.quickshell_managed"
 JSON_DEPLOYES="applets_catalogue.json emoji.json tray_icons.json secrets.example.json"
 
 PRESERVE_CORE="style_vars.json app_vars.json secrets.json autostart.json widgets.json notif_targets.json llm_providers.json bar_applets.json homelab.json launch_history.json todo.json"
-# colors.lua est *généré* par generate_rofi_theme.sh depuis style_vars.json :
+# colors.lua est *généré* par sync_theme.sh depuis style_vars.json :
 # il n'est ni préservé ni comparé (sinon .upstream à chaque changement de palette).
 # programs.lua est *généré* depuis core/app_vars.json (sync_programs_lua) et
 # autostart_cmds.txt depuis core/autostart.json : ils ne sont ni préservés ni
@@ -2032,7 +2032,7 @@ deploy_new_env() {
 
     installer_crochets_git
 
-    "$CORE_DIR/generate_rofi_theme.sh"
+    "$CORE_DIR/sync_theme.sh"
 
     deploy_ghostty_overrides
 

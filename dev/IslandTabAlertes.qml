@@ -258,81 +258,257 @@ Item {
                     width: parent.width
                     spacing: 6
 
+                    property var expandedGroups: ({})
+                    property string ruleToastApp: ""
+                    Timer {
+                        id: ruleToastTimer
+                        interval: 1800
+                        onTriggered: notifCol.ruleToastApp = ""
+                    }
+
+                    function toggleGroup(appName) {
+                        const copy = Object.assign({}, notifCol.expandedGroups)
+                        copy[appName] = !Boolean(copy[appName])
+                        notifCol.expandedGroups = copy
+                    }
+
+                    function createRuleForApp(appName) {
+                        const key = String(appName || "").trim()
+                        if (!key) return
+                        const cmd = key.toLowerCase().replace(/\s+/g, "-")
+                        ConfigStore.runCmd(["notif_app_set", key, cmd])
+                        notifCol.ruleToastApp = key
+                        ruleToastTimer.restart()
+                    }
+
+                    readonly property var groupedNotifs: {
+                        const list = ShellState.notifList || []
+                        const order = []
+                        const map = ({})
+                        for (let i = 0; i < list.length; ++i) {
+                            const item = list[i]
+                            const app = String(item.appName || "Notification")
+                            if (!map[app]) {
+                                map[app] = { appName: app, items: [] }
+                                order.push(map[app])
+                            }
+                            map[app].items.push(item)
+                        }
+                        return order
+                    }
+
                     Repeater {
-                        model: ShellState.notifList || []
-                        delegate: Rectangle {
+                        model: notifCol.groupedNotifs
+                        delegate: ColumnLayout {
                             required property var modelData
+                            readonly property string appName: modelData.appName
+                            readonly property var items: modelData.items
+                            readonly property bool isGroup: items.length > 1
+                            readonly property bool isExpanded: Boolean(notifCol.expandedGroups[appName])
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 48
-                            radius: 8
-                            color: nMa.containsMouse ? Qt.alpha(Theme.accent, 0.14) : Qt.alpha(Theme.surfaceVariant, 0.45)
+                            spacing: 4
 
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 10
-                                anchors.rightMargin: 8
-                                spacing: 8
+                            // En-tête de pile repliable quand une app a >= 2 notifications
+                            Rectangle {
+                                visible: isGroup
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 40
+                                radius: 8
+                                color: grpMa.containsMouse ? Qt.alpha(Theme.accent, 0.14) : Qt.alpha(Theme.surfaceVariant, 0.55)
+                                border.color: Qt.alpha(Theme.accent, 0.28)
+                                border.width: 1
 
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 1
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 8
+                                    spacing: 6
+
+                                    Text {
+                                        text: isExpanded ? "▾" : "▸"
+                                        font.pixelSize: 11
+                                        color: Theme.accent
+                                    }
 
                                     Text {
                                         Layout.fillWidth: true
-                                        text: (modelData.appName || "Notification") + (modelData.summary ? (" · " + modelData.summary) : "")
+                                        text: appName + " (" + items.length + ")" + (items[0] && items[0].summary ? (" · " + items[0].summary) : "")
                                         font.family: Theme.fontUi
                                         font.pixelSize: Theme.textXs
                                         font.weight: Font.DemiBold
                                         color: Theme.fg
                                         elide: Text.ElideRight
                                     }
-                                    Text {
-                                        Layout.fillWidth: true
-                                        text: modelData.body || ""
-                                        font.family: Theme.fontUi
-                                        font.pixelSize: 10
-                                        color: Qt.alpha(Theme.fg, 0.7)
-                                        elide: Text.ElideRight
+
+                                    Rectangle {
+                                        Layout.preferredWidth: ruleGrpTxt.implicitWidth + 10
+                                        Layout.preferredHeight: 20
+                                        radius: 5
+                                        color: ruleGrpMa.containsMouse ? Qt.alpha(Theme.accent, 0.25) : Qt.alpha(Theme.fg, 0.08)
+                                        z: 2
+
+                                        Text {
+                                            id: ruleGrpTxt
+                                            anchors.centerIn: parent
+                                            text: notifCol.ruleToastApp === appName ? "✓ Règle" : "+ Règle"
+                                            font.pixelSize: 9
+                                            font.bold: true
+                                            color: notifCol.ruleToastApp === appName ? Theme.success : Theme.accent
+                                        }
+
+                                        MouseArea {
+                                            id: ruleGrpMa
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: notifCol.createRuleForApp(appName)
+                                        }
                                     }
-                                }
 
-                                Rectangle {
-                                    Layout.preferredWidth: 22
-                                    Layout.preferredHeight: 22
-                                    radius: 6
-                                    color: closeNMa.containsMouse ? Qt.alpha(Theme.error, 0.25) : "transparent"
-                                    z: 2
+                                    Rectangle {
+                                        Layout.preferredWidth: clrGrpTxt.implicitWidth + 10
+                                        Layout.preferredHeight: 20
+                                        radius: 5
+                                        color: clrGrpMa.containsMouse ? Qt.alpha(Theme.error, 0.22) : Qt.alpha(Theme.fg, 0.08)
+                                        z: 2
 
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "✕"
-                                        font.pixelSize: 11
-                                        color: closeNMa.containsMouse ? Theme.error : Qt.alpha(Theme.fg, 0.6)
-                                    }
+                                        Text {
+                                            id: clrGrpTxt
+                                            anchors.centerIn: parent
+                                            text: "Tout effacer"
+                                            font.pixelSize: 9
+                                            color: clrGrpMa.containsMouse ? Theme.error : Qt.alpha(Theme.fg, 0.75)
+                                        }
 
-                                    MouseArea {
-                                        id: closeNMa
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            if (ShellState.notifOps && ShellState.notifOps.forget) {
-                                                ShellState.notifOps.forget(modelData)
+                                        MouseArea {
+                                            id: clrGrpMa
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                if (ShellState.notifOps && ShellState.notifOps.clearApp) {
+                                                    ShellState.notifOps.clearApp(appName)
+                                                }
                                             }
                                         }
                                     }
                                 }
+
+                                MouseArea {
+                                    id: grpMa
+                                    anchors.fill: parent
+                                    anchors.rightMargin: 130
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: notifCol.toggleGroup(appName)
+                                }
                             }
 
-                            MouseArea {
-                                id: nMa
-                                anchors.fill: parent
-                                anchors.rightMargin: 28
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    if (ShellState.notifOps && ShellState.notifOps.open) {
-                                        ShellState.notifOps.open(modelData, function() { Theme.islandPanelOpen = false })
+                            // Cartes individuelles (toujours visibles si count === 1, sinon si déplié)
+                            Repeater {
+                                model: (!isGroup || isExpanded) ? items : []
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    Layout.leftMargin: isGroup ? 10 : 0
+                                    Layout.preferredHeight: 48
+                                    radius: 8
+                                    color: nMa.containsMouse ? Qt.alpha(Theme.accent, 0.14) : Qt.alpha(Theme.surfaceVariant, 0.45)
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 10
+                                        anchors.rightMargin: 8
+                                        spacing: 6
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 1
+
+                                            Text {
+                                                Layout.fillWidth: true
+                                                text: (modelData.appName || "Notification") + (modelData.summary ? (" · " + modelData.summary) : "")
+                                                font.family: Theme.fontUi
+                                                font.pixelSize: Theme.textXs
+                                                font.weight: Font.DemiBold
+                                                color: Theme.fg
+                                                elide: Text.ElideRight
+                                            }
+                                            Text {
+                                                Layout.fillWidth: true
+                                                text: modelData.body || ""
+                                                font.family: Theme.fontUi
+                                                font.pixelSize: 10
+                                                color: Qt.alpha(Theme.fg, 0.7)
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            visible: !isGroup
+                                            Layout.preferredWidth: ruleBtnTxt.implicitWidth + 10
+                                            Layout.preferredHeight: 20
+                                            radius: 5
+                                            color: ruleMa.containsMouse ? Qt.alpha(Theme.accent, 0.25) : Qt.alpha(Theme.fg, 0.08)
+                                            z: 2
+
+                                            Text {
+                                                id: ruleBtnTxt
+                                                anchors.centerIn: parent
+                                                text: notifCol.ruleToastApp === appName ? "✓ Règle" : "+ Règle"
+                                                font.pixelSize: 9
+                                                font.bold: true
+                                                color: notifCol.ruleToastApp === appName ? Theme.success : Theme.accent
+                                            }
+
+                                            MouseArea {
+                                                id: ruleMa
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: notifCol.createRuleForApp(appName)
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            Layout.preferredWidth: 22
+                                            Layout.preferredHeight: 22
+                                            radius: 6
+                                            color: closeNMa.containsMouse ? Qt.alpha(Theme.error, 0.25) : "transparent"
+                                            z: 2
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "✕"
+                                                font.pixelSize: 11
+                                                color: closeNMa.containsMouse ? Theme.error : Qt.alpha(Theme.fg, 0.6)
+                                            }
+
+                                            MouseArea {
+                                                id: closeNMa
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    if (ShellState.notifOps && ShellState.notifOps.forget) {
+                                                        ShellState.notifOps.forget(modelData)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: nMa
+                                        anchors.fill: parent
+                                        anchors.rightMargin: isGroup ? 28 : 84
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            if (ShellState.notifOps && ShellState.notifOps.open) {
+                                                ShellState.notifOps.open(modelData, function() { Theme.islandPanelOpen = false })
+                                            }
+                                        }
                                     }
                                 }
                             }

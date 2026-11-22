@@ -20,12 +20,13 @@ QtObject {
         }
     }
 
-    property var wallpaperNavHook: null
-    property var themeNavHook: null
-    property var islandNavHook: null
-    property var placeWidgetHook: null
-    property var widgetMenuHook: null
-    property var captureHook: null
+    signal wallpaperNavRequested(string action)
+    signal themeNavRequested(string action)
+    signal islandNavRequested(string action)
+    signal placeWidgetRequested()
+    signal resizeWidgetRequested()
+    signal widgetMenuRequested(string widgetId)
+    signal captureRequested(string mode)
 
     // ──────────────────────────────────────────────────────────────────────────
     // NOTIFICATIONS (état partagé + crochets IPC)
@@ -40,10 +41,7 @@ QtObject {
     property bool notifToastVisible: false
     property bool notifToastHovered: false
     property bool notifHistoryVisible: false
-    property var notifTargetsHook: null
-    property var notifOpenHook: null
-    property var notifClearHook: null
-    property var notifInvokeHook: null
+    property var notifProvider: null
 
     // ──────────────────────────────────────────────────────────────────────────
     // FOND D'ÉCRAN COURANT PARTAGÉ (awww query)
@@ -199,7 +197,7 @@ QtObject {
         }
     }
 
-    function _buildAppletEntry(cat, choix, itemIle) {
+    function buildAppletEntry(cat, choix, itemIle) {
         const entree = Object.assign({}, cat)
         entree.actif = true
         entree.ile = itemIle
@@ -211,7 +209,7 @@ QtObject {
         return entree
     }
 
-    function _sortApplets(liste) {
+    function sortApplets(liste) {
         const ord = Array.isArray(Theme.ilotAppletsOrder) ? Theme.ilotAppletsOrder : []
         liste.sort(function(a, b) {
             const ia = ord.indexOf(String(a.id || ""))
@@ -242,52 +240,9 @@ QtObject {
             itemIle = root.barAnciens[itemIle] || itemIle
             if (itemIle !== cible) continue
 
-            liste.push(root._buildAppletEntry(cat, choix, itemIle))
+            liste.push(root.buildAppletEntry(cat, choix, itemIle))
         }
-        return root._sortApplets(liste)
-    }
-
-    function appletsPourIlot(state, side) {
-        const _ = root.barAppletsRev + Theme.ilotAppletsRev
-        if (!root.barAppletsCatalogue.length) return []
-        const liste = []
-        for (let i = 0; i < root.barAppletsCatalogue.length; i++) {
-            const cat = root.barAppletsCatalogue[i]
-            if (!cat || !cat.id || cat.fixe) continue
-            if (cat.id === "visualiseur" || cat.id === "workspaces" || cat.id === "horloge" || cat.id === "musique") continue
-            if (Theme.ilotAppletCornerFor(cat.id) !== "") continue
-            const mode = Theme.ilotAppletModeFor(cat.id)
-            if (!Theme.ilotVisibleIn(mode, state)) continue
-
-            const choix = root.barAppletsActifs[cat.id] || ({})
-            let itemIle = String(choix.ile || cat.ile || "haut:fin")
-            itemIle = root.barAnciens[itemIle] || itemIle
-            if (side === "left" && itemIle !== "haut:debut") continue
-            if (side === "right" && itemIle === "haut:debut") continue
-
-            liste.push(root._buildAppletEntry(cat, choix, itemIle))
-        }
-        return root._sortApplets(liste)
-    }
-
-    function appletsPourCoinIlot(corner) {
-        const _ = root.barAppletsRev + Theme.ilotAppletsRev
-        if (!corner || !root.barAppletsCatalogue.length) return []
-        const liste = []
-        for (let i = 0; i < root.barAppletsCatalogue.length; i++) {
-            const cat = root.barAppletsCatalogue[i]
-            if (!cat || !cat.id || cat.fixe) continue
-            if (cat.id === "visualiseur" || cat.id === "musique") continue
-            if (Theme.ilotAppletCornerFor(cat.id) !== corner) continue
-            const mode = Theme.ilotAppletModeFor(cat.id)
-            if (mode === "off") continue
-
-            const choix = root.barAppletsActifs[cat.id] || ({})
-            let itemIle = String(choix.ile || cat.ile || "haut:fin")
-            itemIle = root.barAnciens[itemIle] || itemIle
-            liste.push(root._buildAppletEntry(cat, choix, itemIle))
-        }
-        return root._sortApplets(liste)
+        return root.sortApplets(liste)
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -329,217 +284,18 @@ QtObject {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // LIVE ACTIVITY (Îlot dynamique : minuteur, enregistrement, téléchargements, IPC)
-    // ──────────────────────────────────────────────────────────────────────────
-    property var ipcActivities: []
-    property int timerTotalSec: 0
-    property int timerRemainingSec: 0
-    property bool timerRunning: false
-    property bool timerPaused: false
-    property string timerLabel: "Minuteur"
-
-    property Timer liveTimerTick: Timer {
-        interval: 1000
-        repeat: true
-        running: root.timerRunning && !root.timerPaused
-        onTriggered: {
-            if (root.timerRemainingSec > 1) {
-                root.timerRemainingSec -= 1
-            } else {
-                const lbl = root.timerLabel || "Minuteur"
-                root.timerRunning = false
-                root.timerPaused = false
-                root.timerRemainingSec = 0
-                root.timerTotalSec = 0
-                Quickshell.execDetached(["notify-send", "-a", "AetherShell", lbl + " terminé", "Le décompte est arrivé à 0."])
-            }
-        }
-    }
-
-    function startTimer(minutes, label) {
-        const mins = Math.max(1, Math.round(Number(minutes) || 0))
-        root.timerTotalSec = mins * 60
-        root.timerRemainingSec = mins * 60
-        root.timerLabel = (label && String(label).trim() !== "") ? String(label).trim() : ("Minuteur " + mins + "m")
-        root.timerPaused = false
-        root.timerRunning = true
-    }
-
-    function togglePauseTimer() {
-        if (!root.timerRunning) return
-        root.timerPaused = !root.timerPaused
-    }
-
-    function stopTimer() {
-        root.timerRunning = false
-        root.timerPaused = false
-        root.timerRemainingSec = 0
-        root.timerTotalSec = 0
-    }
-
-    function handleLiveActivity(action, actId, title, progress) {
-        const a = String(action || "").toLowerCase()
-        const id = String(actId || "").trim()
-        if (a === "clear") {
-            root.ipcActivities = []
-            return "ok"
-        }
-        if (!id) return "missing_id"
-        const list = root.ipcActivities.slice()
-        const idx = list.findIndex(x => x && x.id === id)
-        if (a === "stop" || a === "remove" || a === "done") {
-            if (idx >= 0) {
-                list.splice(idx, 1)
-                root.ipcActivities = list
-            }
-            return "ok"
-        }
-        const p = (progress !== undefined && progress !== null) ? Number(progress) : -1
-        const prog = isNaN(p) ? -1 : (p < 0 ? -1 : Math.max(0, Math.min(100, Math.round(p))))
-        if (a === "start" || (a === "update" && idx < 0)) {
-            const item = {
-                id: id,
-                title: String(title || id),
-                progress: prog,
-                startedAt: Date.now()
-            }
-            if (idx >= 0) list[idx] = item
-            else list.push(item)
-            root.ipcActivities = list
-            return "ok"
-        }
-        if (a === "update" && idx >= 0) {
-            const cur = list[idx]
-            list[idx] = {
-                id: id,
-                title: (title !== undefined && String(title) !== "") ? String(title) : cur.title,
-                progress: prog,
-                startedAt: cur.startedAt || Date.now()
-            }
-            root.ipcActivities = list
-            return "ok"
-        }
-        return "unknown_action"
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // FENÊTRES MINIMISÉES (Hyprland special:minimized)
-    // ──────────────────────────────────────────────────────────────────────────
-    readonly property string workspaceMinimise: "special:minimized"
-    property var ordreMinimisees: []
-
-    function cleAdresse(adresse) {
-        let a = String(adresse || "").toLowerCase()
-        if (a.indexOf("0x") === 0) a = a.substring(2)
-        return a
-    }
-
-    function selecteurAdresse(adresse) {
-        const a = root.cleAdresse(adresse)
-        return a === "" ? "" : "address:0x" + a
-    }
-
-    function estMinimisee(fenetre) {
-        if (!fenetre) return false
-        const espace = fenetre.workspace
-        if (espace) {
-            const nom = String(espace.name || "")
-            if (nom === root.workspaceMinimise || nom === "minimized") return true
-            if (Number(espace.id) > 0) return false
-        }
-        const brut = fenetre.lastIpcObject
-        const bws = brut ? brut.workspace : null
-        return Boolean(bws) && String(bws.name || "") === root.workspaceMinimise
-    }
-
-    function fenetresMinimisees() {
-        const out = []
-        const tops = Hyprland.toplevels ? Hyprland.toplevels.values : []
-        for (let i = 0; i < tops.length; i++) {
-            const t = tops[i]
-            if (t && t.address && root.estMinimisee(t)) out.push(t)
-        }
-        const rang = function (adresse) {
-            const i = root.ordreMinimisees.indexOf(root.cleAdresse(adresse))
-            return i < 0 ? 1000 : i
-        }
-        out.sort(function (a, b) { return rang(a.address) - rang(b.address) })
-        return out
-    }
-
-    function bureauCourant() {
-        const ws = Hyprland.focusedWorkspace
-        if (ws && Number(ws.id) > 0) return Number(ws.id)
-        const m = Hyprland.focusedMonitor
-        const actif = m ? m.activeWorkspace : null
-        if (actif && Number(actif.id) > 0) return Number(actif.id)
-        const liste = Hyprland.workspaces ? Hyprland.workspaces.values : []
-        for (let i = 0; i < liste.length; i++) {
-            if (liste[i] && Number(liste[i].id) > 0 && liste[i].active) return Number(liste[i].id)
-        }
-        return 0
-    }
-
-    function minimiserFenetre(adresse) {
-        let cible = root.cleAdresse(adresse)
-        if (cible === "" && Hyprland.activeToplevel)
-            cible = root.cleAdresse(Hyprland.activeToplevel.address)
-        if (Hyprland.usingLua) {
-            const sel = cible !== "" ? ', window = "' + root.selecteurAdresse(cible) + '"' : ""
-            Hyprland.dispatch('hl.dsp.window.move({ workspace = "' + root.workspaceMinimise + '"'
-                             + sel + ', follow = false })')
-        } else {
-            Hyprland.dispatch("movetoworkspacesilent " + root.workspaceMinimise
-                              + (cible !== "" ? "," + root.selecteurAdresse(cible) : ""))
-        }
-        if (cible !== "" && root.ordreMinimisees.indexOf(cible) < 0) {
-            const suite = root.ordreMinimisees.slice()
-            suite.push(cible)
-            root.ordreMinimisees = suite
-        }
-        return cible !== ""
-    }
-
-    function rappelerFenetre(adresse) {
-        const cible = root.cleAdresse(adresse)
-        const bureau = root.bureauCourant()
-        if (cible === "" || bureau <= 0) return false
-        const sel = root.selecteurAdresse(cible)
-        if (Hyprland.usingLua) {
-            Hyprland.dispatch('hl.dsp.window.move({ workspace = ' + bureau
-                             + ', window = "' + sel + '", follow = false })')
-            Hyprland.dispatch('hl.dsp.focus({ window = "' + sel + '" })')
-        } else {
-            Hyprland.dispatch("movetoworkspacesilent " + bureau + "," + sel)
-            Hyprland.dispatch("focuswindow " + sel)
-        }
-        const i = root.ordreMinimisees.indexOf(cible)
-        if (i >= 0) {
-            const suite = root.ordreMinimisees.slice()
-            suite.splice(i, 1)
-            root.ordreMinimisees = suite
-        }
-        return true
-    }
-
-    function rappelerDerniere() {
-        const liste = root.fenetresMinimisees()
-        if (liste.length === 0) return false
-        return root.rappelerFenetre(String(liste[liste.length - 1].address))
-    }
-
-    // ──────────────────────────────────────────────────────────────────────────
     // IPC HANDLER ("shell")
     // ──────────────────────────────────────────────────────────────────────────
     property IpcHandler ipc: IpcHandler {
         target: "shell"
         function placeWidget() {
-            if (root.placeWidgetHook)
-                root.placeWidgetHook()
+            root.placeWidgetRequested()
+        }
+        function resizeWidget() {
+            root.resizeWidgetRequested()
         }
         function openWidgetMenu(id: string) {
-            if (root.widgetMenuHook)
-                root.widgetMenuHook(id)
+            root.widgetMenuRequested(id)
         }
         function toggleConfig() {
             Theme.configPanelVisible = !Theme.configPanelVisible
@@ -611,11 +367,8 @@ QtObject {
                 Theme.islandPanelTab = (Theme.islandPanelTab + nTabs - 1) % nTabs
                 return "ok"
             }
-            if (root.islandNavHook) {
-                root.islandNavHook(a)
-                return "ok"
-            }
-            return "no_hook"
+            root.islandNavRequested(a)
+            return "ok"
         }
         function navState(): bool {
             return Theme.islandNavActive
@@ -647,22 +400,22 @@ QtObject {
             Theme.toggleLiveActivity()
         }
         function liveActivity(action: string, actId: string, title: string, progress: int): string {
-            return root.handleLiveActivity(action, actId, title, progress)
+            return LiveActivityStore.handleLiveActivity(action, actId, title, progress)
         }
         function liveActivityStart(actId: string, title: string, progress: int): string {
-            return root.handleLiveActivity("start", actId, title, progress)
+            return LiveActivityStore.handleLiveActivity("start", actId, title, progress)
         }
         function liveActivityUpdate(actId: string, progress: int, title: string): string {
-            return root.handleLiveActivity("update", actId, title, progress)
+            return LiveActivityStore.handleLiveActivity("update", actId, title, progress)
         }
         function liveActivityStop(actId: string): string {
-            return root.handleLiveActivity("stop", actId, "", -1)
+            return LiveActivityStore.handleLiveActivity("stop", actId, "", -1)
         }
         function liveActivityClear(): string {
-            return root.handleLiveActivity("clear", "", "", -1)
+            return LiveActivityStore.handleLiveActivity("clear", "", "", -1)
         }
         function timerStart(minutes: int): string {
-            root.startTimer(minutes, "")
+            LiveActivityStore.startTimer(minutes, "")
             return "ok"
         }
         function setContext(ctxId: string): string {
@@ -709,7 +462,7 @@ QtObject {
                 Theme.themePickerOpen = false
                 return
             }
-            if (root.themeNavHook) root.themeNavHook(a)
+            root.themeNavRequested(a)
         }
         function wpNav(action: string) {
             const a = String(action || "").toLowerCase()
@@ -717,7 +470,7 @@ QtObject {
                 Theme.wallpaperPickerOpen = false
                 return
             }
-            if (root.wallpaperNavHook) root.wallpaperNavHook(a)
+            root.wallpaperNavRequested(a)
         }
         function showCheatsheet() {
             Theme.cheatsheetVisible = true
@@ -753,20 +506,19 @@ QtObject {
             return Theme.screenshotPickerVisible
         }
         function captureMode(mode: string) {
-            if (root.captureHook)
-                root.captureHook(mode)
+            root.captureRequested(mode)
         }
         function notifTargets(): string {
-            return root.notifTargetsHook ? String(root.notifTargetsHook()) : "[]"
+            return root.notifProvider ? String(root.notifProvider.targetsJson()) : "[]"
         }
         function notifOpenLatest(): bool {
-            return root.notifOpenHook ? Boolean(root.notifOpenHook()) : false
+            return root.notifProvider ? Boolean(root.notifProvider.openLatest()) : false
         }
         function notifClear(): bool {
-            return root.notifClearHook ? Boolean(root.notifClearHook()) : false
+            return root.notifProvider ? Boolean(root.notifProvider.clearAll()) : false
         }
         function notifInvoke(actionId: string): bool {
-            return root.notifInvokeHook ? Boolean(root.notifInvokeHook(actionId)) : false
+            return root.notifProvider ? Boolean(root.notifProvider.invokeAction(actionId)) : false
         }
         function toggleNotifHistory() {
             root.notifHistoryVisible = !root.notifHistoryVisible
@@ -781,16 +533,16 @@ QtObject {
             return root.notifHistoryVisible
         }
         function minimiser(): bool {
-            return root.minimiserFenetre("")
+            return MinimizedWindows.minimiserFenetre("")
         }
         function rappelerDerniere(): bool {
-            return root.rappelerDerniere()
+            return MinimizedWindows.rappelerDerniere()
         }
         function rappelerFenetreAdresse(adresse: string) {
-            return root.rappelerFenetre(adresse)
+            return MinimizedWindows.rappelerFenetre(adresse)
         }
         function minimisees(): string {
-            const liste = root.fenetresMinimisees()
+            const liste = MinimizedWindows.fenetresMinimisees()
             const out = []
             for (let i = 0; i < liste.length; i++)
                 out.push({ adresse: String(liste[i].address),

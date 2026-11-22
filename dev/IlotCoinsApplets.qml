@@ -21,34 +21,6 @@ Scope {
     }
 
     readonly property var svgIcones: (["cpu", "ram", "gpu", "temp", "disque", "reseau", "load", "swap"])
-    readonly property var iconesDefaut: ({
-        "reseau": "wifi",
-        "systray": "widgets",
-        "nuit": "weather-night",
-        "luminosite": "brightness",
-        "batterie": "battery",
-        "minimise": "monitor",
-        "volume": "volume",
-        "notifications": "bell",
-        "maj": "download",
-        "todo": "check",
-        "meteo": "weather-cloud",
-        "presse-papiers": "clipboard",
-        "usb": "usb",
-        "systeme": "cpu",
-        "disques": "disque",
-        "homelab": "speedometer",
-        "comptes": "wallet",
-        "hermes": "robot",
-        "flotte": "rocket"
-    })
-
-    function iconePour(applet) {
-        if (!applet) return "widgets"
-        const ic = String(applet.icone || "")
-        if (ic !== "") return ic
-        return root.iconesDefaut[String(applet.id || "")] || "widgets"
-    }
 
     Variants {
         model: [
@@ -61,7 +33,7 @@ Scope {
         PanelWindow {
             id: coinWin
             required property var modelData
-            readonly property var applets: ShellState.appletsPourCoinIlot(modelData.id)
+            readonly property var applets: IslandAppletLayout.appletsForCorner(modelData.id)
             readonly property bool groupes: Theme.ilotCoinsGroupes
             readonly property bool ancreADroite: (groupes && modelData.left) || (!groupes && modelData.right)
             readonly property int ecranW: screen ? screen.width : 1920
@@ -157,7 +129,7 @@ Scope {
                             : index
                         readonly property real ratio: Math.max(0.50, 1.0 - distIdx * 0.25)
                         readonly property int diametre: Math.max(12, Math.round(Theme.barHeight * ratio))
-                        readonly property string icone: root.iconePour(modelData)
+                        readonly property string icone: IslandAppletLayout.iconFor(modelData)
                         readonly property bool estSvg: root.svgIcones.indexOf(icone) >= 0
                         readonly property bool popupOuvert: Theme.activePopup === ("applet:" + String(modelData.id || ""))
                         readonly property real largeurEtendue: Math.max(Theme.barHeight, itemApplet.implicitWidth + Theme.padH * 2 + 4)
