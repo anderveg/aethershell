@@ -9,7 +9,17 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **`x.yy.x.x`** : ajout de fonctionnalités décisives (ex. : ajout de l'Îlot dynamique).
 - **Version majeure (`y.x.x.x`)** : conservation du schéma déjà en place (proposée lorsque l'ampleur des changements le justifie ; décision finale validée par l'utilisateur).
 
+## [0.4.5.1] — 2026-11-23
+
+### Corrigé
+- **Mise à jour fantôme annoncée par le panneau de configuration (onglet Système, tiroir *Mise à jour du shell*)** (`install.sh`, `dev/sync.sh`) : `install.sh` écrit la version déployée dans `core/version.json` à partir de `git describe --tags --abbrev=0`, que `as-core maj-shell` compare ensuite au dernier tag publié sur GitHub. Sur une machine nourrie en rsync (qui exclut `.git/`) ou par un `git fetch` sans `--tags`, `describe` retombait sur un tag ancien : bespin, pourtant au commit `853ea66` (= `v0.4.5.0`), se déclarait en `v0.4.3.0` et le panneau proposait une mise à jour déjà installée.
+  - `install.sh` — `ecrire_version_deployee()` : la version en tête de `CHANGELOG.md`, livrée avec le code, fait désormais foi dès qu'elle est plus récente que le tag trouvé par `git describe` (`sort -V`). L'étiquette reste juste même si les tags sont absents, et même si le dossier déployé n'est pas un dépôt git.
+  - `dev/sync.sh` — `--github` récupère les tags (`git fetch --tags origin <branche>`) ; le mode rsync, qui ne peut pas les transporter, les rappelle sur la cible après le transfert (et en local dans le sens inverse), avec un avertissement explicite si le dépôt GitHub est injoignable depuis la machine visée.
+  - `dev/sync.sh` (script local, non versionné) : `BESPIN_HOST` corrigé en `192.168.1.56` — l'ancienne adresse `192.168.1.232` ne répond plus, ce qui faisait échouer `sync.sh --bespin` avant même la vérification SSH.
+
 ## [0.4.5.0] — 2026-11-23
+
+_Publiée en Release GitHub le 2026-11-23 (saut direct : `v0.4.4.2` n'a pas de Release séparée, ses changements sont repris ci-dessous)._
 
 ### Ajouté
 - **Désinstallation complète (`install.sh --uninstall`, entrée 9 du menu, panneau de configuration)** (`install.sh`, `dev/OngletEcrans.qml`, `dev/core/maj_terminal.sh` réutilisé) :
@@ -20,6 +30,8 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
   - Panneau : ligne *Désinstaller AetherShell* en bas du tiroir **Mise à jour du shell** (onglet Système), armement en deux clics (6 s) puis exécution dans le terminal par défaut via `core/maj_terminal.sh` — dépôt local privilégié (`$AETHERSHELL_DIR`, `~/dev/aethershell`, `~/dev/aethershell`), repli sur la ligne `curl … | bash -s -- --uninstall`.
 
 ## [0.4.4.2] — 2026-11-23
+
+_Non publiée en Release séparée : reprise dans `v0.4.5.0` (saut direct)._
 
 ### Supprimé
 - **Purge des reliquats Python (R4, effectif au déploiement)** (`dev/core/`, `dev/rust/as-core/src/config/config_mgr.rs`, `dev/core/applets_catalogue.json`, `dev/core/llm_providers.json`) :

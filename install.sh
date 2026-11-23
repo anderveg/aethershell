@@ -2085,6 +2085,27 @@ ecrire_version_deployee() {
         tag="$(git -C "$DEV_DIR" describe --tags --abbrev=0 2>/dev/null || true)"
         decrite="$(git -C "$DEV_DIR" describe --tags --always --dirty 2>/dev/null || true)"
     fi
+    # Les tags ne suivent pas toujours le code : `sync.sh` en rsync exclut .git/,
+    # et un `git fetch` sans --tags les oublie. `git describe` retombe alors sur
+    # un tag ancien — version.json annonce une version que la machine n'a pas,
+    # et le panneau propose une mise à jour qui n'existe pas. Le CHANGELOG étant
+    # livré avec le code, sa version en tête fait foi.
+    local journal="$DEV_DIR/CHANGELOG.md" version_journal=""
+    if [ -f "$journal" ]; then
+        version_journal="$(sed -n 's/^##[[:space:]]*\[\([0-9][0-9.]*\)\].*/v\1/p' "$journal" 2>/dev/null | head -n 1)"
+    fi
+    if [ -n "$version_journal" ] && [ "$version_journal" != "$tag" ]; then
+        local retenu
+        retenu="$(printf '%s\n%s\n' "$tag" "$version_journal" | sed '/^$/d' | sort -V | tail -n 1)"
+        if [ "$retenu" != "$tag" ]; then
+            if [ -n "$decrite" ] && [ -n "$tag" ]; then
+                decrite="${retenu}${decrite#"$tag"}"
+            else
+                decrite="$retenu"
+            fi
+            tag="$retenu"
+        fi
+    fi
     printf '{"version": "%s", "tag": "%s", "commit": "%s", "deploye_le": "%s"}\n' \
         "$decrite" "$tag" "$commit" "$(date -Iseconds)" \
         > "$CORE_DIR/version.json.new" || return 0
