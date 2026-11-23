@@ -488,8 +488,8 @@ CollapsibleSection {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                        root.barBorder = !root.barBorder
-                        root.runConfigCmd(["style", "bar_border", root.barBorder ? "true" : "false"])
+                        ConfigStore.barBorder = !ConfigStore.barBorder
+                        root.runConfigCmd(["style", "bar_border", ConfigStore.barBorder ? "true" : "false"])
                     }
                 }
             }
@@ -558,8 +558,8 @@ CollapsibleSection {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                        root.barGapsTransparent = !root.barGapsTransparent
-                        root.runConfigCmd(["style", "bar_gaps_transparent", root.barGapsTransparent ? "true" : "false"])
+                        ConfigStore.barGapsTransparent = !ConfigStore.barGapsTransparent
+                        root.runConfigCmd(["style", "bar_gaps_transparent", ConfigStore.barGapsTransparent ? "true" : "false"])
                     }
                 }
             }
@@ -1585,7 +1585,7 @@ CollapsibleSection {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
-                                    root.vizStyleClassic = modelData.code
+                                    ConfigStore.vizStyleClassic = modelData.code
                                     root.runConfigCmd(["style", "viz_style_classic", modelData.code])
                                 }
                             }
@@ -1646,7 +1646,7 @@ CollapsibleSection {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
-                                    root.vizStyleIsland = modelData.code
+                                    ConfigStore.vizStyleIsland = modelData.code
                                     root.runConfigCmd(["style", "viz_style_island", modelData.code])
                                 }
                             }
@@ -1664,7 +1664,7 @@ CollapsibleSection {
                     value: root.vizFps
                     minimumValue: 10; maximumValue: 60; stepSize: 5; decimals: 0
                     onValueModified: newVal => {
-                        root.vizFps = newVal
+                        ConfigStore.vizFps = newVal
                         root.runConfigCmd(["style", "viz_fps", String(newVal)])
                     }
                 }
@@ -1679,7 +1679,7 @@ CollapsibleSection {
                     value: root.vizCols
                     minimumValue: 16; maximumValue: 256; stepSize: 8; decimals: 0
                     onValueModified: newVal => {
-                        root.vizCols = newVal
+                        ConfigStore.vizCols = newVal
                         root.runConfigCmd(["style", "viz_cols", String(newVal)])
                     }
                 }
@@ -1695,7 +1695,7 @@ CollapsibleSection {
                     value: root.vizSensibilite
                     minimumValue: 0.05; maximumValue: 4.0; stepSize: 0.05; decimals: 2
                     onValueModified: newVal => {
-                        root.vizSensibilite = newVal
+                        ConfigStore.vizSensibilite = newVal
                         root.runConfigCmd(["style", "viz_sensibilite", String(newVal)])
                     }
                 }
@@ -1710,7 +1710,7 @@ CollapsibleSection {
                     value: root.vizLissage
                     minimumValue: 0.0; maximumValue: 0.99; stepSize: 0.05; decimals: 2
                     onValueModified: newVal => {
-                        root.vizLissage = newVal
+                        ConfigStore.vizLissage = newVal
                         root.runConfigCmd(["style", "viz_lissage", String(newVal)])
                     }
                 }
@@ -1725,7 +1725,7 @@ CollapsibleSection {
                     value: root.vizEpaisseur
                     minimumValue: 0.5; maximumValue: 4.0; stepSize: 0.5; decimals: 1
                     onValueModified: newVal => {
-                        root.vizEpaisseur = newVal
+                        ConfigStore.vizEpaisseur = newVal
                         root.runConfigCmd(["style", "viz_epaisseur", String(newVal)])
                     }
                 }
@@ -1767,7 +1767,7 @@ CollapsibleSection {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
-                                    root.vizCouleur = modelData.code
+                                    ConfigStore.vizCouleur = modelData.code
                                     root.runConfigCmd(["style", "viz_couleur", modelData.code])
                                 }
                             }
@@ -1810,7 +1810,7 @@ CollapsibleSection {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
-                                    root.vizCouleurIsland = modelData.code
+                                    ConfigStore.vizCouleurIsland = modelData.code
                                     root.runConfigCmd(["style", "viz_couleur_island", modelData.code])
                                 }
                             }

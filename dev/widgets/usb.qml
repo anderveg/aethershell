@@ -14,11 +14,17 @@ Item {
     id: root
     property var options: ({})
     property string widgetId: ""
+    property real widgetW: 0
+    property real widgetH: 0
 
     readonly property real echelle: {
         const v = Number(options && options.text_scale)
         if (v >= 60 && v <= 160) return v / 100
         return 1.0
+    }
+    readonly property int maxDevices: {
+        if (widgetH <= 0) return 3
+        return Math.max(0, Math.min(12, Math.floor((widgetH - Math.round(20 * echelle)) / Math.round(16 * echelle))))
     }
 
     readonly property var etat: SystemServices.usbData
@@ -50,8 +56,8 @@ Item {
         }
     }
 
-    implicitWidth: Math.round(246 * echelle)
-    implicitHeight: colonne.implicitHeight
+    implicitWidth: widgetW > 0 ? Math.max(Math.round(180 * echelle), Math.round(widgetW)) : Math.round(246 * echelle)
+    implicitHeight: widgetH > 0 ? Math.max(colonne.implicitHeight, widgetH) : colonne.implicitHeight
 
     Column {
         id: colonne
@@ -92,9 +98,9 @@ Item {
             }
         }
 
-        // ── jusqu'à trois disques ───────────────────────────────────────────
+        // ── périphériques branchés (adaptatif à la hauteur) ─────────────────
         Repeater {
-            model: root.disques.slice(0, 3)
+            model: root.disques.slice(0, root.maxDevices)
 
             Row {
                 required property var modelData

@@ -1831,6 +1831,58 @@ installer_charge_limit() {
     fi
 }
 
+# Helper root + règle polkit du greeter SDDM (dev/sddm/greeter-palette).
+#
+# Posé dès le déploiement si SDDM est présent sur la machine : ainsi, le
+# panneau de bienvenue (first_run) et l'onglet Clavier peuvent synchroniser sans
+# mot de passe la disposition clavier et la locale UTF-8 de SDDM via
+# `pkexec /usr/local/bin/greeter-palette set-keymap <layout>`.
+installer_greeter_helper() {
+    command -v sddm >/dev/null 2>&1 || [ -d /etc/sddm.conf.d ] || return 0
+    local dir="$DEV_DIR/sddm"
+    [ -f "$dir/greeter-palette" ] && [ -f "$dir/50-greeter-palette.rules" ] || return 0
+
+    local stamp="$HOME/.cache/quickshell/greeter-helper.stamp" courant
+    courant=$(cat "$dir/greeter-palette" "$dir/50-greeter-palette.rules" | sha256sum | cut -d' ' -f1)
+    if [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$courant" ] && [ -x /usr/local/bin/greeter-palette ]; then
+        return 0
+    fi
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  ⚙ greeter-palette : helper SDDM et règle polkit à installer (root)"
+        return 0
+    fi
+    local kb="fr"
+    if [ -f "$CORE_DIR/style_vars.json" ]; then
+        local detected_kb
+        detected_kb=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("kb_layout",""))' "$CORE_DIR/style_vars.json" 2>/dev/null || true)
+        [[ "$detected_kb" =~ ^[a-z]{2}(-[a-z0-9_]+)?$ ]] && kb="$detected_kb"
+    fi
+    if [ -x /usr/local/bin/greeter-palette ] && [ -f /etc/polkit-1/rules.d/50-greeter-palette.rules ]; then
+        # Si la règle polkit est déjà active mais que seul le binaire greeter-palette évolue,
+        # une unique invite pkexec met à jour le helper et synchronise le clavier SDDM.
+        :
+    fi
+    if command -v pkexec >/dev/null 2>&1; then
+        local tmp_sh
+        tmp_sh="$(mktemp)"
+        cat > "$tmp_sh" <<EOF
+#!/bin/bash
+set -euo pipefail
+install -Dm755 '$dir/greeter-palette' /usr/local/bin/greeter-palette
+install -Dm644 '$dir/50-greeter-palette.rules' /etc/polkit-1/rules.d/50-greeter-palette.rules
+/usr/local/bin/greeter-palette set-keymap '$kb' >/dev/null 2>&1 || true
+EOF
+        if pkexec bash "$tmp_sh"; then
+            rm -f "$tmp_sh"
+            mkdir -p "$(dirname "$stamp")" && printf '%s\n' "$courant" > "$stamp"
+            echo "  ↪ greeter-palette : helper SDDM mis à jour (clavier $kb)"
+        else
+            rm -f "$tmp_sh"
+            echo "  ⚠ helper SDDM non mis à jour — à lancer à la main : sudo bash $dir/install.sh"
+        fi
+    fi
+}
+
 deploy_new_env() {
     echo "🚀 Deploying $DISTRO_TITLE ($FORM_TITLE)..."
 
@@ -2029,6 +2081,7 @@ deploy_new_env() {
     fi
 
     installer_charge_limit
+    installer_greeter_helper
 
     installer_crochets_git
 

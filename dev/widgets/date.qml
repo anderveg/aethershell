@@ -121,6 +121,7 @@ Item {
             visible: root.calendrierEtendu
             width: root.largeurCalendrier
             echelle: root.echelle
+            extraHeight: root.widgetH
         }
     }
 }

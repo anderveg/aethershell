@@ -107,6 +107,19 @@ python3 "$DEV/generate.py"
 [ -f "$DEV/out/Themes/palette.conf" ] || die "palette.conf non généré"
 [ -f "$DEV/out/Backgrounds/wallpaper.png" ] || die "fond non généré"
 
+# Détecte la disposition clavier choisie dans style_vars.json (ou input.lua)
+# pour aligner immédiatement SDDM et sa locale lors de l'installation.
+KB_LAYOUT="fr"
+for candidate_style in "$HOME/.config/quickshell/core/style_vars.json" "$DEV/../core/style_vars.json"; do
+    if [ -f "$candidate_style" ]; then
+        detected_kb="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("kb_layout",""))' "$candidate_style" 2>/dev/null || true)"
+        if [[ "$detected_kb" =~ ^[a-z]{2}(-[a-z0-9_]+)?$ ]]; then
+            KB_LAYOUT="$detected_kb"
+            break
+        fi
+    fi
+done
+
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
@@ -122,7 +135,7 @@ trap 'rm -rf "$STAGE"' EXIT
     echo "install -Dm644 '$DEV/out/Backgrounds/wallpaper.png' '$THEME/Backgrounds/wallpaper.png'"
     # Reprise d'un renommage : la nomenclature précédente portait le nom de
     # l'hôte du laptop, on retire les artefacts qu'elle a laissés.
-    echo "rm -f /usr/local/bin/wallpaper-greeter /etc/polkit-1/rules.d/50-wallpaper-greeter.rules '$THEME/Themes/palette.conf' '$THEME/Backgrounds/wallpaper.png'"
+    echo "rm -f /usr/local/bin/wallpaper-greeter /etc/polkit-1/rules.d/50-wallpaper-greeter.rules"
     if [ "$MODE" = "full" ]; then
         # Sauvegarde puis neutralisation des Current= locaux : sans ça trois
         # fichiers se contredisent et l'ordre lexical décide du thème affiché.
@@ -141,13 +154,11 @@ trap 'rm -rf "$STAGE"' EXIT
             echo "cp -n '/etc/sddm.conf' '$BACKUP/sddm.conf' 2>/dev/null || true"
             echo "sed -i 's|^Current=|# désactivé par dev/sddm/install.sh — Current=|' '/etc/sddm.conf'"
         fi
-        # Nomenclature précédente : supprimée après sauvegarde, sinon SDDM lit
-        # deux Current= et l'ordre lexical décide.
+        # Écrit /etc/sddm.conf.d/10-sddm-theme.conf + drop-in locale systemd + localectl
         echo "rm -f '$CONFD/10-sddm-theme.conf'"
-        echo "cat > '$CONFD/10-sddm-theme.conf' <<'CONF'"
-        echo '[Theme]'
-        echo 'Current=sddm-astronaut-theme'
-        echo 'CONF'
+        echo "/usr/local/bin/greeter-palette set-keymap '$KB_LAYOUT'"
+    else
+        echo "/usr/local/bin/greeter-palette set-keymap '$KB_LAYOUT' >/dev/null 2>&1 || true"
     fi
 } > "$STAGE/root.sh"
 

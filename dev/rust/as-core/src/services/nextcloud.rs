@@ -206,7 +206,13 @@ fn now_utc_stamp() -> String {
 }
 
 fn xml_unescape(s: &str) -> String {
-    s.replace("&lt;", "<")
+    s.replace("&#13;", "\r")
+        .replace("&#xD;", "\r")
+        .replace("&#xd;", "\r")
+        .replace("&#10;", "\n")
+        .replace("&#xA;", "\n")
+        .replace("&#xa;", "\n")
+        .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
         .replace("&apos;", "'")
@@ -555,6 +561,9 @@ fn get_month_events(year_in: Option<i32>, month_in: Option<i32>, force_refresh: 
     );
 
     let cal_urls = discover_calendars(&base_url, &user, &auth_hdr);
+    if std::env::var_os("AS_NC_DEBUG").is_some() {
+        eprintln!("[nc] cal_urls={:?}", cal_urls);
+    }
     let agent = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(7))
         .build();
@@ -575,14 +584,34 @@ fn get_month_events(year_in: Option<i32>, month_in: Option<i32>, force_refresh: 
             .send_string(&report_body);
         match resp {
             Ok(r) => {
-                if !matches!(r.status(), 200 | 207) {
+                let status = r.status();
+                if !matches!(status, 200 | 207) {
+                    if std::env::var_os("AS_NC_DEBUG").is_some() {
+                        eprintln!("[nc] bad status={} for {}", status, cal_url);
+                    }
                     failed_calendars += 1;
                     continue;
                 }
-                let txt = r.into_string().unwrap_or_default();
+                let txt = match r.into_string() {
+                    Ok(s) => s,
+                    Err(e) => {
+                        if std::env::var_os("AS_NC_DEBUG").is_some() {
+                            eprintln!("[nc] into_string err={} for {}", e, cal_url);
+                        }
+                        String::new()
+                    }
+                };
+                if std::env::var_os("AS_NC_DEBUG").is_some() {
+                    eprintln!("[nc] status={} txt_len={} for {}", status, txt.len(), cal_url);
+                }
+                let mut cap_cnt = 0usize;
+                let mut ev_cnt = 0usize;
                 for cap in cal_data_re.captures_iter(&txt) {
+                    cap_cnt += 1;
                     let ics = xml_unescape(&cap[1]);
-                    for ev in parse_ics_events(&ics) {
+                    let parsed = parse_ics_events(&ics);
+                    ev_cnt += parsed.len();
+                    for ev in parsed {
                         let d_key = ev
                             .get("date")
                             .and_then(|v| v.as_str())
@@ -598,6 +627,9 @@ fn get_month_events(year_in: Option<i32>, month_in: Option<i32>, force_refresh: 
                             list.push(ev);
                         }
                     }
+                }
+                if std::env::var_os("AS_NC_DEBUG").is_some() {
+                    eprintln!("[nc] cap_cnt={} ev_cnt={} for {}", cap_cnt, ev_cnt, cal_url);
                 }
             }
             Err(ureq::Error::Status(401 | 403, _)) => {
@@ -956,4 +988,20 @@ pub fn run(args: &[String]) -> i32 {
     };
     println!("{}", out);
     0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_sabredav_ics_with_cr_entities() {
+        let raw_xml_ics = "BEGIN:VCALENDAR&#13;\nVERSION:2.0&#13;\nBEGIN:VEVENT&#13;\nSUMMARY:Poubelle noire&#13;\nDTSTART;VALUE=DATE:20261106&#13;\nDTEND;VALUE=DATE:20261107&#13;\nEND:VEVENT&#13;\nEND:VCALENDAR&#13;\n";
+        let ics = xml_unescape(raw_xml_ics);
+        let evs = parse_ics_events(&ics);
+        assert_eq!(evs.len(), 1);
+        assert_eq!(evs[0]["date"], "2026-11-06");
+        assert_eq!(evs[0]["summary"], "Poubelle noire");
+        assert_eq!(evs[0]["all_day"], true);
+    }
 }

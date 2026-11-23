@@ -70,7 +70,10 @@ start() {
         changer_workspace "$PREV_WORKSPACE"
     fi
 
-    QT_QPA_PLATFORM=wayland sddm-greeter-qt6 --test-mode --theme "$theme" &
+    QT_QPA_PLATFORM=wayland \
+    QT_LOGGING_RULES="*.debug=false;qt.qpa.wayland*=false;qt.qml.propertyCache*=false;kwin_*=false" \
+    LANG="${LANG:-C.UTF-8}" \
+    sddm-greeter-qt6 --test-mode --theme "$theme" >/dev/null 2>&1 &
     pid=$!
     echo "$pid" > "$PIDFILE"
 

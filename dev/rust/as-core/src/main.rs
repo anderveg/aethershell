@@ -68,6 +68,7 @@ fn normalize_subcmd(s: &str) -> &str {
         "hermes_lecteur.py" => "hermes-lecteur",
         "hermes_approbations.py" => "hermes-approbations",
         "hermes_publier.py" => "hermes-publier",
+        "tablet_mode_daemon.py" => "tablet-mode",
         _ => s,
     }
 }
@@ -98,6 +99,7 @@ fn main() {
         "bluetooth" => daemon::bluetooth::run(rest),
         "workspace" => daemon::workspace::run(),
         "workspace-float-toggle" => daemon::workspace::run_float_toggle(),
+        "tablet-mode" => daemon::tablet_mode::run(rest),
         // Lot 2 — Registre d'applets, thèmes & configuration
         "bar-applets" => config::bar_applets::run(rest),
         "config" => config::config_mgr::run(rest),

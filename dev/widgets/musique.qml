@@ -9,12 +9,17 @@ Item {
     id: root
 
     property var options: ({})
+    property real widgetW: 0
+    property real widgetH: 0
     readonly property real echelle: {
         const v = Number(options && options.text_scale)
         if (v >= 60 && v <= 160) return v / 100
         return 1.0
     }
     property string widgetId: ""
+
+    readonly property bool showProgress: widgetH === 0 || widgetH >= Math.round(135 * echelle)
+    readonly property bool showVizDots: widgetH === 0 || widgetH >= Math.round(175 * echelle)
 
     property string lastArt: ""
     property string lastName: ""
@@ -81,10 +86,10 @@ Item {
         : lastAlbum
 
     readonly property string shownArt: artSource !== "" ? artSource : lastArt
-    readonly property int cardWidth: Math.round(330 * echelle)
+    readonly property int cardWidth: widgetW > 0 ? Math.max(Math.round(220 * echelle), Math.round(widgetW)) : Math.round(330 * echelle)
 
     implicitWidth: cardWidth
-    implicitHeight: mainCol.implicitHeight
+    implicitHeight: widgetH > 0 ? Math.max(mainCol.implicitHeight, widgetH) : mainCol.implicitHeight
 
     onArtSourceChanged: {
         if (artSource === "") return
@@ -235,8 +240,9 @@ Item {
         // ── Ligne pointillée audio réactive (toute la largeur) ───────────────
         Row {
             id: vizDotsRow
+            visible: root.showVizDots
             width: parent.width
-            readonly property int dotCount: 28
+            readonly property int dotCount: Math.max(12, Math.min(64, Math.floor(width / Math.round(11 * root.echelle))))
             readonly property real dotGap: Math.round(4 * root.echelle)
             readonly property real dotW: (width - (dotCount - 1) * dotGap) / dotCount
             readonly property var levels: VisualiseurAudio.hauteurs || []
@@ -270,6 +276,7 @@ Item {
 
         // ── Progression : temps écoulé | barre | durée ──────────────────────
         Item {
+            visible: root.showProgress
             width: parent.width
             height: Math.round(16 * root.echelle)
 

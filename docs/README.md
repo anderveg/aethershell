@@ -22,7 +22,7 @@ Rather than a simple bar theme, AetherShell brings together the visual and utili
 * **Reactive Audio Visualizer**: discreet integration of a native PipeWire waveform (`pwscope`) or spectral bars (`cava`), with automatic sleep after ten seconds of silence to conserve GPU/CPU resources.
 * **Task Tracking & Hermes Integration**: local Markdown checklist management (`- [ ]`) with a graphical file picker and an optional monitoring switch delegating checked tasks to the Hermes agent via a background worker.
 * **Integrated Graphical Selectors**: modal sheets drawn directly within the shell surface ([`SelecteurDossier.qml`](../dev/SelecteurDossier.qml), [`SelecteurFichier.qml`](../dev/SelecteurFichier.qml)), bypassing the limitation of traditional Wayland dialogs that would open beneath the overlay layer surface.
-* **Login Screen Manager (SDDM)**: configuration of the Astronaut theme and Qylock variants from the panel, with a safe preview launcher isolating tests on a dedicated workspace (`workspace 99`) to never freeze the active session.
+* **Login Screen Manager (SDDM)**: configuration of the Astronaut theme and Qylock variants from the panel, automatic keyboard layout and UTF-8 locale synchronization from the first-run wizard (or Keyboard tab), and a safe preview launcher isolating tests on a dedicated workspace (`workspace 99`) to never freeze the active session.
 
 ---
 

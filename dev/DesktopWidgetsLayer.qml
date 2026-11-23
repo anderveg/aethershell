@@ -316,8 +316,8 @@ Item {
                 : (isPendingResize ? root.pendingH : (hasCustomSize ? Number(w.h) : 0))
             readonly property real contentW: broken ? brokenText.implicitWidth : widgetLoader.implicitWidth
             readonly property real contentH: broken ? brokenText.implicitHeight : widgetLoader.implicitHeight
-            implicitWidth: targetW > 0 ? Math.max(targetW, contentW + pad * 2) : (contentW + pad * 2)
-            implicitHeight: targetH > 0 ? Math.max(targetH, contentH + pad * 2) : (contentH + pad * 2)
+            implicitWidth: targetW > 0 ? Math.max(110, targetW) : (contentW + pad * 2)
+            implicitHeight: targetH > 0 ? Math.max(48, targetH) : (contentH + pad * 2)
 
             Component.onCompleted: {
                 const list = root.widgetWindows.slice()
@@ -342,6 +342,7 @@ Item {
             Rectangle {
                 id: carteWidget
                 anchors.fill: parent
+                clip: true
                 radius: Theme.globalRadius
                 color: (widgetWindow.isResizeSelected || widgetWindow.isResizing) ? Qt.alpha(Theme.accent, 0.08) : "transparent"
                 border.width: widgetWindow.resizeActive ? 2 : ((widgetWindow.isTransparentStyle || widgetWindow.w.border === false) ? 0 : 1)
@@ -783,5 +784,16 @@ Item {
         wEcran: root.menuWidgetW
         hEcran: root.menuWidgetH
         onFermer: root.menuWidgetId = ""
+        onRedimensionner: {
+            const targetId = root.menuWidgetId
+            root.menuWidgetId = ""
+            for (let i = 0; i < root.widgetWindows.length; ++i) {
+                const win = root.widgetWindows[i]
+                if (win && String(win.w.id) === targetId) {
+                    root.resizeTargetWindow = win
+                    return
+                }
+            }
+        }
     }
 }

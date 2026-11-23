@@ -34,8 +34,9 @@ Item {
     // Renseigné par main.qml : identité de l'entrée dans widgets.json.
     property string widgetId: ""
 
-    readonly property bool showDate: widgetH >= Math.round(92 * echelle)
-    readonly property bool showWeather: widgetH >= Math.round(145 * echelle)
+    readonly property bool showDate: widgetH >= Math.round(78 * echelle)
+    readonly property bool showWeather: widgetH >= Math.round(118 * echelle)
+    readonly property bool showWeatherDetails: widgetH >= Math.round(158 * echelle)
     readonly property var meteo: SystemServices.meteoData || ({})
     readonly property bool meteoOk: Boolean(meteo && meteo.ok)
     readonly property string dateTexte: {
@@ -130,6 +131,17 @@ Item {
                 style: Text.Raised
                 styleColor: Qt.alpha(Theme.bg, 0.55)
             }
+        }
+
+        Text {
+            visible: root.showWeatherDetails && root.meteoOk
+            text: root.meteoOk
+                ? ("min " + Math.round(Number(root.meteo.tmin) || 0) + "° · max " + Math.round(Number(root.meteo.tmax) || 0) + "° · ressenti " + Math.round(Number(root.meteo.feels) || 0) + "°")
+                : ""
+            color: Qt.alpha(Theme.fg, 0.62)
+            font.pixelSize: Math.round(Theme.widgetLabel * 0.9 * root.echelle)
+            style: Text.Raised
+            styleColor: Qt.alpha(Theme.bg, 0.55)
         }
     }
 }

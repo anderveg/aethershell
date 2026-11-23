@@ -21,6 +21,7 @@ Item {
     property real wEcran: 0
     property real hEcran: 0
     signal fermer()
+    signal redimensionner()
 
     // Lecture réactive depuis ShellState.widgets pour refléter immédiatement les changements.
     readonly property var widgetActuel: {
@@ -219,32 +220,63 @@ Item {
                     color: Theme.surfaceVariant
                 }
 
-                Rectangle {
-                    visible: Number((racine.widgetActuel || {}).w) > 0 || Number((racine.widgetActuel || {}).h) > 0
+                Row {
                     width: parent.width
-                    height: 26
-                    radius: Theme.globalRadius
-                    color: resetSizeMa.containsMouse ? Qt.alpha(Theme.accent, 0.22) : Qt.alpha(Theme.surfaceVariant, 0.45)
-                    border.color: Theme.accent
-                    border.width: 1
+                    spacing: 6
 
-                    Text {
-                        anchors.centerIn: parent
-                        text: "Réinitialiser la taille"
-                        color: Theme.accent
-                        font.pixelSize: Theme.textXs
-                        font.bold: true
+                    Rectangle {
+                        readonly property bool hasCustom: Number((racine.widgetActuel || {}).w) > 0 || Number((racine.widgetActuel || {}).h) > 0
+                        width: hasCustom ? Math.floor((parent.width - 6) / 2) : parent.width
+                        height: 26
+                        radius: Theme.globalRadius
+                        color: resizeModeMa.containsMouse ? Qt.alpha(Theme.accent, 0.22) : Qt.alpha(Theme.surfaceVariant, 0.45)
+                        border.color: Theme.accent
+                        border.width: 1
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Redimensionner"
+                            color: Theme.accent
+                            font.pixelSize: Theme.textXs
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            id: resizeModeMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: racine.redimensionner()
+                        }
                     }
 
-                    MouseArea {
-                        id: resetSizeMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: Quickshell.execDetached([
-                            Quickshell.shellPath("core/as-core"),
-                            "config", "widget_resize", racine.wid, "0", "0"
-                        ])
+                    Rectangle {
+                        visible: Number((racine.widgetActuel || {}).w) > 0 || Number((racine.widgetActuel || {}).h) > 0
+                        width: Math.floor((parent.width - 6) / 2)
+                        height: 26
+                        radius: Theme.globalRadius
+                        color: resetSizeMa.containsMouse ? Qt.alpha(Theme.accent, 0.22) : Qt.alpha(Theme.surfaceVariant, 0.45)
+                        border.color: Theme.accent
+                        border.width: 1
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Taille auto"
+                            color: Theme.accent
+                            font.pixelSize: Theme.textXs
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            id: resetSizeMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Quickshell.execDetached([
+                                Quickshell.shellPath("core/as-core"),
+                                "config", "widget_resize", racine.wid, "0", "0"
+                            ])
+                        }
                     }
                 }
 

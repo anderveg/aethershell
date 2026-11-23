@@ -14,6 +14,8 @@ Item {
     id: root
     property var options: ({})
     property string widgetId: ""
+    property real widgetW: 0
+    property real widgetH: 0
 
     readonly property real echelle: {
         const v = Number(options && options.text_scale)
@@ -46,6 +48,9 @@ Item {
         return v === true || v === "true" || v === 1 || v === "1"
     }
     readonly property int lignesAffichees: {
+        if (widgetH > 0) {
+            return Math.max(1, Math.min(18, Math.floor((widgetH - Math.round(22 * echelle)) / Math.round(17 * echelle))))
+        }
         const v = Number(root.options && root.options.lignes)
         return (v >= 1 && v <= 6) ? Math.round(v) : 3
     }
@@ -76,8 +81,8 @@ Item {
         onTriggered: root.rafraichir()
     }
 
-    implicitWidth: Math.round(246 * echelle)
-    implicitHeight: colonne.implicitHeight
+    implicitWidth: widgetW > 0 ? Math.max(Math.round(180 * echelle), Math.round(widgetW)) : Math.round(246 * echelle)
+    implicitHeight: widgetH > 0 ? Math.max(colonne.implicitHeight, widgetH) : colonne.implicitHeight
 
     Column {
         id: colonne

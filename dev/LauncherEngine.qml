@@ -10,7 +10,18 @@ QtObject {
     property var appIndex: []
     property var aliases: ({})
     property var history: []
-    property bool watchActive: false
+    property bool watchActive: true
+
+    property Process indexBuilderProc: Process {
+        command: [Quickshell.shellPath("core/as-core"), "app-index", "--quiet"]
+        onExited: root.reload()
+    }
+
+    function rebuildIndex() {
+        if (!indexBuilderProc.running) indexBuilderProc.running = true
+    }
+
+    Component.onCompleted: rebuildIndex()
 
     property FileView appIndexFile: FileView {
         path: Quickshell.shellPath("core/app_index.json")

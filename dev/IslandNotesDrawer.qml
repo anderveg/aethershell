@@ -315,7 +315,62 @@ Item {
                     color: Theme.fg
                     wrapMode: TextEdit.Wrap
                     selectByMouse: true
+                    selectionColor: Theme.accent
+                    selectedTextColor: Theme.bg
+                    onActiveFocusChanged: if (activeFocus && TabletMode.active) TabletMode.keyboardOpen = true
                     Keys.onEscapePressed: Theme.islandNotesOpen = false
+
+                    Connections {
+                        target: TabletMode
+                        function onLauncherKeyInjected(keyText, keySpec) {
+                            if (!Theme.islandNotesOpen) return
+                            noteEditor.forceActiveFocus()
+                            if (keySpec === "ACTION_SELECT_ALL") {
+                                noteEditor.selectAll()
+                            } else if (keySpec === "ACTION_COPY") {
+                                noteEditor.copy()
+                            } else if (keySpec === "ACTION_CUT") {
+                                noteEditor.cut()
+                            } else if (keySpec === "ACTION_PASTE") {
+                                noteEditor.paste()
+                            } else if (keySpec === "KEY_LEFT") {
+                                if (noteEditor.selectedText.length > 0) noteEditor.cursorPosition = noteEditor.selectionStart
+                                else noteEditor.cursorPosition = Math.max(0, noteEditor.cursorPosition - 1)
+                            } else if (keySpec === "KEY_RIGHT") {
+                                if (noteEditor.selectedText.length > 0) noteEditor.cursorPosition = noteEditor.selectionEnd
+                                else noteEditor.cursorPosition = Math.min(noteEditor.text.length, noteEditor.cursorPosition + 1)
+                            } else if (keySpec === "SHIFT+KEY_LEFT") {
+                                noteEditor.moveCursorSelection(Math.max(0, noteEditor.cursorPosition - 1), TextEdit.SelectCharacters)
+                            } else if (keySpec === "SHIFT+KEY_RIGHT") {
+                                noteEditor.moveCursorSelection(Math.min(noteEditor.text.length, noteEditor.cursorPosition + 1), TextEdit.SelectCharacters)
+                            } else if (keySpec === "CTRL+SHIFT+KEY_LEFT") {
+                                noteEditor.moveCursorSelection(Math.max(0, noteEditor.cursorPosition - 1), TextEdit.SelectWords)
+                            } else if (keySpec === "CTRL+SHIFT+KEY_RIGHT") {
+                                noteEditor.moveCursorSelection(Math.min(noteEditor.text.length, noteEditor.cursorPosition + 1), TextEdit.SelectWords)
+                            } else if (keySpec === "KEY_BACKSPACE") {
+                                if (noteEditor.selectedText.length > 0) {
+                                    noteEditor.remove(noteEditor.selectionStart, noteEditor.selectionEnd)
+                                } else if (noteEditor.cursorPosition > 0) {
+                                    noteEditor.remove(noteEditor.cursorPosition - 1, noteEditor.cursorPosition)
+                                }
+                            } else if (keySpec === "KEY_SPACE") {
+                                if (noteEditor.selectedText.length > 0) {
+                                    noteEditor.remove(noteEditor.selectionStart, noteEditor.selectionEnd)
+                                }
+                                noteEditor.insert(noteEditor.cursorPosition, " ")
+                            } else if (keySpec === "KEY_ENTER") {
+                                if (noteEditor.selectedText.length > 0) {
+                                    noteEditor.remove(noteEditor.selectionStart, noteEditor.selectionEnd)
+                                }
+                                noteEditor.insert(noteEditor.cursorPosition, "\n")
+                            } else if (keyText !== "") {
+                                if (noteEditor.selectedText.length > 0) {
+                                    noteEditor.remove(noteEditor.selectionStart, noteEditor.selectionEnd)
+                                }
+                                noteEditor.insert(noteEditor.cursorPosition, keyText)
+                            }
+                        }
+                    }
                     onTextChanged: {
                         if (root._notesSyncing) return
                         if (root.activeNoteIdx >= 0 && root.activeNoteIdx < root.quickNotes.length) {

@@ -13,6 +13,8 @@ import Quickshell.Io
 Item {
     id: root
     property var options: ({})
+    property real widgetW: 0
+    property real widgetH: 0
 
     // Échelle du texte, réglée par widget depuis le panneau (options.text_scale,
     // en pourcentage). 100 = taille du thème ; les widgets de compte LLM partent
@@ -25,9 +27,14 @@ Item {
     // Renseigné par main.qml : identité de l'entrée dans widgets.json.
     property string widgetId: ""
 
+    // Progression adaptative : horloge -> horloge + date -> horloge + date + météo (-> + calendrier)
+    readonly property bool showDate: widgetH === 0 || widgetH >= Math.round(75 * echelle)
+    readonly property bool showWeather: widgetH === 0 || widgetH >= Math.round(115 * echelle)
+
     // Calendrier replié/étendu, comme dans le widget « date » : même grille, même
     // composant (CalendrierCompact), la carte grandit et sa fenêtre suit.
     property bool ouvert: false
+    readonly property bool showCalendrier: ouvert || widgetH >= Math.round(230 * echelle)
 
     property var meteoLocal: ({})
     property bool loadedLocal: false
@@ -60,10 +67,10 @@ Item {
     // les textes seuls, jamais sur la colonne qui contient la grille (boucle).
     readonly property real largeurCalendrier: Math.max(ligneDate.width,
                                                        ligneMeteo.implicitWidth,
-                                                       Math.round(196 * echelle))
+                                                       Math.max(Math.round(196 * echelle), widgetW))
 
-    implicitWidth: stack.implicitWidth
-    implicitHeight: stack.implicitHeight
+    implicitWidth: widgetW > 0 ? Math.max(stack.implicitWidth, widgetW) : stack.implicitWidth
+    implicitHeight: widgetH > 0 ? Math.max(stack.implicitHeight, widgetH) : stack.implicitHeight
 
 
     function refresh(force) {
@@ -143,6 +150,7 @@ Item {
         // de la ligne, ce qu'une rangée interdit à ses enfants.
         Item {
             id: ligneDate
+            visible: root.showDate
             width: texteDate.implicitWidth + 11
             height: texteDate.implicitHeight
 
@@ -181,6 +189,7 @@ Item {
         // Météo
         Row {
             id: ligneMeteo
+            visible: root.showWeather
             spacing: Theme.space2
             topPadding: Theme.space1
 
@@ -216,9 +225,10 @@ Item {
 
         CalendrierCompact {
             id: calendrier
-            visible: root.ouvert
+            visible: root.showCalendrier
             width: root.largeurCalendrier
             echelle: root.echelle
+            extraHeight: Math.max(0, root.widgetH - Math.round(115 * root.echelle))
         }
     }
 }

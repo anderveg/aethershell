@@ -19,6 +19,8 @@ Item {
     id: root
     property var options: ({})
     property string widgetId: ""
+    property real widgetW: 0
+    property real widgetH: 0
     property bool replie: true
     property string actionStatus: ""
 
@@ -30,12 +32,14 @@ Item {
 
     readonly property var etat: SystemServices.hermesData
     readonly property bool charge: SystemServices.hermesCharge
+    readonly property bool autoExpanded: !replie || widgetH >= Math.round(185 * echelle)
+    readonly property int maxSessions: widgetH > 0 ? Math.max(1, Math.min(8, Math.floor((widgetH - Math.round(35 * echelle)) / Math.round(18 * echelle)))) : 3
 
     readonly property var lignes: {
         const l = root.etat.sessions || []
         const vivantes = l.filter(function (s) { return s.vivante })
         const autres = l.filter(function (s) { return !s.vivante })
-        return vivantes.concat(autres).slice(0, 3)
+        return vivantes.concat(autres).slice(0, root.maxSessions)
     }
 
     function jeton(n) { return SystemServices.formatTokens(n) }
@@ -85,9 +89,9 @@ Item {
                                      : root.etat.etat === "en_cours" ? Theme.accent
                                      : Qt.alpha(Theme.fg, 0.55)
 
-    readonly property real hauteurMax: Math.round(380 * echelle)
-    implicitWidth: Math.round(264 * echelle)
-    implicitHeight: replie ? Math.round(colonne.implicitHeight) : Math.min(Math.round(colonne.implicitHeight), hauteurMax)
+    readonly property real hauteurMax: widgetH > 0 ? widgetH : Math.round(380 * echelle)
+    implicitWidth: widgetW > 0 ? Math.max(Math.round(190 * echelle), Math.round(widgetW)) : Math.round(264 * echelle)
+    implicitHeight: widgetH > 0 ? widgetH : ( !root.autoExpanded ? Math.round(colonne.implicitHeight) : Math.min(Math.round(colonne.implicitHeight), hauteurMax) )
 
     Flickable {
         id: flick
@@ -96,7 +100,7 @@ Item {
         contentHeight: colonne.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
-        interactive: !root.replie && contentHeight > height
+        interactive: root.autoExpanded && contentHeight > height
 
         Column {
             id: colonne
@@ -224,7 +228,7 @@ Item {
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: root.replie ? "Détails & Actions ▾" : "Replier ▴"
+                        text: !root.autoExpanded ? "Détails & Actions ▾" : "Replier ▴"
                         color: toggleMa.containsMouse ? Theme.accent : Qt.alpha(Theme.fg, 0.70)
                         font.pixelSize: Math.round(9 * echelle)
                         font.bold: true
@@ -241,11 +245,11 @@ Item {
             }
 
             // ══════════════════════════════════════════════════════════════════
-            // SECTION ENRICHIE (VISIBLE QUAND DÉPLIÉE)
+            // SECTION ENRICHIE (VISIBLE QUAND DÉPLIÉE OU AGRANDIE)
             // ══════════════════════════════════════════════════════════════════
             Column {
                 width: parent.width
-                visible: !root.replie
+                visible: root.autoExpanded
                 spacing: Math.round(6 * echelle)
 
                 // Séparateur

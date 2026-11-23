@@ -24,6 +24,7 @@ PanelWindow {
 
     visible: win.open
     anchors { top: true; bottom: true; left: true; right: true }
+    margins { bottom: (win.open && TabletMode.keyboardOpen) ? 314 : 0 }
     exclusionMode: ExclusionMode.Ignore
     color: "transparent"
     WlrLayershell.layer: win.layerLevel

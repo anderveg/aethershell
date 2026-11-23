@@ -427,6 +427,9 @@ QtObject {
         function toggleOverview() {
             Theme.overviewVisible = !Theme.overviewVisible
         }
+        function toggleKeyboard() {
+            TabletMode.toggleVirtualKeyboard()
+        }
         function toggleWidgetEditMode() {
             Theme.widgetsEditMode = !Theme.widgetsEditMode
         }

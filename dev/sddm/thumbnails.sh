@@ -52,7 +52,10 @@ for row in "${rows[@]}"; do
         sed -i "s|^ConfigFile=.*|ConfigFile=Themes/$id.conf|" "$tmp/metadata.desktop"
     fi
 
-    QT_QPA_PLATFORM=wayland timeout 9 sddm-greeter-qt6 --test-mode --theme "$tmp" \
+    QT_QPA_PLATFORM=wayland \
+    QT_LOGGING_RULES="*.debug=false;qt.qpa.wayland*=false;qt.qml.propertyCache*=false;kwin_*=false" \
+    LANG="${LANG:-C.UTF-8}" \
+    timeout 9 sddm-greeter-qt6 --test-mode --theme "$tmp" \
         >/dev/null 2>&1 &
     pid=$!
     sleep 4.5

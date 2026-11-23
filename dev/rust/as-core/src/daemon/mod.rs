@@ -5,6 +5,7 @@ pub mod nuit;
 pub mod reseau;
 pub mod system_service;
 pub mod systeme;
+pub mod tablet_mode;
 pub mod workspace;
 
 use crate::common::io::tie_to_parent_death;

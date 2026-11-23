@@ -252,7 +252,7 @@ Column {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                        root.matugenScheme = parent.modelData.id
+                        ConfigStore.matugenScheme = parent.modelData.id
                         root.runConfigCmd(["style", "matugen_scheme", parent.modelData.id])
                         Quickshell.execDetached(["bash", Quickshell.shellPath("core/generate_colors.sh")])
                     }
@@ -308,7 +308,7 @@ Column {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                        root.matugenContrast = parent.modelData.v
+                        ConfigStore.matugenContrast = parent.modelData.v
                         root.runConfigCmd(["style", "matugen_contrast", String(parent.modelData.v)])
                         Quickshell.execDetached(["bash", Quickshell.shellPath("core/generate_colors.sh")])
                     }
@@ -1006,7 +1006,7 @@ maximumValue: 30
 stepSize: 1
 suffix: " px"
 onValueModified: newVal => {
-    root.gapsIn = newVal
+    ConfigStore.gapsIn = newVal
     root.runConfigCmd(["gaps", "gaps_in", String(newVal)])
 }
         }
@@ -1034,7 +1034,7 @@ maximumValue: 40
 stepSize: 1
 suffix: " px"
 onValueModified: newVal => {
-    root.gapsOut = newVal
+    ConfigStore.gapsOut = newVal
     root.runConfigCmd(["gaps", "gaps_out", String(newVal)])
 }
         }
@@ -1064,7 +1064,7 @@ maximumValue: 10
 stepSize: 1
 suffix: " px"
 onValueModified: newVal => {
-    root.borderSize = newVal
+    ConfigStore.borderSize = newVal
     root.runConfigCmd(["gaps", "border_size", String(newVal)])
 }
         }
@@ -1094,7 +1094,7 @@ maximumValue: 35
 stepSize: 1
 suffix: " px"
 onValueModified: newVal => {
-    root.hyprRounding = newVal
+    ConfigStore.hyprRounding = newVal
     root.runConfigCmd(["style", "hypr_rounding", String(newVal)])
 }
         }
@@ -1131,7 +1131,7 @@ minimumValue: 1
 maximumValue: 2
 stepSize: 1
 onValueModified: newVal => {
-    root.hyprRoundingPower = newVal
+    ConfigStore.hyprRoundingPower = newVal
     root.runConfigCmd(["style", "hypr_rounding_power", String(newVal)])
 }
         }
@@ -1168,7 +1168,7 @@ maximumValue: 50
 stepSize: 5
 suffix: " px"
 onValueModified: newVal => {
-    root.resizeStep = newVal
+    ConfigStore.resizeStep = newVal
     root.runConfigCmd(["style", "resize_step", String(newVal)])
 }
         }
@@ -1236,7 +1236,7 @@ maximumValue: 20
 stepSize: 1
 suffix: " px"
 onValueModified: newVal => {
-    root.blurSize = newVal
+    ConfigStore.blurSize = newVal
     root.runConfigCmd(["style", "blur_size", String(newVal)])
 }
         }
@@ -1263,7 +1263,7 @@ minimumValue: 1
 maximumValue: 8
 stepSize: 1
 onValueModified: newVal => {
-    root.blurPasses = newVal
+    ConfigStore.blurPasses = newVal
     root.runConfigCmd(["style", "blur_passes", String(newVal)])
 }
         }
@@ -1287,8 +1287,8 @@ elide: Text.ElideRight
             anchors.verticalCenter: parent.verticalCenter
             checked: root.blurEnabled
             onToggled: {
-                root.blurEnabled = !root.blurEnabled
-                root.runConfigCmd(["style", "blur_enabled", root.blurEnabled ? "true" : "false"])
+                ConfigStore.blurEnabled = !ConfigStore.blurEnabled
+                root.runConfigCmd(["style", "blur_enabled", ConfigStore.blurEnabled ? "true" : "false"])
             }
         }
     }
@@ -1370,8 +1370,8 @@ Text {
             anchors.verticalCenter: parent.verticalCenter
             checked: root.shellBlurEnabled
             onToggled: {
-                root.shellBlurEnabled = !root.shellBlurEnabled
-                root.runConfigCmd(["style", "shell_blur_enabled", root.shellBlurEnabled ? "true" : "false"])
+                ConfigStore.shellBlurEnabled = !ConfigStore.shellBlurEnabled
+                root.runConfigCmd(["style", "shell_blur_enabled", ConfigStore.shellBlurEnabled ? "true" : "false"])
             }
         }
         }
@@ -1398,7 +1398,7 @@ Stepper {
     stepSize: 0.05
     decimals: 2
     onValueModified: newVal => {
-        root.shellBlurAlpha = newVal
+        ConfigStore.shellBlurAlpha = newVal
         root.runConfigCmd(["style", "shell_blur_alpha", String(newVal)])
     }
 }
@@ -1429,8 +1429,8 @@ Text {
             anchors.verticalCenter: parent.verticalCenter
             checked: root.shellBlurPopups
             onToggled: {
-                root.shellBlurPopups = !root.shellBlurPopups
-                root.runConfigCmd(["style", "shell_blur_popups", root.shellBlurPopups ? "true" : "false"])
+                ConfigStore.shellBlurPopups = !ConfigStore.shellBlurPopups
+                root.runConfigCmd(["style", "shell_blur_popups", ConfigStore.shellBlurPopups ? "true" : "false"])
             }
         }
         }

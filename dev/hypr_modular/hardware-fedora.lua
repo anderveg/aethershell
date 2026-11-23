@@ -23,7 +23,7 @@ hl.bind("switch:off:Lid Switch", hl.dsp.exec_cmd("hyprctl eval 'hl.monitor({ out
 -- Bascule manuelle du Dock
 hl.bind("SUPER + SHIFT + D", hl.dsp.exec_cmd("~/.config/hypr/toggle_dock.sh"))
 
--- Navigation entre workspaces au trackpad : SUPER + glissement 3 doigts
+-- Navigation entre workspaces : glissement 3 doigts sans modificateur
 -- (droite -> n+1, gauche -> n-1 sur l'écran actif).
 for _, geste in ipairs({
     { direction = "right", workspace = "r+1" },
@@ -32,15 +32,23 @@ for _, geste in ipairs({
     hl.gesture({
         fingers   = 3,
         direction = geste.direction,
-        mods      = "SUPER",
         action    = function()
             hl.dispatch(hl.dsp.focus({ workspace = geste.workspace }))
         end,
     })
 end
 
--- Mode tablette : daemon d'orientation (iio-sensor-proxy / monitor-sensor), portable uniquement.
--- Lancé uniquement au démarrage de Hyprland (pas à chaque reload) et jamais en double.
-hl.on("hyprland.start", function ()
-    hl.exec_cmd("sh -c 'pgrep -f \"[t]ablet_mode_daemon.py\" >/dev/null || exec python3 \"$HOME/.config/quickshell/core/tablet_mode_daemon.py\" daemon' &")
-end)
+-- 3 doigts haut/bas : vue d'ensemble tactile des fenêtres
+for _, dir in ipairs({ "up", "down" }) do
+    hl.gesture({
+        fingers   = 3,
+        direction = dir,
+        action    = function()
+            hl.dispatch(hl.dsp.exec_cmd("quickshell ipc -n call shell toggleOverview"))
+        end,
+    })
+end
+
+-- Mode tablette : daemon d'orientation et de gestes tactiles (as-core tablet-mode daemon), portable uniquement.
+-- Gardé par pgrep pour ne jamais être lancé en double (démarrage ou reload).
+hl.exec_cmd("sh -c 'pgrep -f \"as-core [t]ablet-mode daemon\" >/dev/null || exec \"$HOME/.config/quickshell/core/as-core\" tablet-mode daemon' &")

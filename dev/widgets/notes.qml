@@ -8,10 +8,16 @@ Item {
     id: root
     property var options: ({})
     property string widgetId: ""
+    property real widgetW: 0
+    property real widgetH: 0
 
     readonly property real echelle: {
         const v = Number(options && options.text_scale)
         return (v >= 60 && v <= 160) ? v / 100 : 1.0
+    }
+    readonly property int maxLines: {
+        if (widgetH <= 0) return 12
+        return Math.max(1, Math.min(32, Math.floor((widgetH - Math.round(26 * echelle)) / Math.round(16 * echelle))))
     }
     property int activeIdx: Math.max(0, Number(options && options.note_index) || 0)
     property var notesList: []
@@ -48,8 +54,8 @@ Item {
         }
     }
 
-    implicitWidth: Math.round(240 * echelle)
-    implicitHeight: noteCol.implicitHeight
+    implicitWidth: widgetW > 0 ? Math.max(Math.round(160 * echelle), Math.round(widgetW)) : Math.round(240 * echelle)
+    implicitHeight: widgetH > 0 ? Math.max(noteCol.implicitHeight, widgetH) : noteCol.implicitHeight
 
     Column {
         id: noteCol
@@ -145,7 +151,7 @@ Item {
             font.family: Theme.fontUi
             font.pixelSize: Math.round(Theme.textSm * echelle)
             wrapMode: Text.WordWrap
-            maximumLineCount: 12
+            maximumLineCount: root.maxLines
             elide: Text.ElideRight
             style: Text.Raised
             styleColor: Qt.alpha(Theme.bg, 0.55)

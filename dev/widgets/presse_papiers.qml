@@ -13,9 +13,11 @@ Item {
     id: root
     property var options: ({})
     property string widgetId: ""
+    property real widgetW: 0
+    property real widgetH: 0
     property bool ouvert: false
     property bool fermerAuClic: false
-    property int limite: 6
+    property int limite: 12
     property bool afficherVider: false
     onOuvertChanged: if (ouvert) rafraichir()
 
@@ -24,6 +26,11 @@ Item {
         if (v >= 60 && v <= 160) return v / 100
         return 1.0
     }
+    readonly property int maxVisibleEntries: {
+        if (widgetH <= 0) return 6
+        return Math.max(1, Math.min(12, Math.floor((widgetH - Math.round(24 * echelle)) / Math.round(24 * echelle))))
+    }
+    readonly property bool showClearBtn: afficherVider || widgetH >= Math.round(190 * echelle)
 
     property var entrees: []
     property int total: 0
@@ -96,8 +103,8 @@ Item {
         action.running = true
     }
 
-    implicitWidth: Math.round(244 * echelle)
-    implicitHeight: colonne.implicitHeight
+    implicitWidth: widgetW > 0 ? Math.max(Math.round(180 * echelle), Math.round(widgetW)) : Math.round(244 * echelle)
+    implicitHeight: widgetH > 0 ? Math.max(colonne.implicitHeight, widgetH) : colonne.implicitHeight
 
     Column {
         id: colonne
@@ -126,7 +133,7 @@ Item {
         }
 
         Repeater {
-            model: root.entrees
+            model: root.entrees.slice(0, root.maxVisibleEntries)
 
             Rectangle {
                 required property var modelData
@@ -165,7 +172,7 @@ Item {
         }
 
         Rectangle {
-            visible: root.afficherVider
+            visible: root.showClearBtn
             width: parent.width
             height: Math.round(24 * root.echelle)
             radius: Theme.globalRadius

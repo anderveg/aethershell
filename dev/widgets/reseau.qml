@@ -15,12 +15,17 @@ Item {
     id: root
     property var options: ({})
     property string widgetId: ""
+    property real widgetW: 0
+    property real widgetH: 0
 
     readonly property real echelle: {
         const v = Number(options && options.text_scale)
         if (v >= 60 && v <= 160) return v / 100
         return 1.0
     }
+
+    readonly property bool showAddressing: widgetH === 0 || widgetH >= Math.round(78 * echelle)
+    readonly property bool showRadioDetails: widgetH === 0 || widgetH >= Math.round(125 * echelle)
 
     readonly property var reseau: SystemServices.reseauData
     readonly property bool charge: SystemServices.reseauCharge
@@ -54,8 +59,8 @@ Item {
     // Largeur **fixe** : un ping qui passe de 6 à 1200 ms, ou un débit qui passe de
     // « 1 ko/s » à « 12,3 Mo/s », ne doit pas redimensionner la carte sous le
     // curseur. Les lignes se contentent de tronquer ce qui dépasse.
-    implicitWidth: Math.round(252 * echelle)
-    implicitHeight: colonne.implicitHeight
+    implicitWidth: widgetW > 0 ? Math.max(Math.round(180 * echelle), Math.round(widgetW)) : Math.round(252 * echelle)
+    implicitHeight: widgetH > 0 ? Math.max(colonne.implicitHeight, widgetH) : colonne.implicitHeight
 
     Column {
         id: colonne
@@ -74,7 +79,7 @@ Item {
                 style: Text.Raised
                 styleColor: Qt.alpha(Theme.bg, 0.55)
                 elide: Text.ElideRight
-                width: Math.min(implicitWidth, Math.round(150 * root.echelle))
+                width: Math.min(implicitWidth, Math.max(Math.round(90 * root.echelle), root.implicitWidth - Math.round(90 * root.echelle)))
             }
 
             // Quatre barres, comme un indicateur Wi-Fi : plus parlant qu'un
@@ -113,7 +118,7 @@ Item {
 
         // ── radio ───────────────────────────────────────────────────────────
         Text {
-            visible: root.bande() !== ""
+            visible: root.showRadioDetails && root.bande() !== ""
             width: parent.width
             elide: Text.ElideRight
             text: root.bande()
@@ -125,7 +130,7 @@ Item {
 
         // ── adressage ───────────────────────────────────────────────────────
         Text {
-            visible: root.reseau.ip !== undefined
+            visible: root.showAddressing && root.reseau.ip !== undefined
             width: parent.width
             elide: Text.ElideRight
             text: String(root.reseau.ip || "")
@@ -140,7 +145,7 @@ Item {
         // Sur sa propre ligne : un ping qui explose (1200 ms) allongeait la ligne
         // d'adressage et donc la carte.
         Text {
-            visible: root.reseau.latence_ms !== undefined
+            visible: root.showAddressing && root.reseau.latence_ms !== undefined
             text: "ping " + root.reseau.latence_ms + " ms"
             color: Qt.alpha(Theme.fg, 0.6)
             font.pixelSize: Math.round(11.5 * root.echelle)
@@ -168,7 +173,7 @@ Item {
 
         // ── VPN ─────────────────────────────────────────────────────────────
         Text {
-            visible: root.reseau.vpn !== undefined && String(root.reseau.vpn || "") !== ""
+            visible: root.showRadioDetails && root.reseau.vpn !== undefined && String(root.reseau.vpn || "") !== ""
             width: parent.width
             elide: Text.ElideRight
             text: "⛨ " + String(root.reseau.vpn || "")

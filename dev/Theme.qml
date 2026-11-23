@@ -62,6 +62,10 @@ QtObject {
     property bool showKeyboardOnboarding: false
     property bool showConfigButton: true
     property int barHeight: 40
+    // Tokens d'ergonomie tactile (agrandis automatiquement en mode tablette)
+    readonly property int touchTargetMin: TabletMode.active ? 44 : 32
+    readonly property int touchSliderHeight: TabletMode.active ? 24 : 14
+    readonly property int touchIconBtnSize: TabletMode.active ? 42 : 28
     // Bordure de la barre du haut (capsule fusionnée et îlots) : réglable.
     property bool barBorder: true
     // Style d'agencement de la barre : "classic" (3 îlots) ou "island" (îlot central dynamique)

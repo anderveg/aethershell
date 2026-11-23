@@ -33,9 +33,14 @@ Item {
     // Renseigné par main.qml : identité de l'entrée dans widgets.json.
     property string widgetId: ""
 
-    readonly property bool showDate: widgetH >= Math.round(105 * echelle)
-    readonly property bool showDetails: widgetH === 0 || widgetH >= Math.round(85 * echelle)
-    readonly property bool showForecast: widgetH === 0 || widgetH >= Math.round(160 * echelle)
+    // Progression adaptative : météo -> météo + date -> météo + date + forecast
+    readonly property bool showDate: widgetH === 0 || widgetH >= Math.round(82 * echelle)
+    readonly property bool showDetails: widgetH === 0 || widgetH >= Math.round(112 * echelle)
+    readonly property bool showForecast: widgetH === 0 || widgetH >= Math.round(155 * echelle)
+    readonly property int maxForecastDays: {
+        if (widgetW <= 0) return 5
+        return Math.max(2, Math.min(5, Math.floor(widgetW / Math.round(68 * echelle))))
+    }
     readonly property string dateTexte: {
         const d = new Date()
         const jours = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"]
@@ -54,10 +59,10 @@ Item {
     // retombe sur la localisation réglée dans le panneau, puis sur weather_city.
     readonly property string cityOption: (options && options.city) ? String(options.city) : ""
 
-    // Aujourd'hui est déjà résumé au-dessus : on garde les cinq jours suivants.
+    // Aujourd'hui est déjà résumé au-dessus : on adapte le nombre de jours de prévisions à la largeur.
     readonly property var previsions: {
         const p = (root.meteo && root.meteo.previsions) ? root.meteo.previsions : []
-        return p.slice(1, 6)
+        return p.slice(1, 1 + root.maxForecastDays)
     }
 
     implicitWidth: widgetW > 0 ? Math.max(contentCol.implicitWidth, widgetW) : contentCol.implicitWidth

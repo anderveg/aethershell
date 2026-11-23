@@ -748,6 +748,18 @@ Item {
         targetScreen: topBarWindow.screen
     }
 
+    TabletEdgeZones {
+        targetScreen: topBarWindow.screen
+    }
+
+    TabletLauncher {
+        targetScreen: topBarWindow.screen
+    }
+
+    TabletKeyboard {
+        targetScreen: topBarWindow.screen
+    }
+
     // Barres supplémentaires : bas et côtés. Elles ne s'affichent que si elles
     // sont allumées **et** portent un applet (voir bar_extra.qml).
     BarExtra {

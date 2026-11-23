@@ -78,14 +78,16 @@ Item {
 
         function colonnesRegroupees(haut, l) {
             const n = haut.length
-            const pas = l / n
-            const groupe = Math.max(1, Math.ceil(4 / Math.max(0.5, pas)))
-            const m = Math.max(1, Math.floor(n / groupe))
+            if (n < 2) return [0.05]
+            // Ajuste le nombre de colonnes proportionnellement à la largeur (6 à 96 colonnes)
+            const m = Math.max(6, Math.min(96, Math.floor(l / 7)))
             const vals = []
             for (let j = 0; j < m; ++j) {
-                let v = 0
-                const fin = Math.min(n, (j + 1) * groupe)
-                for (let k = j * groupe; k < fin; ++k) v = Math.max(v, haut[k])
+                const pos = (j / Math.max(1, m - 1)) * (n - 1)
+                const i0 = Math.floor(pos)
+                const i1 = Math.min(n - 1, i0 + 1)
+                const frac = pos - i0
+                const v = (Number(haut[i0]) || 0) * (1 - frac) + (Number(haut[i1]) || 0) * frac
                 vals.push(Math.max(0.03, Math.min(1, v)))
             }
             return vals
@@ -185,11 +187,12 @@ Item {
                 const vals = colonnesRegroupees(haut, l)
                 const m = vals.length
                 const pasBarre = l / m
-                const largeur = Math.max(2, pasBarre * 0.64)
-                const blocH = Math.max(2, Math.min(4, Math.floor(h / 7)))
+                const largeur = Math.max(2, pasBarre * 0.66)
+                // Ajuste le nombre de lignes de la matrice LED à la hauteur disponible (3 à 32 lignes)
+                const maxBlocs = Math.max(3, Math.min(32, Math.floor((h - 4) / 5)))
                 const gapY = 1.5
-                const pasY = blocH + gapY
-                const maxBlocs = Math.max(2, Math.floor((h - 4) / pasY))
+                const pasY = (h - 4) / maxBlocs
+                const blocH = Math.max(2, pasY - gapY)
                 for (let j = 0; j < m; ++j) {
                     const nb = Math.max(1, Math.round(vals[j] * maxBlocs))
                     const x = Math.round(j * pasBarre + (pasBarre - largeur) / 2)

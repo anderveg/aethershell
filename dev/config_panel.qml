@@ -330,7 +330,7 @@ Rectangle {
         "ilot_config": 1, "ilot_indicateurs": 1, "ilot_applets": 1,
         "widgets": 2, "widgets_pilule": 2,
         "systeme_nuit": 3, "ecrans_moniteurs": 3, "systeme_horloge": 3,
-        "ecrans_captures": 3, "systeme_maj": 3, "systeme_diag": 3,
+        "systeme_veille": 3, "ecrans_captures": 3, "systeme_maj": 3, "systeme_diag": 3,
         "clavier_disposition": 3, "clavier_binds": 3,
         "apps_programs": 4, "apps_autostart": 4, "quickshell_notifications": 4,
         "quickshell_calendrier": 4, "taches_fichiers": 4, "widgets_homelab": 4,
@@ -1209,10 +1209,10 @@ Rectangle {
             onStreamFinished: {
                 try {
                     const d = JSON.parse(text.trim())
-                    if (typeof d.temperature === "number") root.nuitTemp = d.temperature
-                    root.nuitAllumee = d.allume === true
-                    root.nuitDe = String(d.de || "")
-                    root.nuitA = String(d.a || "")
+                    if (typeof d.temperature === "number") ConfigStore.nuitTemp = d.temperature
+                    ConfigStore.nuitAllumee = d.allume === true
+                    ConfigStore.nuitDe = String(d.de || "")
+                    ConfigStore.nuitA = String(d.a || "")
                 } catch (e) {}
                 root.refreshConfigState()
             }
@@ -1227,7 +1227,7 @@ Rectangle {
     }
 
     function reglerDnd(actif) {
-        root.dndActif = actif
+        ConfigStore.dndActif = actif
         dndProc.command = [Quickshell.shellPath("core/as-core"), "config",
                            "style", "do_not_disturb", actif ? "true" : "false"]
         dndProc.running = true
@@ -1254,9 +1254,9 @@ Rectangle {
             onStreamFinished: {
                 try {
                     const d = JSON.parse(text.trim())
-                    root.todoFichiers = d.fichiers || []
-                    root.todoFocus = String(d.focus || "")
-                    root.todoSurveillance = Boolean(d.surveillance)
+                    ConfigStore.todoFichiers = d.fichiers || []
+                    ConfigStore.todoFocus = String(d.focus || "")
+                    ConfigStore.todoSurveillance = Boolean(d.surveillance)
                 } catch (e) { }
             }
         }

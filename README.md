@@ -23,7 +23,7 @@ Plutôt qu'un simple thème de barre, AetherShell regroupe les éléments visuel
 * **Visualiseur audio réactif** : intégration discrète d'une onde PipeWire native (`pwscope`) ou de barres spectrales (`cava`), avec extinction automatique après dix secondes de silence pour préserver les ressources GPU/CPU.
 * **Suivi de tâches & intégration Hermes** : gestion locale de checklists Markdown (`- [ ]`) avec sélecteur de fichiers graphique et interrupteur de surveillance optionnel confiant l'exécution des tâches cochées à l'agent Hermes via un worker d'arrière-plan.
 * **Sélecteurs graphiques intégrés** : feuilles modales dessinées directement dans la surface du shell ([`SelecteurDossier.qml`](dev/SelecteurDossier.qml), [`SelecteurFichier.qml`](dev/SelecteurFichier.qml)), contournant la limitation des dialogues Wayland traditionnels qui s'ouvriraient sous la surface de couche (`Overlay`).
-* **Gestionnaire d'écran de connexion (SDDM)** : réglage du thème Astronaut et de variantes Qylock depuis le panneau, avec un lanceur de prévisualisation sécurisé isolant le test sur un bureau dédié (`workspace 99`) pour ne jamais bloquer la session active.
+* **Gestionnaire d'écran de connexion (SDDM)** : réglage du thème Astronaut et de variantes Qylock depuis le panneau, synchronisation automatique de la disposition clavier et de la locale UTF-8 dès l'assistant de premier démarrage (ou l'onglet Clavier), et lanceur de prévisualisation sécurisé isolant le test sur un bureau dédié (`workspace 99`) pour ne jamais bloquer la session active.
 
 ---
 

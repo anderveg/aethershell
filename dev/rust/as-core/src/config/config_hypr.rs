@@ -203,6 +203,16 @@ pub fn set_kb_layout(layout: &str, mark_first_run_done: bool) -> bool {
     let eval_arg = format!("hl.config({{ input = {{ kb_layout = \"{clean_layout}\" }} }})");
     hyprctl_silent(&["eval", &eval_arg]);
     hyprctl_silent(&["reload"]);
+
+    // Synchronise aussi la disposition clavier et la locale UTF-8 de SDDM
+    // via le helper polkit sans mot de passe (/usr/local/bin/greeter-palette).
+    if Path::new("/usr/local/bin/greeter-palette").exists() {
+        let _ = Command::new("pkexec")
+            .args(["/usr/local/bin/greeter-palette", "set-keymap", &clean_layout])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
     true
 }
 

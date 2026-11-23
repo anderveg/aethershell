@@ -25,6 +25,7 @@ Column {
     readonly property var sections: ({
         "ecrans_moniteurs": secEcrans,
         "systeme_horloge": secHorloge,
+        "systeme_veille": secVeille,
         "systeme_nuit": secNuit,
         "ecrans_captures": secCaptures,
         "systeme_maj": secMaj,
@@ -685,7 +686,7 @@ Column {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            root.idleSuspendTimeout = modelData.value
+                            ConfigStore.idleSuspendTimeout = modelData.value
                             root.runConfigCmd(["idle_timeout", String(modelData.value)])
                         }
                     }
@@ -861,7 +862,7 @@ CollapsibleSection {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                root.screensaverTimeout = ssDelayBtn.modelData.value
+                                ConfigStore.screensaverTimeout = ssDelayBtn.modelData.value
                                 root.runConfigCmd(["screensaver_timeout", String(ssDelayBtn.modelData.value)])
                             }
                         }
@@ -927,7 +928,7 @@ CollapsibleSection {
                             enabled: ssAppBtn.installe
                             cursorShape: ssAppBtn.installe ? Qt.PointingHandCursor : Qt.ArrowCursor
                             onClicked: {
-                                root.screensaverApp = ssAppBtn.modelData.id
+                                ConfigStore.screensaverApp = ssAppBtn.modelData.id
                                 root.runConfigCmd(["screensaver_app", ssAppBtn.modelData.id])
                             }
                         }
@@ -994,7 +995,7 @@ CollapsibleSection {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                root.screensaverSpeed = ssSpeedBtn.modelData.id
+                                ConfigStore.screensaverSpeed = ssSpeedBtn.modelData.id
                                 root.runConfigCmd(["screensaver_speed", ssSpeedBtn.modelData.id])
                             }
                         }
@@ -1037,8 +1038,8 @@ CollapsibleSection {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
-                    root.screensaverRandomColors = !root.screensaverRandomColors
-                    root.runConfigCmd(["screensaver_random_colors", root.screensaverRandomColors ? "true" : "false"])
+                    ConfigStore.screensaverRandomColors = !ConfigStore.screensaverRandomColors
+                    root.runConfigCmd(["screensaver_random_colors", ConfigStore.screensaverRandomColors ? "true" : "false"])
                 }
             }
         }

@@ -1068,8 +1068,8 @@ CollapsibleSection {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
+                            ConfigStore.todoFocus = String(modelData.nom || "")
                             root.runConfigCmd(["todo_focus", String(modelData.nom || "")])
-                            root.todoFocus = String(modelData.nom || "")
                         }
                     }
                 }

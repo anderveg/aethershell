@@ -32,8 +32,10 @@ Item {
     // Calendar navigation & Nextcloud sync state
     property int monthOffset: 0
     property string selectedDateStr: "" // "YYYY-MM-DD" when user clicks a day
-    property var eventsByDay: ({})      // { "YYYY-MM-DD": [ { summary, time, location, all_day }, ... ] }
     property var eventsCacheByMonth: ({}) // { "YYYY-MM": { "YYYY-MM-DD": [...] } } multi-month local cache
+    readonly property string viewMonthKey: currentMonthKey(viewYear, viewMonth)
+    readonly property var eventsByDay: (eventsCacheByMonth && eventsCacheByMonth[viewMonthKey])
+        ? eventsCacheByMonth[viewMonthKey] : ({})
     property string syncStatus: "idle"  // "loading" | "ok" | "cached" | "offline" | "error"
     property bool forceRefreshNext: false
 
@@ -42,12 +44,8 @@ Item {
     }
 
     function syncEventsForView() {
-        const key = currentMonthKey(viewYear, viewMonth)
-        if (eventsCacheByMonth && eventsCacheByMonth[key]) {
-            eventsByDay = eventsCacheByMonth[key]
-            if (syncStatus === "loading") syncStatus = "ok"
-        } else {
-            eventsByDay = ({})
+        if (eventsCacheByMonth && eventsCacheByMonth[viewMonthKey] && syncStatus === "loading") {
+            syncStatus = "ok"
         }
     }
 
@@ -164,13 +162,11 @@ Item {
         startMonthFetch(force)
     }
 
-    onViewYearChanged: {
+    onViewMonthKeyChanged: {
         syncEventsForView()
-        if (panneau.ouvert) fetchMonthEvents(false)
-    }
-    onViewMonthChanged: {
-        syncEventsForView()
-        if (panneau.ouvert) fetchMonthEvents(false)
+        if (panneau.ouvert && (!eventsCacheByMonth || !eventsCacheByMonth[viewMonthKey])) {
+            fetchMonthEvents(false)
+        }
     }
     onSelectedDateStrChanged: {
         addingEvent = false
@@ -276,7 +272,9 @@ Item {
                     const updatedCache = Object.assign({}, panneau.eventsCacheByMonth)
                     if (res.months && typeof res.months === "object") {
                         for (const mk in res.months) {
-                            updatedCache[mk] = res.months[mk]
+                            if (!updatedCache[mk] || Object.keys(res.months[mk] || ({})).length > 0) {
+                                updatedCache[mk] = res.months[mk]
+                            }
                         }
                     }
                     if (res.year && res.month && res.days) {
@@ -284,14 +282,6 @@ Item {
                         updatedCache[k] = res.days
                     }
                     panneau.eventsCacheByMonth = updatedCache
-
-                    // Synchronize currently viewed month
-                    const viewKey = panneau.currentMonthKey(panneau.viewYear, panneau.viewMonth)
-                    if (updatedCache[viewKey]) {
-                        panneau.eventsByDay = updatedCache[viewKey]
-                    } else if (res.days) {
-                        panneau.eventsByDay = res.days
-                    }
                 } catch (e) {
                     panneau.syncStatus = "error"
                 }

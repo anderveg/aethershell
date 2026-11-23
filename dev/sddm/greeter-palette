@@ -6,6 +6,8 @@
 # minuscule, sans shell évalué, et il valide tout ce qu'il reçoit :
 #   - `apply <id>`              choisit un thème déjà présent dans le thème
 #   - `set-palette <conf> <bg>` remplace la palette générée et le fond
+#   - `set-keymap <layout>`     aligne clavier et locale de SDDM sur la session
+#   - `uninstall <id…>`         désinstalle un ou plusieurs thèmes qylock
 #
 # Toute autre invocation sort en erreur.
 
@@ -13,17 +15,136 @@ set -euo pipefail
 
 THEME="/usr/share/sddm/themes/sddm-astronaut-theme"
 SDDM_CONF="/etc/sddm.conf.d/10-sddm-theme.conf"
+SDDM_LOCALE_DROPIN="/etc/systemd/system/sddm.service.d/locale.conf"
 MARKER="# Généré par dev/sddm/generate.py"
+QT_LOG_FILTER="*.debug=false;qt.qpa.wayland*=false;qt.qml.propertyCache*=false;kwin_*=false;kf.*=false"
 
 die() { echo "greeter-palette: $*" >&2; exit 2; }
 
 [ "$(id -u)" -eq 0 ] || die "à lancer via pkexec"
-[ -d "$THEME" ] || die "thème absent : $THEME"
+
+# Lit le thème courant dans SDDM_CONF, ou repli sur sddm-astronaut-theme.
+read_current_theme() {
+    local cur=""
+    if [ -f "$SDDM_CONF" ]; then
+        cur="$(awk -F= '/^Current=/{gsub(/[[:space:]]/, "", $2); print $2; exit}' "$SDDM_CONF" 2>/dev/null || true)"
+    fi
+    if [ -z "$cur" ]; then
+        if [ -d "$THEME" ]; then
+            cur="sddm-astronaut-theme"
+        elif [ -f /etc/sddm.conf ]; then
+            cur="$(awk -F= '/^Current=/{gsub(/[[:space:]]/, "", $2); print $2; exit}' /etc/sddm.conf 2>/dev/null || true)"
+        fi
+    fi
+    printf '%s\n' "${cur:-sddm-astronaut-theme}"
+}
+
+# Lit la disposition clavier courante (XKB) depuis SDDM_CONF ou /etc/vconsole.conf.
+read_current_layout() {
+    local lay=""
+    if [ -f "$SDDM_CONF" ]; then
+        lay="$(grep -oE 'XKB_DEFAULT_LAYOUT=[a-z0-9_-]+' "$SDDM_CONF" 2>/dev/null | head -1 | cut -d= -f2 || true)"
+    fi
+    if [ -z "$lay" ] && [ -f /etc/vconsole.conf ]; then
+        lay="$(awk -F= '/^XKBLAYOUT=/{gsub(/["[:space:]]/, "", $2); print $2; exit}' /etc/vconsole.conf 2>/dev/null || true)"
+    fi
+    if [ -z "$lay" ] && [ -f /etc/vconsole.conf ]; then
+        lay="$(awk -F= '/^KEYMAP=/{gsub(/["[:space:]]/, "", $2); print $2; exit}' /etc/vconsole.conf 2>/dev/null | cut -d- -f1 || true)"
+    fi
+    if [[ ! "${lay:-}" =~ ^[a-z]{2}(-[a-z0-9_]+)?$ ]]; then
+        lay="fr"
+    fi
+    printf '%s\n' "$lay"
+}
+
+# Associe une disposition clavier XKB à sa locale UTF-8 et sa keymap console.
+resolve_locale_and_vc() {
+    local layout="$1"
+    local target_loc="fr_FR.UTF-8"
+    local vc_map="$layout"
+    case "$layout" in
+        fr) target_loc="fr_FR.UTF-8"; vc_map="fr" ;;
+        be) target_loc="fr_BE.UTF-8"; vc_map="be-latin1" ;;
+        ch) target_loc="fr_CH.UTF-8"; vc_map="sg" ;;
+        ca) target_loc="fr_CA.UTF-8"; vc_map="cf" ;;
+        us) target_loc="en_US.UTF-8"; vc_map="us" ;;
+        gb) target_loc="en_GB.UTF-8"; vc_map="uk" ;;
+        de) target_loc="de_DE.UTF-8"; vc_map="de" ;;
+        es) target_loc="es_ES.UTF-8"; vc_map="es" ;;
+        it) target_loc="it_IT.UTF-8"; vc_map="it" ;;
+        pt) target_loc="pt_PT.UTF-8"; vc_map="pt-latin1" ;;
+    esac
+
+    # Vérifie que la locale cible est bien disponible sur le système ; sinon
+    # conserve la locale UTF-8 de /etc/locale.conf, ou repli sur C.UTF-8.
+    local base_prefix="${target_loc%%.*}"
+    if command -v locale >/dev/null 2>&1; then
+        if ! locale -a 2>/dev/null | grep -qiE "^${base_prefix}\.(utf-?8)$"; then
+            local sys_loc=""
+            if [ -f /etc/locale.conf ]; then
+                sys_loc="$(awk -F= '/^LANG=/{gsub(/["[:space:]]/, "", $2); print $2; exit}' /etc/locale.conf 2>/dev/null || true)"
+            fi
+            if [[ "${sys_loc:-}" =~ \.(UTF-8|utf8)$ ]]; then
+                target_loc="$sys_loc"
+            else
+                target_loc="C.UTF-8"
+            fi
+        fi
+    fi
+    printf '%s %s\n' "$target_loc" "$vc_map"
+}
+
+# Écrit /etc/sddm.conf.d/10-sddm-theme.conf et l'override systemd de sddm.service
+# en préservant à la fois le thème actif, la disposition clavier, la locale UTF-8
+# et un compositeur kwin_wayland silencieux (sans plasma-keyboard qui échoue sans
+# surface d'entrée au démarrage, ni déluge de logs Wayland/PipeWire/QML).
+write_sddm_config() {
+    local current_theme="$1"
+    local layout="$2"
+    local loc vc_map
+    read -r loc vc_map < <(resolve_locale_and_vc "$layout")
+
+    mkdir -p "$(dirname "$SDDM_CONF")"
+    if [ -x /usr/bin/kwin_wayland ]; then
+        cat > "$SDDM_CONF" <<EOF
+[General]
+InputMethod=
+GreeterEnvironment=QT_WAYLAND_SHELL_INTEGRATION=layer-shell,LANG=$loc,LC_ALL=$loc,XKB_DEFAULT_LAYOUT=$layout,QT_LOGGING_RULES=$QT_LOG_FILTER
+
+[Wayland]
+CompositorCommand=kwin_wayland --no-global-shortcuts --no-lockscreen --no-kactivities --locale1
+
+[Theme]
+Current=$current_theme
+EOF
+    else
+        cat > "$SDDM_CONF" <<EOF
+[General]
+InputMethod=
+GreeterEnvironment=LANG=$loc,LC_ALL=$loc,XKB_DEFAULT_LAYOUT=$layout,QT_LOGGING_RULES=$QT_LOG_FILTER
+
+[Theme]
+Current=$current_theme
+EOF
+    fi
+
+    # Sur Fedora, sddm.service ne charge pas /etc/locale.conf : sddm-helper
+    # démarre alors avec la locale "C" (ANSI_X3.4-1968). Ce drop-in systemd
+    # injecte /etc/locale.conf, la locale résolue et la disposition XKB.
+    mkdir -p "$(dirname "$SDDM_LOCALE_DROPIN")"
+    cat > "$SDDM_LOCALE_DROPIN" <<EOF
+[Service]
+EnvironmentFile=-/etc/locale.conf
+Environment="LANG=$loc" "LC_ALL=$loc" "XKB_DEFAULT_LAYOUT=$layout" "QT_LOGGING_RULES=$QT_LOG_FILTER"
+EOF
+    systemctl daemon-reload 2>/dev/null || true
+}
 
 cmd="${1:-}"
 
 case "$cmd" in
 apply)
+    [ -d "$THEME" ] || die "thème absent : $THEME"
     id="${2:-}"
     # Identifiant strict : lettres (les noms amont en portent, « Genshin »,
     # « R1999_1 »), chiffres, souligné, tiret et point. Rien d'autre ne peut
@@ -41,12 +162,13 @@ apply)
     else
         die "configuration inconnue : $id"
     fi
-    mkdir -p "$(dirname "$SDDM_CONF")"
-    printf '[Theme]\nCurrent=%s\n' "$current" > "$SDDM_CONF"
+    lay="$(read_current_layout)"
+    write_sddm_config "$current" "$lay"
     echo "appliqué : $id"
     ;;
 
 set-palette)
+    [ -d "$THEME" ] || die "thème absent : $THEME"
     src_conf="${2:-}"
     src_bg="${3:-}"
     [ -f "$src_conf" ] || die "conf introuvable"
@@ -79,17 +201,60 @@ set-palette)
     install -Dm644 "$src_conf" "$THEME/Themes/palette.conf"
     install -Dm644 "$src_bg" "$THEME/Backgrounds/wallpaper.png"
     sed -i "s|^ConfigFile=.*|ConfigFile=Themes/palette.conf|" "$THEME/metadata.desktop"
-    printf '[Theme]\nCurrent=sddm-astronaut-theme\n' > "$SDDM_CONF"
+    lay="$(read_current_layout)"
+    write_sddm_config "sddm-astronaut-theme" "$lay"
     echo "palette installée"
+    ;;
+
+set-keymap)
+    layout="${2:-}"
+    [[ "$layout" =~ ^[a-z]{2}(-[a-z0-9_]+)?$ ]] || die "disposition clavier invalide : ${layout:-<vide>}"
+    read -r loc vc_map < <(resolve_locale_and_vc "$layout")
+
+    # Synchronise systemd-localed (X11/Wayland + console + locale système) pour
+    # que kwin_wayland --locale1 et sddm-helper utilisent le bon clavier et UTF-8.
+    if command -v localectl >/dev/null 2>&1; then
+        localectl set-x11-keymap "$layout" 2>/dev/null || true
+        localectl set-keymap "$vc_map" 2>/dev/null || true
+        localectl set-locale "LANG=$loc" 2>/dev/null || true
+    fi
+
+    # Garantit /etc/locale.conf et /etc/vconsole.conf même si systemd-localed
+    # n'a pas pu répondre (conteneur, chroot, D-Bus occupé).
+    printf 'LANG=%s\n' "$loc" > /etc/locale.conf
+    if [ -f /etc/vconsole.conf ]; then
+        if grep -q '^KEYMAP=' /etc/vconsole.conf; then
+            sed -i "s|^KEYMAP=.*|KEYMAP=$vc_map|" /etc/vconsole.conf
+        else
+            printf 'KEYMAP=%s\n' "$vc_map" >> /etc/vconsole.conf
+        fi
+        if grep -q '^XKBLAYOUT=' /etc/vconsole.conf; then
+            sed -i "s|^XKBLAYOUT=.*|XKBLAYOUT=$layout|" /etc/vconsole.conf
+        else
+            printf 'XKBLAYOUT=%s\n' "$layout" >> /etc/vconsole.conf
+        fi
+    else
+        printf 'KEYMAP=%s\nXKBLAYOUT=%s\n' "$vc_map" "$layout" > /etc/vconsole.conf
+    fi
+
+    # Pour les sessions SDDM sous X11, aligne également /etc/sddm/Xsetup s'il existe.
+    if [ -f /etc/sddm/Xsetup ] && command -v setxkbmap >/dev/null 2>&1; then
+        if grep -q 'setxkbmap' /etc/sddm/Xsetup; then
+            sed -i -E "s|setxkbmap[[:space:]]+[a-z0-9_-]+|setxkbmap $layout|" /etc/sddm/Xsetup || true
+        else
+            printf '\nsetxkbmap %s 2>/dev/null || true\n' "$layout" >> /etc/sddm/Xsetup
+        fi
+    fi
+
+    current="$(read_current_theme)"
+    write_sddm_config "$current" "$layout"
+    echo "clavier SDDM : $layout (locale $loc)"
     ;;
 
 uninstall)
     shift
     [ "$#" -gt 0 ] || die "aucun thème à désinstaller"
-    cur=""
-    if [ -f "$SDDM_CONF" ]; then
-        cur="$(grep '^Current=' "$SDDM_CONF" | cut -d= -f2 | tr -d ' ')"
-    fi
+    cur="$(read_current_theme)"
     for id in "$@"; do
         [[ "$id" =~ ^[A-Za-z0-9_.-]+$ ]] && [[ "$id" != "." && "$id" != ".." ]] \
             || die "identifiant invalide : $id"

@@ -17,10 +17,14 @@ Item {
 
     property real echelle: 1.0
     property int moisOffset: 0
+    property real extraHeight: 0
 
     readonly property var moisNoms: ["janvier", "février", "mars", "avril", "mai",
                                      "juin", "juillet", "août", "septembre",
                                      "octobre", "novembre", "décembre"]
+    readonly property var moisCourts: ["janv.", "févr.", "mars", "avr.", "mai",
+                                       "juin", "juil.", "août", "sept.",
+                                       "oct.", "nov.", "déc."]
     readonly property var joursCourts: ["L", "M", "M", "J", "V", "S", "D"]
 
     readonly property date reference: {
@@ -37,10 +41,13 @@ Item {
                + "-" + String(d.getDate()).padStart(2, "0")
     }
 
-    property var parJour: ({})        // "YYYY-MM-DD" → [événements]
+    property var parMois: ({})        // "YYYY-MM" → { "YYYY-MM-DD": [...] }
+    readonly property var parJour: (parMois && parMois[cleMois]) ? parMois[cleMois] : ({})
     property string statut: "idle"
     property bool charge: false
     property int jourChoisi: 0        // 0 = aujourd'hui / rien de choisi
+    property bool ncQueued: false
+    property bool ncQueuedForce: false
 
     // Cases de la grille : "" pour les blancs avant le 1er, puis 1..31.
     readonly property var cases: {
@@ -72,31 +79,98 @@ Item {
 
     readonly property var listeJour: jourAffiche > 0 ? evenementsDu(jourAffiche) : []
 
-    function charger(force) {
-        statut = "loading"
+    // Aperçu chronologique des événements futurs (à partir d'aujourd'hui dans les mois chargés)
+    readonly property var evenementsFuturs: {
+        const tousMois = parMois || ({})
+        const clesMois = Object.keys(tousMois).sort()
+        const out = []
+        for (let m = 0; m < clesMois.length; ++m) {
+            const mk = clesMois[m]
+            const joursMap = tousMois[mk] || ({})
+            const clesJours = Object.keys(joursMap).sort()
+            for (let j = 0; j < clesJours.length; ++j) {
+                const dk = clesJours[j]
+                if (dk < cleAujourdhui) continue
+                const evs = Array.isArray(joursMap[dk]) ? joursMap[dk] : []
+                const parts = dk.split("-")
+                const mIdx = Math.max(0, Math.min(11, (parseInt(parts[1], 10) || 1) - 1))
+                const dNum = parseInt(parts[2], 10) || 1
+                const dateLbl = (dk === cleAujourdhui) ? "Auj." : (dNum + " " + moisCourts[mIdx])
+                for (let k = 0; k < evs.length; ++k) {
+                    const ev = evs[k]
+                    if (!ev) continue
+                    out.push({
+                        dateKey: dk,
+                        dateLabel: dateLbl,
+                        time: String(ev.time || ""),
+                        summary: String(ev.summary || "Événement")
+                    })
+                }
+            }
+        }
+        return out
+    }
+
+    readonly property int maxFutursAffiches: {
+        if (extraHeight <= 0) return 3
+        const dispo = Math.max(0, extraHeight - Math.round(185 * echelle))
+        return Math.max(2, Math.min(10, Math.floor(dispo / Math.round(16 * echelle))))
+    }
+
+    function _lancerChargement(force) {
+        if (!parMois || !parMois[cleMois]) statut = "loading"
         proc.command = [Quickshell.shellPath("core/as-core"), "nextcloud",
                         "month", String(annee), String(mois)]
         if (force) proc.command = proc.command.concat(["--force"])
         proc.running = true
     }
 
-    onMoisOffsetChanged: {
+    function charger(force) {
+        if (proc.running) {
+            ncQueued = true
+            ncQueuedForce = ncQueuedForce || Boolean(force)
+            return
+        }
+        _lancerChargement(force)
+    }
+
+    onCleMoisChanged: {
         jourChoisi = 0
-        charger(false)
+        if (!parMois || !parMois[cleMois]) charger(false)
     }
 
     Component.onCompleted: charger(false)
 
     Process {
         id: proc
+        onExited: {
+            if (racine.ncQueued) {
+                const f = racine.ncQueuedForce
+                racine.ncQueued = false
+                racine.ncQueuedForce = false
+                racine._lancerChargement(f)
+            }
+        }
         stdout: StdioCollector {
             onStreamFinished: {
+                if (racine.ncQueued) return
                 try {
                     const r = JSON.parse(text.trim())
-                    racine.parJour = (r && r.days) ? r.days : ({})
+                    const maj = Object.assign({}, racine.parMois)
+                    if (r && r.months && typeof r.months === "object") {
+                        for (const mk in r.months) {
+                            if (!maj[mk] || Object.keys(r.months[mk] || ({})).length > 0) {
+                                maj[mk] = r.months[mk]
+                            }
+                        }
+                    }
+                    if (r && r.year && r.month && r.days) {
+                        const k = String(r.year) + "-" + String(r.month).padStart(2, "0")
+                        maj[k] = r.days
+                    }
+                    racine.parMois = maj
                     racine.statut = (r && r.status) ? r.status : "ok"
                 } catch (e) {
-                    racine.parJour = ({})
                     racine.statut = "error"
                 }
                 racine.charge = true
@@ -134,35 +208,42 @@ Item {
 
             Item { width: 4; height: 1 }
 
-            Text {
+            Item {
                 anchors.verticalCenter: parent.verticalCenter
-                width: parent.width - 42
-                text: racine.moisNoms[racine.mois - 1] + " " + racine.annee
-                color: Theme.fg
-                font.pixelSize: Math.round(11 * racine.echelle)
-                font.bold: true
-                horizontalAlignment: Text.AlignHCenter
-                elide: Text.ElideRight
-            }
+                width: parent.width - 28
+                height: Math.max(moisTxt.implicitHeight, syncIcon.height)
 
-            Icon {
-                id: syncIcon
-                anchors.verticalCenter: parent.verticalCenter
-                glyph: "refresh"
-                size: Math.round(11 * racine.echelle)
-                color: racine.statut === "loading" ? Theme.accent : (syncMa.containsMouse ? Theme.accent : Qt.alpha(Theme.fg, 0.55))
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 5
 
-                MouseArea {
-                    id: syncMa
-                    anchors.fill: parent
-                    anchors.margins: -4
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: racine.charger(true)
+                    Text {
+                        id: moisTxt
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: racine.moisNoms[racine.mois - 1] + " " + racine.annee
+                        color: Theme.fg
+                        font.pixelSize: Math.round(11 * racine.echelle)
+                        font.bold: true
+                    }
+
+                    Icon {
+                        id: syncIcon
+                        anchors.verticalCenter: parent.verticalCenter
+                        glyph: "refresh"
+                        size: Math.round(11 * racine.echelle)
+                        color: racine.statut === "loading" ? Theme.accent : (syncMa.containsMouse ? Theme.accent : Qt.alpha(Theme.fg, 0.55))
+
+                        MouseArea {
+                            id: syncMa
+                            anchors.fill: parent
+                            anchors.margins: -4
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: racine.charger(true)
+                        }
+                    }
                 }
             }
-
-            Item { width: 2; height: 1 }
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
@@ -271,21 +352,25 @@ Item {
 
         Column {
             width: parent.width
-            spacing: 2
+            spacing: 3
 
+            // Si un jour particulier a été sélectionné dans la grille, montrer ses événements
             Text {
+                visible: racine.jourChoisi > 0 || racine.listeJour.length > 0
                 width: parent.width
-                text: racine.listeJour.length === 0
-                      ? (racine.statut === "loading" ? "chargement…" : "rien ce jour-là")
-                      : (racine.listeJour.length + (racine.listeJour.length > 1
-                                                    ? " événements" : " événement"))
-                color: Qt.alpha(Theme.fg, 0.42)
+                text: racine.jourChoisi > 0
+                      ? (racine.jourChoisi + " " + racine.moisNoms[racine.mois - 1] + " : "
+                         + (racine.listeJour.length === 0 ? "aucun événement"
+                            : (racine.listeJour.length + (racine.listeJour.length > 1 ? " événements" : " événement"))))
+                      : ("Aujourd'hui (" + racine.listeJour.length + ")")
+                color: Qt.alpha(Theme.fg, 0.52)
                 font.pixelSize: Math.round(9 * racine.echelle)
+                font.bold: true
                 elide: Text.ElideRight
             }
 
             Repeater {
-                model: racine.listeJour.slice(0, 4)
+                model: (racine.jourChoisi > 0 || racine.listeJour.length > 0) ? racine.listeJour.slice(0, 4) : []
 
                 Row {
                     required property var modelData
@@ -300,7 +385,46 @@ Item {
 
                     Text {
                         width: parent.width - 12
-                        text: String(modelData.summary || "")
+                        text: (modelData.time ? (String(modelData.time) + " · ") : "") + String(modelData.summary || "")
+                        color: Theme.fg
+                        font.pixelSize: Math.round(9.5 * racine.echelle)
+                        elide: Text.ElideRight
+                    }
+                }
+            }
+
+            // Aperçu des événements futurs
+            Text {
+                width: parent.width
+                text: racine.evenementsFuturs.length === 0
+                      ? (racine.statut === "loading" ? "chargement…" : "aucun événement à venir")
+                      : ("À venir (" + racine.evenementsFuturs.length + ")")
+                color: Qt.alpha(Theme.accent, 0.85)
+                font.pixelSize: Math.round(9 * racine.echelle)
+                font.bold: true
+                elide: Text.ElideRight
+            }
+
+            Repeater {
+                model: racine.evenementsFuturs.slice(0, racine.maxFutursAffiches)
+
+                Row {
+                    required property var modelData
+                    width: colonne.width
+                    spacing: 5
+
+                    Text {
+                        width: Math.round(42 * racine.echelle)
+                        text: modelData.dateLabel
+                        color: Qt.alpha(Theme.accent, 0.9)
+                        font.pixelSize: Math.round(9 * racine.echelle)
+                        font.bold: true
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        width: parent.width - Math.round(47 * racine.echelle)
+                        text: (modelData.time && modelData.time !== "Journée" ? (modelData.time + " ") : "") + modelData.summary
                         color: Theme.fg
                         font.pixelSize: Math.round(9.5 * racine.echelle)
                         elide: Text.ElideRight

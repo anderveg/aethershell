@@ -9,6 +9,45 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **`x.yy.x.x`** : ajout de fonctionnalités décisives (ex. : ajout de l'Îlot dynamique).
 - **Version majeure (`y.x.x.x`)** : conservation du schéma déjà en place (proposée lorsque l'ampleur des changements le justifie ; décision finale validée par l'utilisateur).
 
+## [0.4.4.1] — 2026-11-23
+
+### Ajouté & Corrigé
+- **Synchronisation automatique du clavier et de la locale SDDM (`dev/sddm/greeter-palette`, `dev/sddm/install.sh`, `dev/rust/as-core/src/config/config_hypr.rs`, `install.sh`)** :
+  - Ajout de la sous-commande `greeter-palette set-keymap <layout>` autorisée sans mot de passe via Polkit (`50-greeter-palette.rules`) : aligne `localectl` (X11/Wayland + console + locale UTF-8 correspondante, ex. `fr` → `fr_FR.UTF-8`), `/etc/locale.conf`, `/etc/vconsole.conf` et `/etc/sddm.conf.d/10-sddm-theme.conf`.
+  - Appel automatique de `pkexec /usr/local/bin/greeter-palette set-keymap <layout>` depuis `set_kb_layout()` (`as-core first-run apply` / `as-core config kb_layout`) ainsi que lors de `dev/sddm/install.sh` et `install.sh`.
+- **Suppression des erreurs et avertissements `sddm-helper` / `kwin_wayland` / `sddm-greeter-qt6` (`dev/sddm/greeter-palette`, `dev/sddm/thumbnails.sh`, `dev/core/greeter_preview.sh`)** :
+  - Création du drop-in `/etc/systemd/system/sddm.service.d/locale.conf` chargeant `/etc/locale.conf` et exportant `LANG`, `LC_ALL` et `XKB_DEFAULT_LAYOUT` (corrige `Detected locale "C" with character encoding "ANSI_X3.4-1968"` sur Fedora).
+  - Définition de `CompositorCommand=kwin_wayland --no-global-shortcuts --no-lockscreen --no-kactivities --locale1` (sans `--inputmethod plasma-keyboard` qui échouait avec `No Wayland screen available, cannot configure input panel surface`) et filtrage `QT_LOGGING_RULES` dans `GreeterEnvironment`, `thumbnails.sh` et `greeter_preview.sh`.
+- **Panneau de configuration — Tiroir Écran de veille & contrôles liés à `ConfigStore` (`dev/config_panel.qml`, `dev/OngletEcrans.qml`, `dev/OngletApparence.qml`, `dev/OngletBarres.qml`, `dev/OngletDonnees.qml`)** :
+  - Écriture directe sur le singleton `ConfigStore` lors des mises à jour optimistes (`ConfigStore.screensaverTimeout = ...`, `screensaverApp`, `screensaverSpeed`, `screensaverRandomColors`, `idleSuspendTimeout`, `gapsIn`/`Out`, `blurSize`/`Passes`, etc.) au lieu d'assigner les `readonly property` de relais de `root` dans `config_panel.qml`, ce qui levait une `TypeError` QML sur propriété en lecture seule et interrompait le handler `onClicked` avant l'appel à `root.runConfigCmd(...)`.
+  - Ajout de `systeme_veille` dans `sections` (`OngletEcrans.qml`) et `ongletDeSection` (`config_panel.qml`) pour l'accordéon des tiroirs.
+
+## [0.4.4.0] — 2026-11-23
+
+### Ajouté
+- **Mode tablette dédié & sous-commande native Rust `as-core tablet-mode`** (`dev/rust/as-core/src/daemon/tablet_mode.rs`, `dev/TabletMode.qml`, `dev/TabletLauncher.qml`, `dev/TabletKeyboard.qml`, `dev/TabletEdgeZones.qml`, `dev/OverviewOverlay.qml`, `dev/IslandTabControles.qml`, `dev/hypr_modular/hardware-fedora.lua`) :
+  - **Daemon Rust unifié (`as-core tablet-mode`)** : surveillance de l'accéléromètre (`monitor-sensor --accel` avec prise en compte immédiate de l'orientation initiale au démarrage) et du switch charnière `SW_TABLET_MODE` (`evdev`/sysfs), synchronisation automatique de la rotation d'écran et de la dalle tactile (`input.touchdevice.transform` / `input.tablet.transform`), verrou de rotation 1-clic, réduction automatique des marges (`gaps`) et bascule monocle (`fullscreen 1`) de la fenêtre active.
+  - **Gestes tactiles & zones de bord (`TabletEdgeZones.qml`)** : détection `evdev` 3 doigts sur la dalle tactile (`INPUT_PROP_DIRECT`) pour changer de bureau (gauche/droite) ou ouvrir la vue d'ensemble (haut/bas) ; swipe haut → bas pour fermer le tiroir d'applications ou déployer l'Îlot dynamique ; swipe bas → haut pour ouvrir le tiroir d'applications ; glissement vertical sur les bords gauche/droit (`36 px`, axe verrouillé) pour régler la luminosité (plancher à `5 %`) et le volume avec OSD ; swipe intérieur gauche/droit pour la capture d'écran et les notes rapides ; badge flottant `⌨` dans le coin inférieur droit.
+  - **Tiroir d'applications tactile (`TabletLauncher.qml`)** : regroupement des programmes dans des dossiers de catégories avec icônes dédiées, centrage vertical et horizontal, sélecteur de taille d'icônes (`64 / 80 / 96 / 128 px`) et reconstruction automatique de `app_index.json` (incluant les Flatpaks) à chaque ouverture via `LauncherEngine.rebuildIndex()`.
+  - **Clavier virtuel tactile 3 pages & sélection de texte au doigt (`TabletKeyboard.qml`)** :
+    - Ouverture automatique au focus d'un champ texte Wayland via `zwp_input_method_manager_v2` et injection de frappes via `evdev` `UInput` (`as-core tablet-mode kbd-pipe`, avec support des touches mortes et séquences Unicode).
+    - 3 pages sans doublon inspirées d'Android : `ABC` (AZERTY + voyelles accentuées `é è ê ë à â ù û ô ç î ï`), `?123` (ponctuation, symboles et devises) et `123+` (chiffres `1..0`, opérateurs et symboles mathématiques `± × ÷ ≠ ≤ ≥ ≈ √ π`).
+    - Barre d'actions de sélection (`Sélect.`, `≪ Mot`, `Mot ≫`, `Tout`, `Copier`, `Couper`, `Coller`), glissement du doigt sur la barre `Espace` pour déplacer le curseur ou sélectionner du texte, répétition automatique sur `⌫` / `←` / `→`, et sélection directe au glissement du doigt dans les champs QML (`TabletLauncher`, `OverviewOverlay`, `IslandNotesDrawer`).
+  - **Menu contextuel tactile dans la Vue d'ensemble (`OverviewOverlay.qml`)** : appui long (`420 ms`) ou clic droit sur une vignette pour basculer en plein écran, flottant/tuilé, déplacer vers un bureau (`1..5`) ou fermer la fenêtre, et correction de `MinimizedWindows.cleAdresse` pour les miniatures `ScreencopyView`.
+- **Redimensionnement libre & contenu adaptatif des widgets de bureau** (`dev/DesktopWidgetsLayer.qml`, `dev/WidgetMenu.qml`, `dev/Visualiseur.qml`, `dev/CalendrierCompact.qml`, `dev/widgets/*.qml`) :
+  - Ajout du bouton *Redimensionner* dans le menu clic-milieu (`WidgetMenu.qml`) et redimensionnement bidirectionnel libre dans `DesktopWidgetsLayer.qml`.
+  - Progressions adaptatives selon la largeur et la hauteur (`widgetW` / `widgetH`) :
+    - `horloge` et `combo` : `horloge` → `horloge + date` → `horloge + date + météo` (→ `+ détails` / `+ calendrier`).
+    - `meteo` : `météo` → `météo + date` → `météo + date + détails + prévisions (2 à 5 jours selon la largeur)`.
+    - `date` et `CalendrierCompact` : `date` → `date + calendrier avec aperçu chronologique des événements futurs` (`À venir`).
+    - `Visualiseur` : adaptation dynamique du nombre de colonnes (`6` à `96`) à la largeur et du nombre de lignes LED (`3` à `32` en mode `blocs`) à la hauteur.
+    - Contenu progressif sur `systeme`, `homelab`, `reseau`, `disques`, `musique`, `todo`, `notes`, `usb`, `presse_papiers` et `hermes`.
+
+## [0.4.3.1] — 2026-11-22
+
+### Corrigé
+- **Événements Nextcloud CalDAV (`dev/rust/as-core/src/services/nextcloud.rs`)** : décodage des entités XML `&#13;` / `&#10;` (`&#xD;` / `&#xA;`) émises par SabreDAV dans `xml_unescape()` ; sans cela, chaque ligne ICS conservait `&#13;` en suffixe et `parse_ics_datetime()` rejetait toutes les dates `DTSTART`/`DTEND`. Ajout d'un test unitaire `parses_sabredav_ics_with_cr_entities`.
+
 ## [0.4.3.0] — 2026-11-22
 
 ### Ajouté

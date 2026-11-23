@@ -890,7 +890,7 @@ Item {
             expanded = true
             pretGrabLauncher = false
             delaiGrabLauncher.restart()
-            LauncherEngine.reload()
+            LauncherEngine.rebuildIndex()
             root.launcherQuery = ""
             root.launcherCategory = ""
             root.launcherSelectedIdx = 0

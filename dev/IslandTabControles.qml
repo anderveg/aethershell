@@ -274,7 +274,7 @@ Item {
         signal chevronClicked()
 
         Layout.fillWidth: true
-        Layout.preferredHeight: 42
+        Layout.preferredHeight: Math.max(42, Theme.touchTargetMin)
         radius: Math.max(10, Math.round(Theme.pillRadius * 0.65))
         color: active
             ? Qt.alpha(Theme.accent, tileMa.containsMouse ? 0.28 : 0.20)
@@ -631,7 +631,7 @@ Item {
                     required property var modelData
                     readonly property bool isActive: ShellState.activeContext === modelData.id
                     Layout.fillWidth: true
-                    height: 28
+                    height: TabletMode.active ? 40 : 28
                     radius: Math.max(8, Math.round(Theme.globalRadius * 0.5))
                     color: isActive
                         ? Qt.alpha(Theme.accent, 0.22)
@@ -758,7 +758,7 @@ Item {
             // Tuile 6 : Session & Énergie (mini-boutons directs)
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 42
+                Layout.preferredHeight: Math.max(42, Theme.touchTargetMin)
                 radius: Math.max(10, Math.round(Theme.pillRadius * 0.65))
                 color: Qt.alpha(Theme.surfaceVariant, 0.34)
                 border.width: 1
@@ -788,8 +788,8 @@ Item {
                         ]
                         delegate: Rectangle {
                             required property var modelData
-                            Layout.preferredWidth: 32
-                            Layout.preferredHeight: 32
+                            Layout.preferredWidth: TabletMode.active ? 38 : 32
+                            Layout.preferredHeight: TabletMode.active ? 38 : 32
                             radius: 8
                             color: sessMa.containsMouse
                                 ? Qt.alpha(modelData.danger ? Theme.error : Theme.accent, 0.25)
@@ -843,6 +843,36 @@ Item {
                     powerProfileSetProc.running = true
                 }
             }
+
+            // Tuile 9 : Mode tablette (convertible)
+            QuickTile {
+                visible: ConfigStore.isLaptop || TabletMode.active
+                glyphName: "monitor"
+                title: "Tablette"
+                subtitle: TabletMode.active ? "Actif" : "Inactif"
+                active: TabletMode.active
+                onToggled: TabletMode.toggleMode()
+            }
+
+            // Tuile 10 : Verrou de rotation
+            QuickTile {
+                visible: ConfigStore.isLaptop || TabletMode.active
+                glyphName: "refresh"
+                title: "Rotation"
+                subtitle: TabletMode.rotationLocked ? "Verrouillée" : "Auto"
+                active: TabletMode.rotationLocked
+                onToggled: TabletMode.toggleRotationLock()
+            }
+
+            // Tuile 11 : Clavier virtuel
+            QuickTile {
+                visible: ConfigStore.isLaptop || TabletMode.active
+                glyphName: "keyboard"
+                title: "Clavier"
+                subtitle: TabletMode.keyboardOpen ? "Ouvert" : "Masqué"
+                active: TabletMode.keyboardOpen
+                onToggled: TabletMode.toggleVirtualKeyboard()
+            }
         }
 
         Rectangle {
@@ -857,8 +887,8 @@ Item {
             spacing: 10
 
             Rectangle {
-                Layout.preferredWidth: 28
-                Layout.preferredHeight: 28
+                Layout.preferredWidth: Theme.touchIconBtnSize
+                Layout.preferredHeight: Theme.touchIconBtnSize
                 radius: 8
                 color: muteMa.containsMouse ? Qt.alpha(Theme.accent, 0.2) : "transparent"
 
@@ -893,19 +923,19 @@ Item {
             Item {
                 id: volSlider
                 Layout.fillWidth: true
-                Layout.preferredHeight: 22
+                Layout.preferredHeight: Math.max(22, Theme.touchSliderHeight)
 
                 Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width
-                    height: 6
-                    radius: 3
+                    height: TabletMode.active ? 12 : 6
+                    radius: height / 2
                     color: Qt.alpha(Theme.fg, 0.14)
 
                     Rectangle {
                         width: parent.width * (root.volumePct / 100)
                         height: parent.height
-                        radius: 3
+                        radius: parent.radius
                         color: root.volumeMuted ? Qt.alpha(Theme.fg, 0.35) : Theme.accent
                     }
                 }
@@ -913,9 +943,9 @@ Item {
                 Rectangle {
                     x: Math.max(0, Math.min(parent.width - width, (parent.width - width) * (root.volumePct / 100)))
                     anchors.verticalCenter: parent.verticalCenter
-                    width: 14
-                    height: 14
-                    radius: 7
+                    width: TabletMode.active ? 22 : 14
+                    height: width
+                    radius: width / 2
                     color: Theme.fg
                     border.width: 2
                     border.color: Theme.accent
@@ -1166,19 +1196,19 @@ Item {
 
             Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 22
+                Layout.preferredHeight: Math.max(22, Theme.touchSliderHeight)
 
                 Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width
-                    height: 6
-                    radius: 3
+                    height: TabletMode.active ? 12 : 6
+                    radius: height / 2
                     color: Qt.alpha(Theme.fg, 0.14)
 
                     Rectangle {
                         width: parent.width * (root.brightPct / 100)
                         height: parent.height
-                        radius: 3
+                        radius: parent.radius
                         color: Theme.accent
                     }
                 }
@@ -1186,9 +1216,9 @@ Item {
                 Rectangle {
                     x: Math.max(0, Math.min(parent.width - width, (parent.width - width) * (root.brightPct / 100)))
                     anchors.verticalCenter: parent.verticalCenter
-                    width: 14
-                    height: 14
-                    radius: 7
+                    width: TabletMode.active ? 22 : 14
+                    height: width
+                    radius: width / 2
                     color: Theme.fg
                     border.width: 2
                     border.color: Theme.accent

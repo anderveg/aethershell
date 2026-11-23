@@ -14,6 +14,8 @@ Item {
     id: root
     property var options: ({})
     property string widgetId: ""
+    property real widgetW: 0
+    property real widgetH: 0
     property bool ouvert: false
     onOuvertChanged: if (ouvert) rafraichir()
 
@@ -22,6 +24,10 @@ Item {
         if (v >= 60 && v <= 160) return v / 100
         return 1.0
     }
+
+    readonly property bool showMounts: widgetH === 0 || widgetH >= Math.round(70 * echelle)
+    readonly property bool showPhysical: widgetH === 0 || widgetH >= Math.round(135 * echelle)
+    readonly property bool showManageBtn: widgetH === 0 || widgetH >= Math.round(180 * echelle)
 
     property var donnees: ({})
     property bool charge: false
@@ -103,8 +109,8 @@ Item {
         }
     }
 
-    implicitWidth: Math.round(268 * echelle)
-    implicitHeight: colonne.implicitHeight
+    implicitWidth: widgetW > 0 ? Math.max(Math.round(190 * echelle), Math.round(widgetW)) : Math.round(268 * echelle)
+    implicitHeight: widgetH > 0 ? Math.max(colonne.implicitHeight, widgetH) : colonne.implicitHeight
 
     Column {
         id: colonne
@@ -143,7 +149,7 @@ Item {
 
         // ── systèmes de fichiers de la sélection ────────────────────────────
         Repeater {
-            model: root.montages
+            model: root.showMounts ? root.montages : []
 
             Column {
                 required property var modelData
@@ -189,11 +195,11 @@ Item {
             }
         }
 
-        Rectangle { width: parent.width; height: 1; color: Qt.alpha(Theme.fg, 0.09) }
+        Rectangle { visible: root.showPhysical; width: parent.width; height: 1; color: Qt.alpha(Theme.fg, 0.09) }
 
         // ── disques physiques ───────────────────────────────────────────────
         Repeater {
-            model: root.disques
+            model: root.showPhysical ? root.disques : []
 
             Row {
                 required property var modelData
@@ -230,6 +236,7 @@ Item {
 
         // ── utilitaire ──────────────────────────────────────────────────────
         Rectangle {
+            visible: root.showManageBtn
             width: parent.width
             height: Math.round(26 * echelle)
             radius: Theme.globalRadius

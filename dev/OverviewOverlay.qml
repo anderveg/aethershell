@@ -63,12 +63,12 @@ FocusScope {
     }
 
     function findWaylandToplevel(address) {
-        const key = ShellState.cleAdresse(address)
+        const key = MinimizedWindows.cleAdresse(address)
         if (!key) return null
         const tops = Hyprland.toplevels ? Hyprland.toplevels.values : []
         for (let i = 0; i < tops.length; i++) {
             const t = tops[i]
-            if (t && t.address && ShellState.cleAdresse(t.address) === key) {
+            if (t && t.address && MinimizedWindows.cleAdresse(t.address) === key) {
                 return t.wayland || null
             }
         }
@@ -124,6 +124,29 @@ FocusScope {
         refreshDelay.restart()
     }
 
+    property var contextClient: null
+
+    function toggleFullscreenWindow(c) {
+        if (!c || !c.address) return
+        root.contextClient = null
+        root.focusWindow(c)
+        Quickshell.execDetached(["hyprctl", "dispatch", "fullscreen", "0"])
+    }
+
+    function toggleFloatingWindow(c) {
+        if (!c || !c.address) return
+        Quickshell.execDetached(["hyprctl", "dispatch", "togglefloating", "address:" + String(c.address)])
+        root.contextClient = null
+        refreshDelay.restart()
+    }
+
+    function moveWindowToWorkspace(c, targetWs) {
+        if (!c || !c.address) return
+        Quickshell.execDetached(["hyprctl", "dispatch", "movetoworkspacesilent", String(targetWs) + ",address:" + String(c.address)])
+        root.contextClient = null
+        refreshDelay.restart()
+    }
+
     Timer {
         id: refreshDelay
         interval: 80
@@ -133,9 +156,70 @@ FocusScope {
 
     Keys.onEscapePressed: root.closeRequested()
 
+    Connections {
+        target: TabletMode
+        function onLauncherKeyInjected(keyText, keySpec) {
+            if (!Theme.overviewVisible) return
+            searchInput.forceActiveFocus()
+            if (keySpec === "ACTION_SELECT_ALL") {
+                searchInput.selectAll()
+            } else if (keySpec === "ACTION_COPY") {
+                searchInput.copy()
+            } else if (keySpec === "ACTION_CUT") {
+                searchInput.cut()
+            } else if (keySpec === "ACTION_PASTE") {
+                searchInput.paste()
+            } else if (keySpec === "KEY_LEFT") {
+                if (searchInput.selectedText.length > 0) searchInput.cursorPosition = searchInput.selectionStart
+                else searchInput.cursorPosition = Math.max(0, searchInput.cursorPosition - 1)
+            } else if (keySpec === "KEY_RIGHT") {
+                if (searchInput.selectedText.length > 0) searchInput.cursorPosition = searchInput.selectionEnd
+                else searchInput.cursorPosition = Math.min(searchInput.text.length, searchInput.cursorPosition + 1)
+            } else if (keySpec === "SHIFT+KEY_LEFT") {
+                searchInput.moveCursorSelection(Math.max(0, searchInput.cursorPosition - 1), TextInput.SelectCharacters)
+            } else if (keySpec === "SHIFT+KEY_RIGHT") {
+                searchInput.moveCursorSelection(Math.min(searchInput.text.length, searchInput.cursorPosition + 1), TextInput.SelectCharacters)
+            } else if (keySpec === "CTRL+SHIFT+KEY_LEFT") {
+                searchInput.moveCursorSelection(Math.max(0, searchInput.cursorPosition - 1), TextInput.SelectWords)
+            } else if (keySpec === "CTRL+SHIFT+KEY_RIGHT") {
+                searchInput.moveCursorSelection(Math.min(searchInput.text.length, searchInput.cursorPosition + 1), TextInput.SelectWords)
+            } else if (keySpec === "KEY_BACKSPACE") {
+                if (searchInput.selectedText.length > 0) {
+                    searchInput.remove(searchInput.selectionStart, searchInput.selectionEnd)
+                } else if (searchInput.cursorPosition > 0) {
+                    searchInput.remove(searchInput.cursorPosition - 1, searchInput.cursorPosition)
+                }
+            } else if (keySpec === "KEY_SPACE") {
+                if (searchInput.selectedText.length > 0) {
+                    searchInput.remove(searchInput.selectionStart, searchInput.selectionEnd)
+                }
+                searchInput.insert(searchInput.cursorPosition, " ")
+            } else if (keySpec === "KEY_ENTER") {
+                if (root.filteredClients.length > 0) root.focusWindow(root.filteredClients[root.selectedIndex])
+            } else if (keyText !== "") {
+                if (searchInput.selectedText.length > 0) {
+                    searchInput.remove(searchInput.selectionStart, searchInput.selectionEnd)
+                }
+                searchInput.insert(searchInput.cursorPosition, keyText)
+            }
+        }
+    }
+
     Component.onCompleted: {
         opacity = 1.0
         searchInput.forceActiveFocus()
+    }
+
+    onVisibleChanged: {
+        if (!visible) {
+            root.contextClient = null
+            if (TabletMode.keyboardOpen) TabletMode.keyboardOpen = false
+        }
+    }
+
+    Component.onDestruction: {
+        root.contextClient = null
+        if (TabletMode.keyboardOpen && !TabletMode.launcherOpen) TabletMode.keyboardOpen = false
     }
 
     opacity: 0.0
@@ -199,7 +283,7 @@ FocusScope {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 34
+                    Layout.preferredHeight: TabletMode.active ? 44 : 34
                     radius: Math.max(8, Math.round(Theme.globalRadius * 0.6))
                     color: Qt.alpha(Theme.surfaceVariant, 0.45)
                     border.width: 1
@@ -224,11 +308,14 @@ FocusScope {
                             font.pixelSize: Theme.textSm
                             color: Theme.fg
                             selectByMouse: true
+                            selectionColor: Theme.accent
+                            selectedTextColor: Theme.bg
                             clip: true
                             onTextChanged: {
                                 root.query = text
                                 root.selectedIndex = 0
                             }
+                            onActiveFocusChanged: if (activeFocus && TabletMode.active) TabletMode.keyboardOpen = true
                             Keys.onEscapePressed: root.closeRequested()
                             Keys.onReturnPressed: {
                                 if (root.filteredClients.length > 0) {
@@ -249,6 +336,39 @@ FocusScope {
                             }
                         }
                     }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onPressed: mouse => {
+                            searchInput.forceActiveFocus()
+                            if (TabletMode.active) TabletMode.keyboardOpen = true
+                            mouse.accepted = false
+                        }
+                    }
+                }
+
+                Rectangle {
+                    visible: TabletMode.active
+                    width: 42
+                    height: 42
+                    radius: 8
+                    color: TabletMode.keyboardOpen ? Theme.accent : Qt.alpha(Theme.fg, 0.08)
+
+                    Icon {
+                        anchors.centerIn: parent
+                        glyph: "keyboard"
+                        size: Theme.iconSm
+                        color: TabletMode.keyboardOpen ? Theme.bg : Theme.fg
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            searchInput.forceActiveFocus()
+                            TabletMode.toggleVirtualKeyboard()
+                        }
+                    }
                 }
 
                 Text {
@@ -259,8 +379,8 @@ FocusScope {
                 }
 
                 Rectangle {
-                    width: 28
-                    height: 28
+                    width: TabletMode.active ? 42 : 28
+                    height: TabletMode.active ? 42 : 28
                     radius: 8
                     color: closeBtnMa.containsMouse ? Qt.alpha(Theme.error, 0.22) : Qt.alpha(Theme.fg, 0.08)
 
@@ -340,12 +460,20 @@ FocusScope {
                                 id: cardMa
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+                                acceptedButtons: Qt.LeftButton | Qt.MiddleButton | Qt.RightButton
+                                pressAndHoldInterval: 420
                                 cursorShape: Qt.PointingHandCursor
                                 onEntered: root.selectedIndex = index
+                                onPressAndHold: {
+                                    root.selectedIndex = index
+                                    root.contextClient = modelData
+                                }
                                 onClicked: mouse => {
                                     if (mouse.button === Qt.MiddleButton) {
                                         root.closeWindow(modelData)
+                                    } else if (mouse.button === Qt.RightButton) {
+                                        root.selectedIndex = index
+                                        root.contextClient = modelData
                                     } else {
                                         root.focusWindow(modelData)
                                     }
@@ -389,8 +517,8 @@ FocusScope {
                                     }
 
                                     Rectangle {
-                                        Layout.preferredWidth: 22
-                                        Layout.preferredHeight: 22
+                                        Layout.preferredWidth: TabletMode.active ? 36 : 22
+                                        Layout.preferredHeight: TabletMode.active ? 36 : 22
                                         radius: 6
                                         color: winCloseMa.containsMouse ? Qt.alpha(Theme.error, 0.25) : "transparent"
 
@@ -466,6 +594,91 @@ FocusScope {
                                         font.family: Theme.fontUi
                                         font.pixelSize: Theme.text2xs
                                         color: Qt.alpha(Theme.fg, 0.5)
+                                    }
+                                }
+                            }
+
+                            // Menu contextuel tactile (appui long / clic droit)
+                            Rectangle {
+                                id: ctxMenu
+                                visible: root.contextClient !== null && root.contextClient.address === modelData.address
+                                anchors.fill: parent
+                                radius: parent.radius
+                                color: Qt.alpha(Theme.bg, 0.94)
+                                border.width: 1
+                                border.color: Theme.accent
+                                z: 20
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: root.contextClient = null
+                                }
+
+                                ColumnLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    spacing: 6
+
+                                    Repeater {
+                                        model: [
+                                            { lbl: "Plein écran", act: "full" },
+                                            { lbl: Boolean(modelData.floating) ? "Tuilé" : "Flottant", act: "float" },
+                                            { lbl: "Fermer la fenêtre", act: "close" }
+                                        ]
+                                        delegate: Rectangle {
+                                            required property var modelData
+                                            readonly property var win: cardDelegate.modelData
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 40
+                                            radius: 10
+                                            color: modelData.act === "close" ? Qt.alpha(Theme.error, 0.25) : Qt.alpha(Theme.surfaceVariant, 0.85)
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: modelData.lbl
+                                                font.family: Theme.fontUi
+                                                font.pixelSize: Theme.textSm
+                                                color: modelData.act === "close" ? Theme.error : Theme.fg
+                                            }
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                onClicked: {
+                                                    if (modelData.act === "full") root.toggleFullscreenWindow(win)
+                                                    else if (modelData.act === "float") root.toggleFloatingWindow(win)
+                                                    else { root.contextClient = null; root.closeWindow(win) }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 6
+                                        Text {
+                                            text: "Bureau"
+                                            font.family: Theme.fontUi
+                                            font.pixelSize: Theme.textXs
+                                            color: Qt.alpha(Theme.fg, 0.7)
+                                        }
+                                        Repeater {
+                                            model: [1, 2, 3, 4, 5]
+                                            delegate: Rectangle {
+                                                required property int modelData
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 38
+                                                radius: 10
+                                                color: Qt.alpha(Theme.accent, 0.2)
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: modelData
+                                                    font.bold: true
+                                                    color: Theme.accent
+                                                }
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    onClicked: root.moveWindowToWorkspace(cardDelegate.modelData, modelData)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
