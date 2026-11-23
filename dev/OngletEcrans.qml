@@ -48,6 +48,20 @@ Column {
     property string diagRestoreConfirm: ""
     property string diagStatusMsg: ""
 
+    // Désinstallation : armement en deux temps (comme les restaurations du
+    // diagnostic), puis un terminal s'ouvre et demande le mot « uninstall ».
+    property bool desinstArme: false
+
+    // La commande privilégie le dépôt local (install.sh à jour, utilisable hors
+    // ligne) et ne retombe sur la ligne GitHub que si aucun dépôt n'existe.
+    // `maj_terminal.sh` l'exécute hors du cgroup de quickshell — indispensable,
+    // puisque la désinstallation arrête ce service.
+    function commandeDesinstallation() {
+        return 'for d in "${AETHERSHELL_DIR:-}" "$HOME/dev/aethershell" "$HOME/dev/aethershell"; do '
+             + '[ -f "$d/install.sh" ] && exec bash "$d/install.sh" --uninstall; done; '
+             + 'curl -fsSL https://raw.githubusercontent.com/anderveg/aethershell/master/install.sh | bash -s -- --uninstall'
+    }
+
     function refreshDiag(src) {
         if (src) bloc.diagLogSource = src
         if (diagProc.running) return
@@ -1407,6 +1421,7 @@ CollapsibleSection {
     expanded: root.sectionOpen("systeme_maj", false)
     onToggled: expanded => {
         root.setPanelSection("systeme_maj", expanded)
+        if (!expanded) bloc.desinstArme = false
         if (expanded && Theme.panelAccordion) root.fermerAutresTiroirs("systeme_maj")
         if (expanded && bloc.majLocale === "") bloc.verifierMaj(false)
         if (expanded) bloc.verifierRmbg()
@@ -1700,6 +1715,77 @@ Column {
             text: bloc.rmbgErreur
             color: Theme.error
             font.pixelSize: Theme.textXs
+        }
+    }
+
+    Rectangle {
+        width: parent.width
+        height: 1
+        color: Qt.alpha(Theme.fg, 0.1)
+    }
+
+    // Désinstallation : action destructive, donc deux temps. Le second clic
+    // ouvre un terminal (maj_terminal.sh l'isole du cgroup de quickshell, que
+    // la désinstallation arrête) ; c'est là que le mot « uninstall » est demandé.
+    Row {
+        width: parent.width
+        spacing: 10
+
+        Rectangle {
+            id: desinstBtn
+            readonly property bool arme: bloc.desinstArme
+            width: desinstTxt.implicitWidth + 26
+            height: 28
+            radius: Theme.globalRadius
+            color: arme
+                ? Theme.error
+                : (desinstMa.containsMouse ? Qt.alpha(Theme.error, 0.22) : Theme.surfaceVariant)
+            border.width: 1
+            border.color: Theme.error
+
+            Text {
+                id: desinstTxt
+                anchors.centerIn: parent
+                text: desinstBtn.arme ? "Confirmer la désinstallation" : "Désinstaller AetherShell"
+                color: desinstBtn.arme ? Theme.bg : Theme.error
+                font.pixelSize: Theme.text2xs
+                font.bold: true
+            }
+
+            MouseArea {
+                id: desinstMa
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    if (!bloc.desinstArme) {
+                        bloc.desinstArme = true
+                        desinstArmement.restart()
+                        return
+                    }
+                    bloc.desinstArme = false
+                    Quickshell.execDetached(["bash", Quickshell.shellPath("core/maj_terminal.sh"),
+                                             bloc.commandeDesinstallation()])
+                }
+            }
+
+            // Un armement oublié ne doit pas laisser le bouton prêt à frapper.
+            Timer {
+                id: desinstArmement
+                interval: 6000
+                onTriggered: bloc.desinstArme = false
+            }
+        }
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            width: parent.width - desinstBtn.width - 10
+            text: "Retire les unités systemd et le shell, puis réécrit ~/.config/hypr avec une "
+                  + "configuration minimale (SUPER + Return et SUPER + T ouvrent un terminal). "
+                  + "Sauvegarde automatique avant suppression, sauf --purge."
+            color: Qt.alpha(Theme.fg, 0.55)
+            font.pixelSize: Theme.text2xs
+            wrapMode: Text.WordWrap
         }
     }
 }

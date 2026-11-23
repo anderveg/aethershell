@@ -73,7 +73,20 @@ Le déploiement est piloté par [`install.sh`](install.sh), compatible avec **Ar
 
 # Déploiement rapide sans nouvelle sauvegarde (quand l'état est déjà archivé)
 ./install.sh --deploy-only
+
+# Désinstallation : retire le shell, ses unités systemd et remet ~/.config/hypr
+# à une configuration minimale (SUPER + Return et SUPER + T ouvrent un terminal)
+./install.sh --uninstall          # confirmation en tapant « uninstall »
+./install.sh --uninstall --purge  # idem + thèmes SDDM, caches et sauvegardes
 ```
+
+`--uninstall` archive d'abord `~/.config/quickshell` et `~/.config/hypr` dans
+`~/.config/backups_env/uninstall_<horodatage>/`, puis ne retire que ce que le
+déploiement avait posé : les cinq unités systemd utilisateur, le shell, et côté
+système le helper `greeter-palette`, sa règle polkit et les drop-ins SDDM (mot de
+passe root demandé). `--dry-run` liste les actions sans rien modifier. Les paquets
+système ne sont jamais retirés. Même option dans le panneau de configuration :
+onglet **Système** ➜ tiroir **Mise à jour du shell** ➜ *Désinstaller AetherShell*.
 
 ### Protection stricte des données locales
 Le déploiement ne remplace jamais aveuglément les fichiers vivants :

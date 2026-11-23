@@ -14,6 +14,8 @@
 #   bash install.sh --check            # état du dépôt et de l'installation
 #   bash install.sh --snapshots        # lister les snapshots
 #   bash install.sh --restore-file P   # restaurer un fichier depuis un snapshot
+#   bash install.sh --uninstall        # désinstaller le shell (Hyprland remis à un état minimal)
+#   bash install.sh --uninstall --purge  # idem + thèmes SDDM, caches et sauvegardes
 #
 # Options bootstrap (utilisées si hors dépôt ou avec --sync / --check / --no-deploy) :
 #   --dir CHEMIN                dossier du dépôt (défaut : $AETHERSHELL_DIR, sinon
@@ -65,10 +67,10 @@ dire()   { printf '%s\n' "$*"; }
 mourir() { printf 'install.sh: %s\n' "$*" >&2; exit 1; }
 
 usage() {
-    sed -n '6,26p' "${BASH_SOURCE[0]:-$0}" 2>/dev/null || cat <<'TXT'
+    sed -n '6,28p' "${BASH_SOURCE[0]:-$0}" 2>/dev/null || cat <<'TXT'
 AetherShell — installation et déploiement unifiés
   curl -fsSL https://raw.githubusercontent.com/anderveg/aethershell/master/install.sh | bash
-  bash install.sh [--yes|--install-deps|--diff|--deps|--check|--no-deploy|--arch|--fedora|--debian|--laptop|--desktop]
+  bash install.sh [--yes|--install-deps|--diff|--deps|--check|--no-deploy|--uninstall|--arch|--fedora|--debian|--laptop|--desktop]
 TXT
 }
 if [ -t 1 ]; then
@@ -172,6 +174,8 @@ RESTORE_SNAP=""
 HQ_ACTION=""
 HQ_ARG1=""
 HQ_ARG2=""
+UNINSTALL=0
+UNINSTALL_PURGE=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -219,6 +223,8 @@ while [ $# -gt 0 ]; do
         --deps) PRINT_DEPS=1; shift ;;
         --install-deps) INSTALL_DEPS_ONLY=1; shift ;;
         --diff) DIFF_ONLY=1; shift ;;
+        --uninstall) UNINSTALL=1; NO_DEPLOY=1; shift ;;
+        --purge) UNINSTALL_PURGE=1; shift ;;
         --dry-run) DRY_RUN=1; shift ;;
         --backup) DO_BACKUP=1; shift ;;
         --no-backup|--skip-backup) NO_BACKUP=1; shift ;;
@@ -262,6 +268,268 @@ done
 
 FORM_TITLE="Desktop"
 [ "$FORM_FACTOR" = "laptop" ] && FORM_TITLE="Laptop"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Désinstallation (`--uninstall`, `--purge`, entrée 9 du menu)
+# ──────────────────────────────────────────────────────────────────────────────
+# Ce qui part : les unités systemd utilisateur, tout ~/.config/quickshell, et la
+# couche Hyprland du shell. ~/.config/hypr n'est jamais laissé vide : il est
+# remplacé par une configuration minimale qui garde Hyprland utilisable
+# (SUPER + Return et SUPER + T ouvrent un terminal). L'état précédent est
+# archivé dans ~/.config/backups_env/uninstall_<horodatage>/ avant toute
+# suppression — sauf avec --purge, qui efface aussi les sauvegardes.
+# ══════════════════════════════════════════════════════════════════════════════
+UNITS_AETHER="quickshell.service hermes-approbations.service polkit-agent.service planka-worker.service planka-worker.timer"
+
+# Système posé hors du HOME par le déploiement (helper SDDM, règle polkit, drop-ins).
+SYSTEM_FILES_AETHER=(
+    /usr/local/bin/greeter-palette
+    /etc/polkit-1/rules.d/50-greeter-palette.rules
+    /etc/sddm.conf.d/10-sddm-theme.conf
+    /etc/systemd/system/sddm.service.d/locale.conf
+)
+
+# terminal_par_defaut : le même ordre que core/maj_terminal.sh, mais sans
+# dépendre du shell (le panneau et la ligne `curl | bash` doivent tomber sur le
+# même terminal). $AETHER_TERMINAL, puis app_vars.json, puis les binaires connus.
+terminal_par_defaut() {
+    local t
+    if [ -n "${AETHER_TERMINAL:-}" ]; then
+        printf '%s\n' "$AETHER_TERMINAL"
+        return 0
+    fi
+    if [ -f "$CORE_DIR/app_vars.json" ] && command -v jq >/dev/null 2>&1; then
+        t="$(jq -r '.Terminal // ""' "$CORE_DIR/app_vars.json" 2>/dev/null || true)"
+        if [ -n "$t" ]; then
+            printf '%s\n' "$t"
+            return 0
+        fi
+    fi
+    for t in ghostty kitty foot alacritty konsole xterm; do
+        if command -v "$t" >/dev/null 2>&1; then
+            printf '%s\n' "$t"
+            return 0
+        fi
+    done
+    printf '%s\n' "xterm"
+}
+
+# ecrire_hyprland_minimal DEST TERMINAL : configuration autonome, sans aucun
+# `require()` — les modules du shell ont disparu. Elle doit rester valide : elle
+# est vérifiée par `luac5.4 -p` avant d'être mise en place (voir uninstall_env).
+ecrire_hyprland_minimal() {
+    local dest="$1" terminal="$2"
+    cat > "$dest" <<LUA
+-- ~/.config/hypr/hyprland.lua
+-- Écrit par « install.sh --uninstall » : AetherShell a été retiré, Hyprland
+-- reste utilisable. Aucun require() : ce fichier ne dépend d'aucun module.
+-- Remplacez-le par votre propre configuration quand vous le souhaitez.
+
+hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
+
+hl.config({
+    general = {
+        gaps_in = 2,
+        gaps_out = 8,
+        border_size = 2,
+        col = {
+            active_border   = "rgba(b4befeee)",
+            inactive_border = "rgba(45475aaa)",
+        },
+        layout = "dwindle",
+    },
+    decoration = {
+        rounding         = 0,
+        active_opacity   = 1.0,
+        inactive_opacity = 1.0,
+        shadow = { enabled = false },
+    },
+    animations = { enabled = true },
+    input = {
+        kb_layout    = "fr",
+        follow_mouse = 1,
+        touchpad     = { natural_scroll = true },
+    },
+})
+
+local terminal = "$terminal"
+
+--: Applications
+hl.bind("SUPER + Return", hl.dsp.exec_cmd(terminal), { description = "terminal" })
+hl.bind("SUPER + T",      hl.dsp.exec_cmd(terminal), { description = "terminal" })
+
+--: Fenêtres
+hl.bind("SUPER + Q",     hl.dsp.window.close(), { description = "fermer la fenêtre" })
+hl.bind("SUPER + V",     hl.dsp.window.float({ action = "toggle" }), { description = "fenêtre flottante" })
+hl.bind("SUPER + Left",  hl.dsp.focus({ direction = "left" }))
+hl.bind("SUPER + Right", hl.dsp.focus({ direction = "right" }))
+hl.bind("SUPER + Up",    hl.dsp.focus({ direction = "up" }))
+hl.bind("SUPER + Down",  hl.dsp.focus({ direction = "down" }))
+
+--: Session
+hl.bind("SUPER + SHIFT + E", hl.dsp.exit(), { description = "quitter Hyprland" })
+LUA
+    chmod 644 "$dest"
+}
+
+uninstall_env() {
+    local dest term mot conf_root u f tmp minimal
+    local -a existants=()
+    # Sandbox de test (vérifier la mécanique sans toucher aux unités réelles, à
+    # Hyprland ni à /etc) : AETHER_UNINSTALL_SAFE=1 neutralise systemctl/hyprctl/sudo.
+    local systeme=1
+    [ "${AETHER_UNINSTALL_SAFE:-0}" = "1" ] && systeme=0
+
+    etape "Désinstallation d'AetherShell"
+    dire "Seront retirés :"
+    dire "  • unités systemd utilisateur (arrêtées, désactivées, supprimées) : $UNITS_AETHER"
+    dire "  • $QS_DIR (tout le shell)"
+    dire "  • $CURRENT_HYPR remis à une configuration minimale : SUPER + Return et SUPER + T ouvrent un terminal"
+    if [ "${UNINSTALL_PURGE:-0}" = "1" ]; then
+        dire "  • --purge : thèmes SDDM, ~/.local/share/qylock-themes, ~/.cache/quickshell et $BACKUP_DIR"
+    fi
+    dire "Sont conservés : les paquets système, le dépôt des sources, et l'archive de l'état actuel."
+    if [ "${NO_BACKUP:-0}" = "1" ]; then
+        dire ""
+        dire "⚠️  --no-backup : aucune archive ne sera faite avant suppression."
+    fi
+
+    if [ "${DRY_RUN:-0}" = "1" ]; then
+        dire ""
+        dire "  [dry-run] désactiverait puis supprimerait : $UNITS_AETHER"
+        [ -d "$QS_DIR" ] && dire "  [dry-run] supprimerait $QS_DIR"
+        dire "  [dry-run] archiverait $CURRENT_HYPR puis écrirait une configuration minimale (terminal : $(terminal_par_defaut))"
+        for f in "${SYSTEM_FILES_AETHER[@]}"; do
+            [ -e "$f" ] && dire "  [dry-run] retirerait (root) : $f"
+        done
+        [ "${UNINSTALL_PURGE:-0}" = "1" ] && dire "  [dry-run] effacerait aussi thèmes SDDM, qylock, caches et sauvegardes"
+        dire ""
+        dire "🔎 --dry-run : rien n'a été modifié."
+        return 0
+    fi
+
+    if [ "${YES_MODE:-0}" != "1" ]; then
+        dire ""
+        read -r -p "Tapez « uninstall » pour confirmer (autre chose annule) : " mot
+        if [ "$mot" != "uninstall" ]; then
+            dire "⏭️ Désinstallation annulée."
+            return 1
+        fi
+    fi
+
+    term="$(terminal_par_defaut)"
+
+    # 1. Archive de l'état courant : rien n'est perdu, sauf en --purge.
+    if [ "${NO_BACKUP:-0}" != "1" ]; then
+        dest="$BACKUP_DIR/uninstall_$(date +%Y%m%d_%H%M%S)"
+        mkdir -p "$dest"
+        if [ -d "$QS_DIR" ]; then
+            tar -czf "$dest/quickshell.tar.gz" -C "$HOME/.config" quickshell 2>/dev/null \
+                && dire "  ↪ sauvegarde : $dest/quickshell.tar.gz"
+        fi
+        if [ -d "$CURRENT_HYPR" ]; then
+            tar -czf "$dest/hypr.tar.gz" -C "$HOME/.config" hypr 2>/dev/null \
+                && dire "  ↪ sauvegarde : $dest/hypr.tar.gz"
+        fi
+    fi
+
+    # 2. Unités systemd utilisateur.
+    for u in $UNITS_AETHER; do
+        if [ -f "$HOME/.config/systemd/user/$u" ]; then
+            [ "$systeme" = "1" ] && systemctl --user disable --now "$u" >/dev/null 2>&1 || true
+            rm -f "$HOME/.config/systemd/user/$u"
+            dire "  ↪ unité retirée : $u"
+        fi
+    done
+    [ "$systeme" = "1" ] && systemctl --user daemon-reload >/dev/null 2>&1 || true
+
+    # 3. Le shell lui-même.
+    if [ -d "$QS_DIR" ]; then
+        rm -rf "$QS_DIR"
+        dire "  ↪ $QS_DIR supprimé"
+    fi
+
+    # 4. Hyprland : la configuration minimale est écrite et vérifiée AVANT de
+    #    toucher au reste — une config Lua invalide laisserait la session sans
+    #    raccourcis (SUPER + Return compris). Reload ensuite, sans redémarrage.
+    mkdir -p "$CURRENT_HYPR"
+    tmp="$CURRENT_HYPR/.hyprland.lua.minimal"
+    minimal=0
+    if ecrire_hyprland_minimal "$tmp" "$term"; then
+        minimal=1
+        if command -v luac5.4 >/dev/null 2>&1; then
+            if ! luac5.4 -p "$tmp" >/dev/null 2>&1; then
+                minimal=0
+                dire "  ⚠️  configuration minimale invalide : $CURRENT_HYPR laissé intact"
+            fi
+        fi
+    fi
+    if [ "$minimal" = "1" ]; then
+        mv -f "$tmp" "$CURRENT_HYPR/hyprland.lua"
+        # Tout le reste appartenait au shell (modules, upstream, marqueur, user/) :
+        # ce qui reste est exactement hyprland.lua. Les copies sont dans l'archive.
+        find "$CURRENT_HYPR" -mindepth 1 -maxdepth 1 ! -name 'hyprland.lua' -exec rm -rf {} + 2>/dev/null || true
+        dire "  ↪ $CURRENT_HYPR réécrit (configuration minimale, terminal : $term)"
+        if [ "$systeme" = "1" ] && command -v hyprctl >/dev/null 2>&1; then
+            hyprctl reload >/dev/null 2>&1 && dire "  ↪ Hyprland rechargé"
+        fi
+    else
+        rm -f "$tmp"
+    fi
+
+    # 5. Parties système (root) : seulement ce que le déploiement a posé.
+    for f in "${SYSTEM_FILES_AETHER[@]}"; do
+        [ -e "$f" ] && existants+=("$f")
+    done
+    if [ "${#existants[@]}" -gt 0 ]; then
+        dire ""
+        dire "Éléments système posés par AetherShell :"
+        printf '  • %s\n' "${existants[@]}"
+        conf_root="o"
+        if [ "${YES_MODE:-0}" != "1" ]; then
+            read -r -p "Les retirer aussi (mot de passe root demandé) ? (o/n) [o] : " conf_root
+        fi
+        case "${conf_root:-o}" in
+            o|O|y|Y|"")
+                if [ "$systeme" = "0" ]; then
+                    dire "  [test] éléments système non retirés (AETHER_UNINSTALL_SAFE=1)"
+                elif command -v sudo >/dev/null 2>&1 && sudo rm -f "${existants[@]}"; then
+                    dire "  ↪ éléments système retirés"
+                else
+                    dire "  ⚠️  non retirés — à supprimer à la main :"
+                    printf '       sudo rm -f %s\n' "${existants[@]}"
+                fi
+                ;;
+            *)  dire "  ⏭️ éléments système conservés" ;;
+        esac
+    fi
+
+    # 6. --purge : ce qui reste de l'installation, y compris les sauvegardes.
+    if [ "${UNINSTALL_PURGE:-0}" = "1" ]; then
+        rm -rf "$HOME/.local/share/qylock-themes" "$HOME/.cache/quickshell"
+        dire "  ↪ thèmes qylock et caches retirés"
+        if [ "$systeme" = "1" ] && [ -d /usr/share/sddm/themes ] && command -v sudo >/dev/null 2>&1; then
+            sudo rm -rf /usr/share/sddm/themes/sddm-astronaut-theme 2>/dev/null || true
+            dire "  ↪ thème astronaut retiré (/usr/share/sddm/themes)"
+        fi
+        rm -rf "$BACKUP_DIR"
+        dire "  ↪ sauvegardes supprimées : $BACKUP_DIR"
+    fi
+
+    dire ""
+    dire "✅ AetherShell désinstallé."
+    if [ "${NO_BACKUP:-0}" != "1" ] && [ "${UNINSTALL_PURGE:-0}" != "1" ]; then
+        dire "   Archive de l'état précédent : ${dest:-$BACKUP_DIR}"
+        dire "   Restauration manuelle : tar -xzf <archive> -C ~/.config"
+    fi
+    dire "   Reste à votre charge : les paquets système (dependencies.txt) et le dépôt des sources."
+    return 0
+}
+
+if [ "${UNINSTALL:-0}" = "1" ]; then
+    uninstall_env
+    exit $?
+fi
 
 # ── Bootstrap distant / récupération GitHub / repli local (hors-ligne / USB) ──
 LOCAL_REPO=0
@@ -2353,6 +2621,7 @@ while true; do
     echo "6 > Snapshots fins : lister, inspecter ou restaurer un fichier"
     echo "7 > Inspecter une archive tarball (diff + extraire)"
     echo "8 > Vérifier / installer les dépendances ($DISTRO_TITLE - $FORM_TITLE)"
+    echo "9 > Désinstaller AetherShell (retire le shell, remet Hyprland à zéro)"
     echo "q > Quit"
     echo "------------------------------------------"
     read -p "Choice: " choice
@@ -2399,6 +2668,10 @@ while true; do
         7) inspecter_hq ;;
         8)
             INSTALL_DEPS_ONLY=1 check_dependencies || true
+            read -p "Appuyer sur Entrée pour revenir au menu..." _
+            ;;
+        9)
+            uninstall_env || true
             read -p "Appuyer sur Entrée pour revenir au menu..." _
             ;;
         q|Q) exit 0 ;;

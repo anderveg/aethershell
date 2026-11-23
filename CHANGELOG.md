@@ -9,6 +9,16 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **`x.yy.x.x`** : ajout de fonctionnalités décisives (ex. : ajout de l'Îlot dynamique).
 - **Version majeure (`y.x.x.x`)** : conservation du schéma déjà en place (proposée lorsque l'ampleur des changements le justifie ; décision finale validée par l'utilisateur).
 
+## [0.4.5.0] — 2026-11-23
+
+### Ajouté
+- **Désinstallation complète (`install.sh --uninstall`, entrée 9 du menu, panneau de configuration)** (`install.sh`, `dev/OngletEcrans.qml`, `dev/core/maj_terminal.sh` réutilisé) :
+  - `--uninstall` retire les cinq unités systemd utilisateur (`quickshell`, `hermes-approbations`, `polkit-agent`, `planka-worker.{service,timer}`), tout `~/.config/quickshell`, et réécrit `~/.config/hypr` avec une **configuration Lua autonome** (aucun `require()`) qui garde Hyprland utilisable : `SUPER + Return` et `SUPER + T` ouvrent le terminal détecté (`$AETHER_TERMINAL`, `app_vars.json`, puis ghostty/kitty/foot/alacritty/konsole/xterm), `SUPER + Q` ferme, `SUPER + SHIFT + E` quitte, flèches pour le focus.
+  - Sauvegarde d'abord : `~/.config/backups_env/uninstall_<horodatage>/quickshell.tar.gz` + `hypr.tar.gz` (rien n'est perdu, la restauration est un `tar -xzf … -C ~/.config`). `--purge` ajoute thèmes SDDM, `~/.local/share/qylock-themes`, `~/.cache/quickshell` et les sauvegardes.
+  - Parties système traitées séparément, derrière une confirmation et un `sudo` : `greeter-palette`, règle polkit, drop-ins `/etc/sddm.conf.d/` et `sddm.service`. Les paquets système ne sont **jamais** désinstallés.
+  - Garde-fous : confirmation en tapant `uninstall` (contournable par `-y`), `--dry-run` qui liste sans modifier, configuration minimale validée par `luac5.4 -p` **avant** d'être mise en place (une config invalide laisse `~/.config/hypr` intact), et `AETHER_UNINSTALL_SAFE=1` réservé aux tests (neutralise systemctl/hyprctl/sudo).
+  - Panneau : ligne *Désinstaller AetherShell* en bas du tiroir **Mise à jour du shell** (onglet Système), armement en deux clics (6 s) puis exécution dans le terminal par défaut via `core/maj_terminal.sh` — dépôt local privilégié (`$AETHERSHELL_DIR`, `~/dev/aethershell`, `~/dev/aethershell`), repli sur la ligne `curl … | bash -s -- --uninstall`.
+
 ## [0.4.4.2] — 2026-11-23
 
 ### Supprimé

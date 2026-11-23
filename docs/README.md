@@ -60,7 +60,20 @@ Deployment is handled by [`install.sh`](../install.sh), compatible with **Arch L
 
 # Fast deployment without new backup (when the state is already archived)
 ./install.sh --deploy-only
+
+# Uninstall: removes the shell, its systemd units and resets ~/.config/hypr to a
+# minimal configuration (SUPER + Return and SUPER + T open a terminal)
+./install.sh --uninstall          # confirmation by typing "uninstall"
+./install.sh --uninstall --purge  # same + SDDM themes, caches and backups
 ```
+
+`--uninstall` first archives `~/.config/quickshell` and `~/.config/hypr` into
+`~/.config/backups_env/uninstall_<timestamp>/`, then removes only what the
+deployment had installed: the five user systemd units, the shell itself, and on
+the system side the `greeter-palette` helper, its polkit rule and the SDDM
+drop-ins (root password requested). `--dry-run` lists the actions without touching
+anything. System packages are never removed. The same option lives in the config
+panel: **System** tab ➜ **Shell update** drawer ➜ *Uninstall AetherShell*.
 
 ### Strict Protection of Local Data
 
