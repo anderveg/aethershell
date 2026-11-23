@@ -19,8 +19,8 @@
 # changer le verdict d'un script.
 set -uo pipefail
 
-PUBLIEUR="$(dirname "$(readlink -f "$0")")/hermes_publier.py"
-[ -x "$PUBLIEUR" ] || PUBLIEUR="python3 $PUBLIEUR"
+# Le publieur d'état est le binaire unique : `as-core hermes-publier`.
+PUBLIEUR="$(dirname "$(readlink -f "$0")")/as-core hermes-publier"
 
 if [ $# -lt 3 ] || [ "$2" != "--" ] && [ "$2" != "--cron" ]; then
     cat >&2 <<'USAGE'
@@ -41,7 +41,7 @@ fi
 [ "${1:-}" = "--" ] && shift
 [ $# -gt 0 ] || { echo "hermes_session.sh : aucune commande à lancer" >&2; exit 2; }
 
-# $PUBLIEUR peut contenir « python3 /chemin » : on le garde tel quel via un tableau.
+# $PUBLIEUR contient « <chemin>/as-core hermes-publier » : tableau, pas d'évaluation.
 read -r -a PUB <<< "$PUBLIEUR"
 
 "${PUB[@]}" debut "$LIBELLE" >/dev/null 2>&1 || true

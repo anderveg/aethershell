@@ -7,7 +7,7 @@ import Quickshell.Io
 
 // PÉRIPHÉRIQUES — ce qui est branché en USB, monté ou non.
 //
-// Même source que l'applet et le popup : `core/usb_applet.py` (sysfs, udev,
+// Même source que l'applet et le popup : `as-core usb` (sysfs, udev,
 // mountinfo — aucun démon). Un disque monté passe en couleur d'accent : c'est
 // celui qu'on vient de brancher et qu'on cherche à ouvrir.
 Item {

@@ -28,35 +28,10 @@ done
 
 # 1. une fenêtre déjà ouverte porte-t-elle un des motifs ?
 if [ -n "$motifs" ] && command -v hyprctl >/dev/null 2>&1; then
-    adresse=$(printf '%s' "$motifs" | python3 -c '
-import json, subprocess, sys
-
-motifs = [m.strip().lower() for m in sys.stdin.read().split("\n") if m.strip()]
-if not motifs:
-    sys.exit(0)
-try:
-    clients = json.loads(subprocess.run(["hyprctl", "clients", "-j"],
-                                        capture_output=True, text=True, timeout=3).stdout)
-except Exception:
-    sys.exit(0)
-
-# Deux passes : la classe d abord (fiable), le titre ensuite — un titre contient
-# n importe quoi, y compris le nom de l application cherchee.
-for passe in ("classe", "titre"):
-    for c in clients:
-        if passe == "classe":
-            champs = [c.get("class", ""), c.get("initialClass", "")]
-        elif len(motifs):
-            champs = [c.get("title", "")]
-        for champ in champs:
-            v = str(champ).lower()
-            for m in motifs:
-                if passe == "classe":
-                    if v == m or m in v:
-                        print(c.get("address", "")); sys.exit(0)
-                elif len(m) >= 4 and m in v:
-                    print(c.get("address", "")); sys.exit(0)
-sys.exit(0)')
+    # `notif-window` fait les deux passes (classe, puis titre ≥ 4 caractères) :
+    # même logique qu'avant, dans le binaire unique.
+    adresse=$(printf '%s' "$motifs" \
+        | "$(dirname "$(readlink -f "$0")")/as-core" notif-window)
     if [ -n "$adresse" ]; then
         # Hyprland 0.57 (config Lua) : `hyprctl dispatch focuswindow address:…`
         # est réévalué comme du Lua et échoue au parsing (« ')' expected near

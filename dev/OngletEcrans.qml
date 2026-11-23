@@ -9,7 +9,7 @@ import "."
 //
 // `root` et `mainFlickable` viennent du panneau sous les noms qu'ils avaient
 // deja dans ce corps, donc les appels a la racine sont restes intacts.
-// `sections` et `cibles` sont remplies apres la decoupe (voir decouper.py) :
+// `sections` et `cibles` sont remplies apres la decoupe (une passe hors dépôt) :
 // le panneau ne peut plus nommer ces ids, il les demande ici.
 Column {
     id: bloc
@@ -93,7 +93,7 @@ Column {
     //
     //   curl -fsSL https://raw.githubusercontent.com/anderveg/aethershell/master/install.sh | bash
     //
-    // `core/maj_shell.py` compare la version déployée (`core/version.json`, écrit
+    // `as-core maj-shell` compare la version déployée (`core/version.json`, écrit
     // par `install.sh`) au dernier tag publié sur GitHub. Il ne sort sur le réseau
     // qu'une fois toutes les `intervalleMin` minutes — 280 par défaut — et le
     // minuteur ci-dessous ne fait que lui redemander l'état : le cache répond.
@@ -132,11 +132,11 @@ Column {
             bloc.majVerifie = String(d.verifie_le || "")
             if (d.commande) bloc.majCommande = String(d.commande)
             // Le script fait foi : changer la fenêtre de vérification ne touche
-            // qu'à `INTERVALLE_MIN` dans core/maj_shell.py.
+            // qu'à `INTERVALLE_MIN` dans as-core maj-shell.
             if (d.intervalle_min) bloc.intervalleMin = Number(d.intervalle_min)
         } catch (e) {
             bloc.majEtat = "inconnu"
-            bloc.majDetail = "réponse illisible de core/maj_shell.py"
+            bloc.majDetail = "réponse illisible de as-core maj-shell"
         }
     }
 
@@ -149,7 +149,7 @@ Column {
         onExited: code => {
             if (code !== 0 && bloc.majEtat === "") {
                 bloc.majEtat = "inconnu"
-                bloc.majDetail = "core/maj_shell.py a échoué (code " + code + ")"
+                bloc.majDetail = "as-core maj-shell a échoué (code " + code + ")"
             }
         }
     }

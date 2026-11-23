@@ -6,7 +6,7 @@ import Quickshell.Io
 // ÉCRAN DES RACCOURCIS (SUPER + K)
 //
 // La liste ne vient pas d'ici : elle vient de `binds.lua`, via
-// `config_manager.py state` → `binds`, et ne retient que les binds qui portent
+// `as-core config state` → `binds`, et ne retient que les binds qui portent
 // une `description`. Un raccourci ajouté dans binds.lua apparaît donc ici, et un
 // raccourci renommé ne peut pas diverger de la réalité.
 //

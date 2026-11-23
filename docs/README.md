@@ -42,7 +42,7 @@ Options: `--dir PATH` (default: `$AETHERSHELL_DIR`, otherwise `~/dev/aethershell
 curl -fsSL https://raw.githubusercontent.com/anderveg/aethershell/master/install.sh | bash -s -- --check
 ```
 
-The panel tracks the same version as the script: "Displays & System" → "Shell Updates" displays the deployed version, the version published on GitHub, and available actions (check now, update in a terminal, copy the one-liner for another machine). `core/version.json` is written on every deployment, and `core/maj_shell.py` queries GitHub only once every **280 minutes** — between checks, it serves from cache, avoiding unnecessary network calls when opening the panel.
+The panel tracks the same version as the script: "Displays & System" → "Shell Updates" displays the deployed version, the version published on GitHub, and available actions (check now, update in a terminal, copy the one-liner for another machine). `core/version.json` is written on every deployment, and `as-core maj-shell` queries GitHub only once every **280 minutes** — between checks, it serves from cache, avoiding unnecessary network calls when opening the panel.
 
 ### Manual Deployment
 
@@ -80,11 +80,11 @@ Paths are constructed using variables, never hardcoded:
 | Context | To use |
 |---|---|
 | shell | `"$HOME"`, `"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"` |
-| Python | `Path.home()`, `os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"` |
+| Rust | `paths::home_dir()`, `paths::runtime_dir()` (`dev/rust/as-core/src/common/paths.rs`) |
 | QML | `Quickshell.env("HOME")`, `Quickshell.env("XDG_RUNTIME_DIR")` |
 | systemd unit | `%h` (unit directive) |
 
-`python3 dev/core/neutralite.py` inspects **tracked** files: it flags any `/home/<name>` that is not a placeholder, as well as the username and machine hostname. The deployment pre-flight runs it and displays a warning. A line may include an explicit exception — `neutralite:ok — <reason>` — for intentional compatibility.
+`dev/core/as-core neutralite` inspects **tracked** files: it flags any `/home/<name>` that is not a placeholder, as well as the username and machine hostname. The deployment pre-flight runs it and displays a warning. A line may include an explicit exception — `neutralite:ok — <reason>` — for intentional compatibility.
 
 ---
 
@@ -102,7 +102,8 @@ Paths are constructed using variables, never hardcoded:
 ```
 install.sh            # Unified script: install, update, pre-flight checks, deployment, and backups
 dev/
-├── core/             # Python services (network, disks, tasks, Hermes, file listing...)
+├── rust/as-core/     # Unified Rust backend (compiled to dev/core/as-core)
+├── core/             # as-core binary, JSON catalogues, caches and shell integration scripts
 ├── widgets/          # Desktop components (clock, todo, system, weather...)
 ├── hypr_modular/     # Modular Hyprland configuration in Lua
 ├── hyprquickpaper/   # Wallpaper engine and palette management

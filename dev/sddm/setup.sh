@@ -14,7 +14,7 @@
 #   3. thèmes      qylock : récupération (fetch) dans ~/.local/share/qylock-themes
 #   4. aperçus     une capture 480×270 par thème (thumbnails.sh)
 #   5. pose        copie dans /usr/share/sddm/themes + helper polkit (install.sh)
-#   6. panneau     copie de core/greeter_manager.py dans ~/.config/quickshell
+#   6. panneau     vérifie le backend `as-core` déployé dans ~/.config/quickshell
 #
 # Le mot de passe n'est demandé qu'une fois : sudo sur Fedora (pas d'agent
 # polkit supposé), pkexec sur Arch. --dry-run affiche les étapes privilégiées.
@@ -49,7 +49,7 @@ Installe tout le greeter en une passe sur une machine neuve.
   3. thèmes      qylock : récupération dans ~/.local/share/qylock-themes
   4. aperçus     une capture 480×270 par thème (thumbnails.sh)
   5. pose        copie dans /usr/share/sddm/themes + helper polkit (install.sh)
-  6. panneau     copie de core/greeter_manager.py dans ~/.config/quickshell
+  6. panneau     vérifie le backend `as-core` déployé dans ~/.config/quickshell
 
 Le mot de passe n'est demandé qu'une fois : sudo sur Fedora (pas d'agent
 polkit supposé), pkexec sur Arch.
@@ -140,7 +140,9 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 have sddm-greeter-qt6 || MISSING+=("$(dep_pkg sddm)")
 have git             || MISSING+=("git")
-have python3         || MISSING+=("python3")
+have jq              || MISSING+=("$(dep_pkg jq)")
+# Backend du shell : binaire Rust, compilé depuis le dépôt (ignoré par Git).
+[ -x "$DEV/core/as-core" ] || echo "⚠ $DEV/core/as-core absent : lancer dev/rust/build.sh" >&2
 have grim            || MISSING+=("$(dep_pkg grim)")
 have magick          || MISSING+=("$(dep_pkg imagemagick)")
 # fc-list | grep -q fausse le résultat sous `pipefail` : grep sort au premier
@@ -206,12 +208,11 @@ if [ "$FETCH" = "1" ]; then
     NAMES="$SUBSET"
     if [ -z "$NAMES" ]; then
         # Tout le dépôt amont ; les fichiers déjà complets sont sautés.
-        NAMES="$(python3 "$SDDM_DIR/qylock.py" list | python3 -c \
-            'import json,sys; print(" ".join(t["name"] for t in json.load(sys.stdin)["themes"]))')" \
+        NAMES="$(jq -r '[.themes[].name] | join(" ")' < <("$DEV/core/as-core" qylock list))" \
             || die "catalogue illisible"
     fi
     # shellcheck disable=SC2086
-    python3 "$SDDM_DIR/qylock.py" fetch $STATIC $NAMES
+    "$DEV/core/as-core" qylock fetch $STATIC $NAMES
 fi
 
 # ── 4. Aperçus ───────────────────────────────────────────────────────────────
@@ -269,11 +270,10 @@ if [ "$DEPLOY" = "1" ]; then
     step "backend du panneau"
     if [ ! -d "$QS/core" ]; then
         echo "  ⚠ $QS/core absent : déployer d'abord la coquille (bash install.sh --$DEPLOY_TARGET)"
-    elif cmp -s "$DEV/core/greeter_manager.py" "$QS/core/greeter_manager.py"; then
-        echo "  greeter_manager.py : déjà à jour"
+    elif [ -x "$QS/core/as-core" ]; then
+        echo "  backend as-core : présent dans $QS/core"
     else
-        cp "$DEV/core/greeter_manager.py" "$QS/core/greeter_manager.py"
-        echo "  greeter_manager.py : copié dans $QS/core"
+        echo "  ⚠ $QS/core/as-core absent : déployer la coquille (bash install.sh --$DEPLOY_TARGET)"
     fi
     if [ ! -f "$QS/GreeterTab.qml" ]; then
         echo "  ⚠ GreeterTab.qml absent du déploiement : l'onglet Connexion n'existera pas"
@@ -285,11 +285,11 @@ fi
 # ── Sélection ────────────────────────────────────────────────────────────────
 if [ -n "$APPLY" ]; then
     step "sélection de $APPLY"
-    python3 "$QS/core/greeter_manager.py" apply "$APPLY" 2>/dev/null \
-        || python3 "$DEV/core/greeter_manager.py" apply "$APPLY"
+    "$QS/core/as-core" greeter apply "$APPLY" 2>/dev/null \
+        || "$DEV/core/as-core" greeter apply "$APPLY"
 fi
 
 echo
 echo "terminé. Sélection : panneau → Connexion, ou"
-echo "  python3 $QS/core/greeter_manager.py apply <thème>"
+echo "  $QS/core/as-core greeter apply <thème>"
 echo "Contrôle : grep Current /etc/sddm.conf.d/10-sddm-theme.conf"

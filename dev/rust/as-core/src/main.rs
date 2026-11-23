@@ -6,71 +6,17 @@ mod config;
 mod daemon;
 mod launcher;
 mod services;
+mod tools;
 mod wallfx;
 
 use std::env;
 use std::process;
 
+/// Les appels QML passent la sous-commande directement (`as-core disques`). Seul
+/// le préfixe de chemin reste toléré : `core/disques` vient d'une entrée de
+/// catalogue recopiée à la main, pas d'une ancienne implémentation.
 fn normalize_subcmd(s: &str) -> &str {
-    let base = s.rsplit('/').next().unwrap_or(s);
-    match base {
-        "metriques_daemon.py" => "daemon",
-        "systeme_applet.py" => "systeme",
-        "reseau_applet.py" => "reseau",
-        "indicateurs_service.py" => "indicateurs",
-        "live_activity_probe.py" => "live-activity",
-        "system_service.py" => "system-service",
-        "nuit_service.py" => "nuit",
-        "bluetooth_service.py" => "bluetooth",
-        "workspace_service.py" => "workspace",
-        "bar_applets.py" => "bar-applets",
-        "config_manager.py" => "config",
-        "themes_scan.py" => "themes-scan",
-        "theme_manager.py" => "theme-manager",
-        "installer_theme_couleur.py" => "installer-theme-couleur",
-        "terminal_theme.py" => "terminal-theme",
-        "icones_manager.py" => "icones",
-        "lien_systeme.py" => "lien-systeme",
-        "greeter_manager.py" => "greeter",
-        "app_index.py" => "app-index",
-        "app_classes.py" => "app-classes",
-        "launch_history.py" => "launch-history",
-        "launcher_service.py" => "launcher",
-        "lister_fichiers.py" => "lister-fichiers",
-        "disques_applet.py" => "disques",
-        "usb_applet.py" => "usb",
-        "presse_papiers_applet.py" => "presse-papiers",
-        "musique_applet.py" => "musique",
-        "todo_applet.py" => "todo",
-        "todo_worker.py" => "todo-worker",
-        "notif_history.py" => "notif-history",
-        "notif_target.py" => "notif-target",
-        "tray_apps.py" => "tray-apps",
-        "tray_watchdog.py" => "tray-watchdog",
-        "matrix_wallpaper.py" => "matrix",
-        "wifi_qr_scan.py" => "wifi-qr",
-        "maj_shell.py" => "maj-shell",
-        "deps_install.py" => "deps-install",
-        "weather_service.py" => "weather",
-        "meteo_applet.py" => "meteo",
-        "nextcloud_service.py" => "nextcloud",
-        "calendrier_config.py" => "calendrier-config",
-        "calendrier_applet.py" => "calendrier",
-        "planka_service.py" => "planka",
-        "planka_worker.py" => "planka-worker",
-        "homelab_applet.py" => "homelab",
-        "flotte_applet.py" => "flotte",
-        "comptes_applet.py" => "comptes",
-        "deepseek_service.py" => "deepseek",
-        "ollama_service.py" => "ollama",
-        "antigravity_service.py" => "antigravity",
-        "hermes_applet.py" => "hermes",
-        "hermes_lecteur.py" => "hermes-lecteur",
-        "hermes_approbations.py" => "hermes-approbations",
-        "hermes_publier.py" => "hermes-publier",
-        "tablet_mode_daemon.py" => "tablet-mode",
-        _ => s,
-    }
+    s.rsplit('/').next().unwrap_or(s)
 }
 
 fn main() {
@@ -100,6 +46,7 @@ fn main() {
         "workspace" => daemon::workspace::run(),
         "workspace-float-toggle" => daemon::workspace::run_float_toggle(),
         "tablet-mode" => daemon::tablet_mode::run(rest),
+        "polkit-focus" => daemon::polkit_focus::run(),
         // Lot 2 — Registre d'applets, thèmes & configuration
         "bar-applets" => config::bar_applets::run(rest),
         "config" => config::config_mgr::run(rest),
@@ -108,9 +55,13 @@ fn main() {
         "installer-theme-couleur" => config::themes::run_installer(rest),
         "terminal-theme" => config::terminal_theme::run_terminal_theme(rest),
         "sync-apps-theme" => config::terminal_theme::run_sync_apps(),
+        "theme-sync" => config::theme_sync::run_sync(rest),
+        "colors-matugen" => config::theme_sync::run_matugen(rest),
         "icones" => config::icones::run(rest),
         "lien-systeme" => config::lien_systeme::run(rest),
         "greeter" => config::greeter::run(rest),
+        "qylock" => config::qylock::run(rest),
+        "gen-palette" => config::greeter_gen::run(rest),
         "first-run" => config::first_run::run(rest),
         "quick-notes" => config::quick_tools::run_quick_notes(rest),
         "wallpaper-list" => config::quick_tools::run_wallpaper_list(),
@@ -131,6 +82,7 @@ fn main() {
         "todo-worker" => applets::todo::run_worker(rest),
         "notif-history" => applets::notif::run_history(rest),
         "notif-target" => applets::notif::run_target(rest),
+        "notif-window" => applets::notif::run_window(rest),
         "tray-apps" => applets::tray::run_apps(rest),
         "tray-watchdog" => applets::tray::run_watchdog(rest),
         "matrix" => applets::matrix::run(rest),
@@ -155,6 +107,8 @@ fn main() {
         "hermes-lecteur" => services::hermes::run_lecteur(rest),
         "hermes-approbations" => services::hermes::run_approbations(rest),
         "hermes-publier" => services::hermes::run_publier(rest),
+        // Outils de dépôt (préflight install.sh)
+        "neutralite" => tools::neutralite::run(rest),
         // Lot 6 — WallFX / Profondeur / Parallaxe
         "wallfx" => wallfx::wallfx_maps::run(rest),
         "depth-mask" => wallfx::depth_mask::run(rest),

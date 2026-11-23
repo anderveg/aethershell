@@ -7,7 +7,7 @@ import Quickshell.Io
 
 // DISQUES — la version « bureau » de l'applet du même nom.
 //
-// Même source (core/disques_applet.py), même sélection : le service lit le
+// Même source (as-core disques), même sélection : le service lit le
 // registre de l'applet quand on ne lui passe pas d'options, donc cocher un
 // système de fichiers dans le panneau change la barre **et** cette carte.
 Item {

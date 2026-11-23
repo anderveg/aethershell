@@ -4,7 +4,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 
 // Tiroir de l'historique des notifications (`~/.cache/quickshell/notifications-history.jsonl`,
-// plafond 200 via `core/notif_history.py`, cibles figées via `core/notif_target.py`).
+// plafond 200 via `as-core notif-history`, cibles figées via `as-core notif-target`).
 Item {
     id: root
 

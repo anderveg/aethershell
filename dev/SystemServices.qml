@@ -7,7 +7,7 @@ import Quickshell.Io
 QtObject {
     id: root
 
-    // ── État système partagé (core/system_service.py info) ──────────────────
+    // ── État système partagé (as-core system-service info) ──────────────────
     property var systemInfo: ({})
     property bool systemInfoPret: false
 
@@ -46,7 +46,7 @@ QtObject {
         running: root.caffeineActif
     }
 
-    // ── Météo partagée (core/weather_service.py) ─────────────────────────────
+    // ── Météo partagée (as-core weather) ─────────────────────────────
     property var meteoData: ({})
     property string meteoStatut: ""
     property bool meteoLoaded: false

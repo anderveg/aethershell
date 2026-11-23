@@ -4,9 +4,9 @@ import Quickshell.Io
 
 // POPUP HERMES — l'agent, ses sessions, ce qui l'attend.
 //
-// Source : `core/hermes_applet.py`, qui lit la base de Hermes en lecture seule
-// (`core/hermes_lecteur.py`). Aucun appel réseau : les sessions viennent de
-// `state.db`, les approbations du canal local de `hermes_approbations.py`.
+// Source : `as-core hermes`, qui lit la base de Hermes en lecture seule
+// (`as-core hermes-lecteur`). Aucun appel réseau : les sessions viennent de
+// `state.db`, les approbations du canal local de `as-core hermes-approbations`.
 //
 // La liste est celle des sessions, pas celle des « exécutions » : une session
 // qui tourne, qui vient de finir ou qui tourne dans un autre profil sont la même

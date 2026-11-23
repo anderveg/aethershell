@@ -38,14 +38,7 @@ if [ "$MODE" = "menu" ]; then
 fi
 
 # Dossier configuré (la valeur est stockée avec un $HOME littéral).
-CONFIGURED="$(python3 - "$HOME/.config/quickshell/core/style_vars.json" <<'PY' 2>/dev/null
-import json, sys
-try:
-    print(json.load(open(sys.argv[1])).get("screenshots_dir", ""))
-except Exception:
-    print("")
-PY
-)"
+CONFIGURED="$(jq -r '.screenshots_dir // ""' "$HOME/.config/quickshell/core/style_vars.json" 2>/dev/null || true)"
 CONFIGURED="${CONFIGURED//\$HOME/$HOME}"
 if [ -n "$CONFIGURED" ]; then
     SCREENSHOTS_DIR="${CONFIGURED%/}"
@@ -92,7 +85,7 @@ notify_failure() {
 
 # Notification d'une capture, avec la cible du clic déclarée dans un hint : le
 # shell ouvre alors le fichier avec l'alias « Images » ou « Video » du tiroir
-# « Programmes par défaut » (cascade de core/notif_target.py, règle 1). Le
+# « Programmes par défaut » (cascade de as-core notif-target, règle 1). Le
 # chemin est passé en `file://` pour que les espaces ne soient pas ambigus.
 notify_capture() {
     local summary="$1" body="$2" path="${3:-}"
@@ -265,12 +258,8 @@ case "$MODE" in
         # 1. grim sur la sortie active — immédiat, sans clic ni perte de focus
         # (préserve les surfaces à HyprlandFocusGrab comme l'Îlot dynamique étendu).
         if command -v grim &>/dev/null; then
-            FOCUSED_OUT="$(hyprctl monitors -j 2>/dev/null | python3 -c 'import json,sys
-try:
-    ms=json.load(sys.stdin)
-    print(next((m["name"] for m in ms if m.get("focused")), ""))
-except Exception:
-    print("")' 2>/dev/null)"
+            FOCUSED_OUT="$(hyprctl monitors -j 2>/dev/null \
+                | jq -r 'map(select(.focused))[0].name // ""' 2>/dev/null || true)"
             if [ -n "$FOCUSED_OUT" ]; then
                 grim -o "$FOCUSED_OUT" "$FILEPATH"
             else

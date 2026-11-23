@@ -3,7 +3,6 @@
 # Synchronisé avec style_vars.json.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEV_ROOT="$(dirname "$SCRIPT_DIR")"
 STYLE_VARS="$SCRIPT_DIR/style_vars.json"
 
 if [ ! -f "$STYLE_VARS" ]; then
@@ -11,155 +10,15 @@ if [ ! -f "$STYLE_VARS" ]; then
     exit 1
 fi
 
-COLORS=$(python3 - "$STYLE_VARS" << 'EOF'
-import json
-import sys
-
-with open(sys.argv[1], "r") as f:
-    d = json.load(f)
-
-active = d.get("active_theme", "dynamic")
-palettes = d.get("palette", {})
-p = palettes.get(active) or palettes.get("dynamic", {})
-radius = d.get("global_radius", 2)
-opacity = d.get("global_opacity", 0.85)
-
-def norm(c, default):
-    val = str(p.get(c, default)).strip()
-    return val if val.startswith("#") else f"#{val}"
-
-print(",".join([
-    norm("bg", "#1e1e2e"),
-    norm("fg", "#cdd6f4"),
-    norm("accent", "#b4befe"),
-    norm("surface", "#313244"),
-    norm("surface_variant", "#45475a"),
-    norm("error", "#f38ba8"),
-    str(radius),
-    str(opacity),
-    norm("warn", "#fab387"),
-    norm("accent_muted", "#89b4fa")
-]))
-EOF
-)
-
-IFS=',' read -r BG FG ACCENT SURFACE SURFACE_VAR ERROR RADIUS OPACITY WARN ACCENT_MUTED <<< "$COLORS"
-ACCENT_NOHASH="${ACCENT#\#}"
-SURFACE_VAR_NOHASH="${SURFACE_VAR#\#}"
-
-# 1. Generate Hyprland Lua colors file (colors.lua)
-HYPR_COLORS_TARGET="$DEV_ROOT/hypr_modular/colors.lua"
-if [[ "$SCRIPT_DIR" == "$HOME/.config/quickshell"* ]]; then
-    HYPR_COLORS_TARGET="$HOME/.config/hypr/colors.lua"
-fi
-
-if [ -d "$(dirname "$HYPR_COLORS_TARGET")" ]; then
-    cat <<EOF > "$HYPR_COLORS_TARGET"
--- ~/.config/hypr/colors.lua
--- Généré automatiquement via Matugen / style_vars.json
--- Applique la palette active aux bordures, arrondis et à l'opacité de Hyprland
-
-hl.config({
-    general = {
-        col = {
-            active_border   = "rgba(${ACCENT_NOHASH}ee)",
-            inactive_border = "rgba(${SURFACE_VAR_NOHASH}aa)",
-        },
-    },
-    decoration = {
-        rounding         = ${RADIUS},
-        active_opacity   = ${OPACITY},
-        inactive_opacity = ${OPACITY},
-    },
-})
-EOF
-fi
-
-# 3. Sync live configs if target directories exist or running from deployed location
-if [ -d "$HOME/.config/quickshell/hyprquickpaper" ]; then
-    (printf '{\n    "border_color": "%s"\n}\n' "$ACCENT" > "$HOME/.config/quickshell/hyprquickpaper/colors.json") 2>/dev/null || true
-fi
-
-# 4. Generate Hyprlock palette (~/.config/hypr/hyprlock-colors.conf)
-# hyprlock ne lit ni le Lua de Hyprland ni le JSON du shell : la palette lui est
-# donc écrite en variables hyprlang. hyprlock.conf ne contient que les noms de
-# variables, jamais une couleur en dur, et ce fichier est régénéré à chaque
-# déploiement comme à chaque changement de palette dans le panneau.
-HYPRLOCK_DIR="$HOME/.config/hypr"
-HYPRLOCK_COLORS="$HYPRLOCK_DIR/hyprlock-colors.conf"
-if [ -d "$HYPRLOCK_DIR" ]; then
-    FG_NH="${FG#\#}"
-    ACCENT_NH="${ACCENT#\#}"
-    ACCENT_MUTED_NH="${ACCENT_MUTED#\#}"
-    SURFACE_NH="${SURFACE#\#}"
-    ERROR_NH="${ERROR#\#}"
-    WARN_NH="${WARN#\#}"
-    BG_NH="${BG#\#}"
-    # Suffixes d'alpha : b3 = 0,70 · 8c = 0,55 · e5 = 0,90 · 80 = 0,50
-    cat <<EOF > "$HYPRLOCK_COLORS"
-# Généré par core/sync_theme.sh depuis style_vars.json — ne pas éditer.
-# Lu par hyprlock.conf : source = ~/.config/hypr/hyprlock-colors.conf
-
-\$bg = rgb(${BG_NH})
-\$fg = rgb(${FG_NH})
-\$fg_soft = rgba(${FG_NH}b3)
-\$fg_dim = rgba(${FG_NH}80)
-\$accent = rgb(${ACCENT_NH})
-\$accent_muted = rgb(${ACCENT_MUTED_NH})
-\$surface = rgb(${SURFACE_NH})
-\$surface_glass = rgba(${SURFACE_NH}8c)
-\$outline = rgba(${ACCENT_NH}59)
-\$error = rgb(${ERROR_NH})
-\$warn = rgb(${WARN_NH})
-EOF
-    HYPRLOCK_BG="$HYPRLOCK_DIR/hyprlock-bg.conf"
-    python3 - "$STYLE_VARS" "$HYPRLOCK_BG" << 'EOF'
-import json, os, sys
-
-style_path, out_path = sys.argv[1], sys.argv[2]
-with open(style_path, "r") as f:
-    d = json.load(f)
-
-mode = str(d.get("lock_bg_mode", "solid") or "solid").strip()
-color_raw = str(d.get("lock_bg_color", "") or "").strip()
-img_raw = os.path.expanduser(str(d.get("lock_bg_image", "") or "").strip())
-
-color_line = "    color = $bg"
-if color_raw:
-    c = color_raw.lstrip("#")
-    if len(c) == 6:
-        color_line = f"    color = rgb({c})"
-
-lines = [
-    "# Généré par core/sync_theme.sh depuis style_vars.json — ne pas éditer.",
-    "# Lu par hyprlock.conf : source = ~/.config/hypr/hyprlock-bg.conf",
-    "",
-    "background {",
-    "    monitor =",
-    color_line,
-]
-if mode == "image" and img_raw and os.path.isfile(img_raw):
-    lines.append(f"    path = {img_raw}")
-lines.extend([
-    "    blur_passes = 0",
-    "}",
-    "",
-])
-with open(out_path, "w") as f:
-    f.write("\n".join(lines))
-EOF
-fi
+# 1 à 4. colors.lua (Hyprland), hyprquickpaper/colors.json, hyprlock-colors.conf
+# et hyprlock-bg.conf : chaque cible a son format, mais une seule source — le
+# binaire unique les écrit depuis la palette active, `--file` désignant le
+# fichier de cette installation (dépôt ou déploiement).
+"$SCRIPT_DIR/as-core" theme-sync --file "$STYLE_VARS" \
+    || echo "sync_theme.sh : as-core theme-sync a échoué" >&2
 
 # 5. Synchronise la palette des terminaux (OSC universel + Ghostty, Kitty, Alacritty, Foot)
-if [ -x "$SCRIPT_DIR/as-core" ]; then
-    "$SCRIPT_DIR/as-core" terminal-theme >/dev/null 2>&1 || true
-elif [ -f "$SCRIPT_DIR/generate_terminal_theme.py" ]; then
-    python3 "$SCRIPT_DIR/generate_terminal_theme.py" >/dev/null 2>&1 || true
-fi
+"$SCRIPT_DIR/as-core" terminal-theme >/dev/null 2>&1 || true
 
 # 6. Synchronise la palette vers GTK 3/4 et Qt5ct/Qt6ct
-if [ -x "$SCRIPT_DIR/as-core" ]; then
-    "$SCRIPT_DIR/as-core" sync-apps-theme >/dev/null 2>&1 || true
-elif [ -f "$SCRIPT_DIR/sync_apps_theme.py" ]; then
-    python3 "$SCRIPT_DIR/sync_apps_theme.py" >/dev/null 2>&1 || true
-fi
+"$SCRIPT_DIR/as-core" sync-apps-theme >/dev/null 2>&1 || true

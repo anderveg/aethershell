@@ -11,7 +11,7 @@ import Quickshell.Io
 // une enveloppe mensuelle, une échéance de quota), mais ils s'affichent pareil :
 // un chiffre en grand, une ligne en petit. Ce composant ne connaît donc aucun
 // fournisseur : il rend le contrat que le service Python lui donne
-// (core/llm_contrat.py) et déduit lequel lancer de son propre id — « deepseek-3 »
+// (services/llm.rs) et déduit lequel lancer de son propre id — « deepseek-3 »
 // → deepseek — que le shell pose déjà sur chaque widget chargé. Ajouter un
 // fournisseur, c'est un service et une entrée dans llm_providers.json ; aucune
 // ligne de QML, et le réglage de taille de texte n'existe qu'ici.

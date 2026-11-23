@@ -4,7 +4,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 
 // Assistant de premier lancement (5 pages : clavier, dossiers XDG, apps, widgets, raccourcis).
-// État initial via `core/first_run_state.py` ; application atomique en fin via `core/first_run_apply.py`.
+// État initial via `as-core first-run` ; application atomique en fin via `as-core first-run apply`.
 Item {
     id: root
 

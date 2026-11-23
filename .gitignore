@@ -62,3 +62,7 @@ dev/sync.sh
 # Brouillons, propositions et archives de travail. Le répertoire de travail ne
 # garde que ce qui sert : les propositions s'écrivent ici et meurent ici.
 tmp/
+
+# Archive locale des prototypes purgés (scripts sh/python obsolètes, rotation et
+# synchronisation d'avant le backend Rust). Mémoire de la démarche, jamais versionnée.
+prototypes_archive_*.tar.gz

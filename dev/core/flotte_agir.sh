@@ -17,18 +17,9 @@ SIMULER=0
 
 [ -n "$NOM" ] || { echo "usage : flotte_agir.sh <machine>" >&2; exit 2; }
 
-CIBLE=$(python3 - "$ICI/flotte.json" "$NOM" <<'PY'
-import json, sys
-try:
-    d = json.load(open(sys.argv[1]))
-except Exception:
-    print(""); raise SystemExit
-for m in d.get("machines", []):
-    if str(m.get("nom", "")).lower() == sys.argv[2].lower():
-        print(m.get("cible", "")); raise SystemExit
-print("")
-PY
-)
+CIBLE="$(jq -r --arg nom "$NOM" \
+    '( .machines // [] ) | map(select((.nom // "" | ascii_downcase) == ($nom | ascii_downcase)))
+     | (.[0].cible // "")' "$ICI/flotte.json" 2>/dev/null || true)"
 [ -n "$CIBLE" ] || { echo "machine inconnue : $NOM" >&2; exit 1; }
 
 if [ "$SIMULER" = "1" ]; then

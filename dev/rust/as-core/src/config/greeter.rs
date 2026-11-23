@@ -263,7 +263,7 @@ fn inject_preview_escape(theme_dir: &Path) -> bool {
     fs::write(&main, patched).is_ok()
 }
 
-fn get_sddm_dir() -> PathBuf {
+pub(crate) fn get_sddm_dir() -> PathBuf {
     if let Some(parent) = core_dir().parent() {
         let cand = parent.join("sddm");
         if cand.is_dir() && cand.join("install.sh").exists() {
@@ -379,17 +379,11 @@ fn apply(ident: &str) -> i32 {
         return fail(&format!("configuration inconnue : {}", ident), 1);
     }
     if ident == "palette" {
-        let sddm = get_sddm_dir();
-        let gen_py = sddm.join("generate.py");
-        if let Some(o) = run_cmd("python3", &[&gen_py.to_string_lossy()]) {
-            if !o.status.success() {
-                let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
-                return fail(
-                    &format!("génération impossible : {}", err.chars().take(200).collect::<String>()),
-                    1,
-                );
-            }
+        // Porté en Rust (config/greeter_gen.rs) : `dev/sddm/generate.py` a été purgé (R4).
+        if crate::config::greeter_gen::run(&[]) != 0 {
+            return fail("génération de la palette impossible (as-core gen-palette)", 1);
         }
+        let sddm = get_sddm_dir();
         let pal_conf = sddm.join("out/Themes/palette.conf");
         let wp = sddm.join("out/Backgrounds/wallpaper.png");
         let (ok, out) = helper(&[
@@ -706,6 +700,7 @@ pub fn run(args: &[String]) -> i32 {
         "refresh" => apply("palette"),
         "thumbnails" => thumbnails(&args[1..]),
         "sources" => sources(&args[1..]),
+        "gen-palette" => crate::config::greeter_gen::run(&args[1..]),
         _ => fail(&format!("action inconnue : {}", action), 1),
     }
 }

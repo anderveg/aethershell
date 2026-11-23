@@ -30,7 +30,7 @@ Item {
     //
     // `activate()` seul ne suffit pas : un item publié avec `ItemIsMenu = true`
     // (Proton VPN) n'a aucun handler Activate, l'appel ne fait rien du tout. Le
-    // choix est donc confié à `core/tray_apps.py` : fenêtre déjà ouverte → au
+    // choix est donc confié à `as-core tray-apps` : fenêtre déjà ouverte → au
     // premier plan (`hl.dsp.focus`), sinon lancement de l'entrée .desktop, et
     // code 3 quand l'application n'a ni fenêtre ni entrée — on retombe alors sur
     // `activate()`, seule chose qui reste.
@@ -126,7 +126,7 @@ Item {
                                 }
                             }
                             // Deuxième clic : `ouvrirFenetre` met la fenêtre au
-                            // premier plan ou lance l'application (tray_apps.py).
+                            // premier plan ou lance l'application (as-core tray-apps).
                             onDoubleClicked: mouse => {
                                 if (mouse.button === Qt.LeftButton)
                                     root.ouvrirFenetre(trayDelegate.modelData)

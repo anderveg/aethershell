@@ -547,7 +547,7 @@ Rectangle {
     }
 
     // ── Applets de la barre ──────────────────────────────────────────────────
-    // Le registre (core/bar_applets.py) est la seule source de vérité : le
+    // Le registre (as-core bar-applets) est la seule source de vérité : le
     // panneau ne fait que l'interroger et lui envoyer des ordres. Comme c'est un
     // dictionnaire `id → placement`, cocher deux fois ou placer ailleurs ne peut
     // pas créer de doublon : la dernière décision remplace la précédente.
@@ -721,7 +721,7 @@ Rectangle {
 
     // Activation du visualiseur audio : absent de la liste des applets (pas
     // d'emplacement), son état se lit dans la même liste, produite par
-    // bar_applets.py.
+    // as-core bar-applets.
     readonly property bool vizActif: {
         for (let i = 0; i < root.appletRows.length; ++i) {
             const a = root.donneeApplet(root.appletRows[i])

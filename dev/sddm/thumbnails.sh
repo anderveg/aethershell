@@ -7,8 +7,8 @@
 #
 # Le panneau liste deux familles : les configurations du thème astronaut
 # (couleurs/police dans Themes/*.conf) et les thèmes complets récupérés par
-# dev/sddm/qylock.py (un dossier QML autonome, miniatures lues dans le cache
-# ou dans /usr/share). core/greeter_manager.py `sources` donne la liste —
+# `as-core qylock` (un dossier QML autonome, miniatures lues dans le cache
+# ou dans /usr/share). `as-core greeter sources` donne la liste —
 # c'est lui qui décide de l'identifiant affiché, donc les noms de fichiers ici
 # correspondent exactement à ceux que le panneau cherche.
 #
@@ -32,7 +32,7 @@ command -v magick >/dev/null || die "magick requis"
 mkdir -p "$OUT"
 
 # sources : une ligne « id<TAB>dossier<TAB>astronaut|qylock » par thème.
-mapfile -t rows < <(python3 "$DEV/core/greeter_manager.py" sources "$@")
+mapfile -t rows < <("$DEV/core/as-core" greeter sources "$@")
 [ "${#rows[@]}" -gt 0 ] || die "aucun thème à prévisualiser${*:+ : $*}"
 
 for row in "${rows[@]}"; do

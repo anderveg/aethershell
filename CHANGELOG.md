@@ -9,6 +9,24 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **`x.yy.x.x`** : ajout de fonctionnalités décisives (ex. : ajout de l'Îlot dynamique).
 - **Version majeure (`y.x.x.x`)** : conservation du schéma déjà en place (proposée lorsque l'ampleur des changements le justifie ; décision finale validée par l'utilisateur).
 
+## [0.4.4.2] — 2026-11-23
+
+### Supprimé
+- **Purge des reliquats Python (R4, effectif au déploiement)** (`dev/core/`, `dev/rust/as-core/src/config/config_mgr.rs`, `dev/core/applets_catalogue.json`, `dev/core/llm_providers.json`) :
+  - Les `.py` du backend (72 encore présents dans `~/.config/quickshell/core` avant ce déploiement, 0 dans le dépôt) sont élagués par le pré-vol de `install.sh` : `as-core` est désormais l'unique backend, y compris pour `hermes-approbations.service` (`ExecStart=…/as-core hermes-approbations serveur`).
+  - `dev/core/__pycache__` résiduel supprimé (dev et installation).
+  - Table `normalize_subcmd` de `main.rs` réduite au seul retrait du préfixe de chemin ; les entrées `service` de `applets_catalogue.json` et `llm_providers.json` ramenées aux sous-commandes (`disques`, `deepseek`…) ; `llm_providers.json` retiré de `PRESERVE_CORE` (catalogue statique, les clés vivent dans `secrets.json`).
+- **Scripts de rotation et de synchronisation obsolètes** (`rotate.sh`, `sync_to_*.sh`, `wallpaper_switcher.sh`) : plus aucune référence ni dans le dépôt ni dans la configuration déployée. La rotation d'écran et de la dalle tactile est assurée par le daemon Rust `as-core tablet-mode` (`apply_monitor_transform`, `sync_touch_transform`, verrou `tablet_rotation_lock`), qui rend le doublon `monitor-sensor` de `rotate.sh` inutile ; les copies résiduelles ne subsistent que dans des sauvegardes (`~/.config/hypr.old/`, `~/.config/backups_env/`).
+
+### Corrigé
+- **Appels `python3` restants après la purge R4** (`dev/rust/as-core/src/config/greeter.rs`, `dev/rust/as-core/src/config/icones.rs`) : deux sites appelaient encore des scripts `.py` supprimés et n'existaient plus sur une installation neuve.
+  - `greeter apply palette` / `greeter refresh` lançaient `python3 dev/sddm/generate.py` (fichier purgé) : le chemin échouait avec « génération impossible » ; il appelle désormais le portage Rust `config::greeter_gen::run()` (`as-core gen-palette`), seule implémentation restante.
+  - `config icons apply` lançait `python3 core/app_index.py` sous condition d'existence (donc silencieusement inerte) : il relance maintenant l'index via le binaire lui-même (`as-core app-index --quiet`), comme `LauncherEngine.qml`.
+- **Marqueur du générateur de palette SDDM** (`dev/sddm/greeter-palette`) : le helper polkit exigeait `# Généré par dev/sddm/generate.py`, alors que `as-core greeter gen-palette` écrit `# Généré par as-core greeter gen-palette` depuis le portage Rust — `set-palette` échouait donc avec « conf: marqueur du générateur absent ». Le marqueur courant est reconnu, l'ancien reste accepté pour les confs générées avant R4.
+
+### Modifié
+- **Documentation alignée sur le backend Rust** (`README.md`, `docs/README.md`) : la ligne « Python » du tableau des chemins dynamiques devient « Rust » (`paths::home_dir()` / `paths::runtime_dir()`), et `dev/core/` est décrit comme binaire `as-core` + catalogues JSON + scripts shell d'intégration (plus de « services Python ») ; `docs/README.md` gagne la ligne `rust/as-core/` manquante dans l'arborescence.
+
 ## [0.4.4.1] — 2026-11-23
 
 ### Ajouté & Corrigé

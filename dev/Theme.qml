@@ -740,7 +740,7 @@ QtObject {
     }
 
     // Catalogue des schémas de couleurs du disque (core/palette_cache.json), tenu
-    // par themes_scan.py. Le shell le relit quand il change : un `.colors` ajouté
+    // par as-core themes-scan. Le shell le relit quand il change : un `.colors` ajouté
     // ou retiré des deux dossiers apparaît dans le panneau sans redémarrer.
     function relireCatalogue() {
         catalogueFile.reload()

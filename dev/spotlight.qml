@@ -20,7 +20,7 @@ Item {
     property var results: []
     property int sel: 0
     onSelChanged: root.majApercu()
-    // Résultats d'un prestataire (core/launcher_service.py) : même forme que les
+    // Résultats d'un prestataire (as-core launcher) : même forme que les
     // entrées locales, plus `action` quand l'effet n'est pas de lancer un programme.
     property var serviceResults: []
     property string serviceKind: ""

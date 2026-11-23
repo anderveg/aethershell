@@ -16,7 +16,7 @@ import Quickshell.Hyprland
 // Sur une tour, rien de tout cela n'existe : le panneau le dit au lieu de
 // s'ouvrir vide. Sur un portable, les deux blocs apparaissent.
 //
-// Les commandes restent `core/system_service.py` (info / brightness / limit) :
+// Les commandes restent `as-core system-service` (info / brightness / limit) :
 // une seule source pour le matériel, la même que celle de l'applet luminosité.
 Item {
     id: root
@@ -94,7 +94,7 @@ Item {
 
     Process {
         id: action
-        // La sortie de `system_service.py` est du JSON, `error` compris : sans la
+        // La sortie de `as-core system-service` est du JSON, `error` compris : sans la
         // lire, un refus d'autorisation ou un mécanisme absent ne se voyait que
         // comme un interrupteur qui revient tout seul. `-u normal` : l'échec doit
         // se lire, il ne disparaît pas comme une notification d'agrément.

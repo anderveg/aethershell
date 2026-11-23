@@ -14,7 +14,7 @@ import QtQuick
 //
 // La valeur n'est écrite dans le backend qu'au relâchement (et sur la molette),
 // jamais à chaque pixel de glissement : `valueModified` déclenche un
-// `config_manager.py` complet, on ne le lance pas soixante fois par seconde.
+// `as-core config` complet, on ne le lance pas soixante fois par seconde.
 Item {
     id: root
 

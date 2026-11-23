@@ -11,19 +11,9 @@ if [ ! -f "$STYLE_VARS" ]; then
     STYLE_VARS="$HOME/dev/aethershell/dev/core/style_vars.json"
 fi
 
-WALLPAPER_DIR="$(python3 - "$STYLE_VARS" << 'EOF' 2>/dev/null
-import json, os, sys
-p = sys.argv[1] if len(sys.argv) > 1 else ""
-val = "$HOME/Images/wallpapers/"
-if p and os.path.exists(p):
-    try:
-        with open(p, "r") as f:
-            val = json.load(f).get("wallpaper_dir") or val
-    except Exception:
-        pass
-print(os.path.expandvars(os.path.expanduser(val)))
-EOF
-)"
+# Dossier configuré (valeur stockée avec un $HOME littéral : on l'étend après).
+WALLPAPER_DIR="$(jq -r '.wallpaper_dir // ""' "$STYLE_VARS" 2>/dev/null || true)"
+WALLPAPER_DIR="${WALLPAPER_DIR//\$HOME/$HOME}"
 [ -z "$WALLPAPER_DIR" ] && WALLPAPER_DIR="$HOME/Images/wallpapers/"
 export WALLPAPER_DIR
 

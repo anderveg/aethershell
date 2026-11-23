@@ -8,14 +8,14 @@ import Quickshell.Hyprland
 //
 // Ce composant ne sait rien de ce qu'il affiche : il lance le service déclaré
 // dans le catalogue (`applets_catalogue.json`), lit le contrat
-// (core/applet_contrat.py) et dessine. Un applet de plus = une entrée de
+// (common/contrat.rs) et dessine. Un applet de plus = une entrée de
 // catalogue + un service ; aucun QML à écrire.
 //
 // La barre ne montre qu'une valeur (`compact.valeur`) : c'est le service qui
 // choisit ce qui compte, parce que lui seul sait ce qui est grave.
 Item {
     id: root
-    // Entrée résolue par bar_applets.py : id, nom, icone, service, popup,
+    // Entrée résolue par as-core bar-applets : id, nom, icone, service, popup,
     // cadence, text_scale, options.
     property var applet: ({})
 

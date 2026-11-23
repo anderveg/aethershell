@@ -7,7 +7,7 @@ import Quickshell.Io
 //
 // Deux choses y vivent : les valeurs complètes (RAM en Go, VRAM, température du
 // GPU) et le choix des mesures affichées dans la barre. Ce choix s'écrit dans le
-// registre (`bar_applets.py option systeme mesures [...]`), donc il survit au
+// registre (`as-core bar-applets option systeme mesures [...]`), donc il survit au
 // redémarrage et vaut aussi pour la barre — pas de réglage en double.
 Item {
     id: root

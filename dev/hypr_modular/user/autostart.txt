@@ -5,3 +5,7 @@
 #
 # Exemple :
 # syncthing --no-browser
+
+# >>> panneau
+protonvpn-app
+# <<< panneau

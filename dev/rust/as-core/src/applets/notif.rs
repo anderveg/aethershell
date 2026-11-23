@@ -826,3 +826,66 @@ pub fn run_target(args: &[String]) -> i32 {
     }
     0
 }
+
+/// Adresse d'une fenêtre déjà ouverte qui correspond à un des motifs.
+///
+/// Port de l'héritage Python de `core/notif_open.sh` : deux passes, la classe
+/// d'abord (fiable), le titre ensuite — un titre contient n'importe quoi, y
+/// compris le nom de l'application cherchée, donc il ne compte qu'à partir de
+/// quatre caractères. Les motifs arrivent par l'entrée standard, un par ligne ;
+/// rien ne sort quand aucune fenêtre ne correspond.
+pub fn run_window(args: &[String]) -> i32 {
+    let mut brut = String::new();
+    let _ = io::stdin().read_to_string(&mut brut);
+    let motifs: Vec<String> = brut
+        .lines()
+        .map(|l| l.trim().to_lowercase())
+        .filter(|l| !l.is_empty())
+        .collect();
+    if motifs.is_empty() {
+        return 0;
+    }
+    let clients = match crate::common::io::run_cmd("hyprctl", &["clients", "-j"]) {
+        Some(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
+        _ => return 0,
+    };
+    let liste: Vec<Value> = match serde_json::from_str::<Value>(&clients) {
+        Ok(Value::Array(a)) => a,
+        _ => return 0,
+    };
+
+    for passe in ["classe", "titre"] {
+        for client in &liste {
+            let champs: Vec<String> = if passe == "classe" {
+                vec![
+                    client.get("class").and_then(|v| v.as_str()).unwrap_or("").to_lowercase(),
+                    client
+                        .get("initialClass")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_lowercase(),
+                ]
+            } else {
+                vec![client.get("title").and_then(|v| v.as_str()).unwrap_or("").to_lowercase()]
+            };
+            for champ in champs {
+                for motif in &motifs {
+                    let touche = if passe == "classe" {
+                        champ == *motif || champ.contains(motif.as_str())
+                    } else {
+                        motif.chars().count() >= 4 && champ.contains(motif.as_str())
+                    };
+                    if touche {
+                        let adresse = client.get("address").and_then(|v| v.as_str()).unwrap_or("");
+                        if !adresse.is_empty() {
+                            println!("{adresse}");
+                        }
+                        return 0;
+                    }
+                }
+            }
+        }
+    }
+    let _ = args;
+    0
+}

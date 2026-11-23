@@ -41,7 +41,7 @@ Singleton {
     // temps donneraient deux animations désynchronisées du même son.
     property string barre: "haut"
 
-    // Filtre des navigateurs : même liste que core/musique_applet.py, pour que
+    // Filtre des navigateurs : même liste que as-core musique, pour que
     // « filtrer les navigateurs » veuille dire la même chose dans les deux
     // applets. Le son d'un navigateur est ignoré : la capture est celle du
     // sink entier, on ne peut pas l'isoler, donc on cesse de le visualiser.

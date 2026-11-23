@@ -7,7 +7,7 @@ import Quickshell.Io
 
 // HERMES — observatoire et lanceur de l'agent.
 //
-// Source : `core/hermes_applet.py` et `core/hermes_lecteur.py`.
+// Source : `as-core hermes` et `as-core hermes-lecteur`.
 // Vue compacte par défaut (sessions récentes, jetons, état) et volet enrichi
 // dépliable/repliable pour ne pas surcharger le bureau :
 //   - État et redémarrage du gateway (service systemd)

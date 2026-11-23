@@ -5,7 +5,7 @@ import Quickshell.Io
 // ────────────────────────────────────────────────────────────────────────────
 // CALENDRIER COMPACT — la grille du mois, à l'intérieur du widget « date »
 //
-// Même source que le panneau de l'applet (core/nextcloud_service.py month …),
+// Même source que le panneau de l'applet (as-core nextcloud month …),
 // mais une autre présentation : pas de formulaire, pas de cache multi-mois, pas
 // de fenêtre à ancrer. Le widget s'étend et la grille apparaît dessous.
 //

@@ -4,7 +4,7 @@ import Quickshell.Io
 
 // POPUP « TÂCHES » — les cases à cocher des fichiers Markdown de l'utilisateur.
 //
-// Source : `core/todo_applet.py`. Cocher n'est pas une décoration : l'applet
+// Source : `as-core todo`. Cocher n'est pas une décoration : l'applet
 // écrit `- [x]` dans le fichier et dépose une demande que l'agent consomme. Le
 // panneau le dit quand une demande attend encore — sinon on croit que la coche
 // n'a rien fait.

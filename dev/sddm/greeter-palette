@@ -16,7 +16,9 @@ set -euo pipefail
 THEME="/usr/share/sddm/themes/sddm-astronaut-theme"
 SDDM_CONF="/etc/sddm.conf.d/10-sddm-theme.conf"
 SDDM_LOCALE_DROPIN="/etc/systemd/system/sddm.service.d/locale.conf"
-MARKER="# Généré par dev/sddm/generate.py"
+MARKER="# Généré par as-core greeter gen-palette"
+# Compatibilité : confs générées par l'ancien `dev/sddm/generate.py` (purgé en R4).
+MARKER_LEGACY="# Généré par dev/sddm/generate.py"
 QT_LOG_FILTER="*.debug=false;qt.qpa.wayland*=false;qt.qml.propertyCache*=false;kwin_*=false;kf.*=false"
 
 die() { echo "greeter-palette: $*" >&2; exit 2; }
@@ -179,7 +181,8 @@ set-palette)
     # Le fichier doit être celui du générateur : marqueur + uniquement des
     # sections, des commentaires et des couples CLE="valeur".
     grep -qxF "[General]" "$src_conf" || die "conf: en-tête inattendu"
-    grep -qF "$MARKER" "$src_conf" || die "conf: marqueur du générateur absent"
+    grep -qF "$MARKER" "$src_conf" || grep -qF "$MARKER_LEGACY" "$src_conf" \
+        || die "conf: marqueur du générateur absent"
     if grep -vE '^[[:space:]]*$|^#|^\[[A-Za-z]+\]$|^[A-Za-z]+="[^"\\]*"$' "$src_conf" >/dev/null; then
         die "conf: ligne non reconnue"
     fi

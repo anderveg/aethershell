@@ -7,7 +7,7 @@ import Quickshell.Io
 
 // TÂCHES — les cases à cocher des fichiers Markdown de l'utilisateur.
 //
-// Même source que l'applet et le popup : `core/todo_applet.py`. Le widget compte
+// Même source que l'applet et le popup : `as-core todo`. Le widget compte
 // les items ouverts et montre les premiers ; une demande déposée par une coche
 // passe en couleur d'accent, parce que c'est elle qui attend une action.
 Item {

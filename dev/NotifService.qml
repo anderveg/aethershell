@@ -249,7 +249,7 @@ Item {
         command: [Quickshell.shellPath("core/as-core"), "notif-target", "--serve"]
         onStarted: service.pumpNotifTargets()
         onExited: {
-            console.warn("notif_target.py s'est arrêté, nouvelle tentative dans 5 s")
+            console.warn("as-core notif-target s'est arrêté, nouvelle tentative dans 5 s")
             notifResolverRestart.restart()
         }
         stdout: SplitParser {

@@ -164,7 +164,7 @@ Flow {
     Repeater {
         // Les palettes viennent de style_vars.json ; les schémas de
         // couleurs KDE installés y sont importés au chargement du
-        // panneau (`themes_scan.py --sync`), donc ils apparaissent ici.
+        // panneau (`as-core themes-scan --sync`), donc ils apparaissent ici.
         model: Theme.paletteNoms.length > 0 ? Theme.paletteNoms
                                 : ["dynamic"]
         Rectangle {

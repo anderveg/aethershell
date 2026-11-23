@@ -21,11 +21,7 @@ resoudre() {
     [ -n "${AETHER_TERMINAL:-}" ] && candidats+=("$AETHER_TERMINAL")
     fichier="$(dirname "$(readlink -f "$0")")/app_vars.json"
     if [ -f "$fichier" ]; then
-        t=$(python3 -c 'import json,sys
-try:
-    print(json.load(open(sys.argv[1])).get("Terminal","") or "")
-except Exception:
-    print("")' "$fichier" 2>/dev/null)
+        t=$(jq -r '.Terminal // ""' "$fichier" 2>/dev/null || true)
         [ -n "$t" ] && candidats+=("$t")
     fi
     candidats+=(ghostty kitty foot alacritty konsole xterm)
@@ -87,12 +83,8 @@ COMMANDE_FINALE="$(printf '%q %q' "$WRAPPER" "$CORPS")"
 STYLE_FILE="$(dirname "$(readlink -f "$0")")/style_vars.json"
 MAJ_MODE="float"
 if [ -f "$STYLE_FILE" ]; then
-    MAJ_MODE=$(python3 -c 'import json,sys
-try:
-    v = str(json.load(open(sys.argv[1])).get("maj_terminal_mode","float") or "float").lower()
-    print("tiling" if v == "tiling" else "float")
-except Exception:
-    print("float")' "$STYLE_FILE" 2>/dev/null)
+    MAJ_MODE=$(jq -r '.maj_terminal_mode // "float" | tostring | ascii_downcase
+        | if . == "tiling" then "tiling" else "float" end' "$STYLE_FILE" 2>/dev/null || true)
 fi
 
 lancer_hors_cgroup() {

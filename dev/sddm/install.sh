@@ -4,7 +4,7 @@
 #
 #   bash dev/sddm/install.sh              installation complète (une invite polkit)
 #   bash dev/sddm/install.sh --colors-only # palette + fond seuls, après un changement
-#   bash dev/sddm/install.sh --qylock <nom…> # thèmes qylock récupérés (qylock.py)
+#   bash dev/sddm/install.sh --qylock <nom…> # thèmes qylock récupérés (as-core qylock fetch)
 #   ASK_SUDO=1 bash dev/sddm/install.sh   # machine sans agent polkit (sudo à la place)
 #
 # Prérequis : le thème sddm-astronaut installé dans /usr/share/sddm/themes/.
@@ -35,7 +35,7 @@ RUNNER="pkexec"
 die() { echo "install.sh: $*" >&2; exit 1; }
 
 # --qylock : installe dans /usr/share/sddm/themes des thèmes récupérés par
-# dev/sddm/qylock.py. Ne touche pas à la sélection courante — le panneau
+# `as-core qylock`. Ne touche pas à la sélection courante — le panneau
 # (onglet Connexion) le fait ensuite par le helper polkit. Les variantes d'un
 # même thème (clockwork en contient trois) sont aplaties en <thème>-<variante> :
 # SDDM ne sait nommer qu'un dossier de premier niveau dans Current=.
@@ -56,7 +56,7 @@ if [ "${1:-}" = "--qylock" ]; then
         echo "install -Dm644 '$DEV/50-greeter-palette.rules' /etc/polkit-1/rules.d/50-greeter-palette.rules"
         for name in "$@"; do
             src="$QCACHE/$name"
-            [ -d "$src" ] || die "thème non récupéré : $name (python3 dev/sddm/qylock.py fetch $name)"
+            [ -d "$src" ] || die "thème non récupéré : $name (as-core qylock fetch $name)"
             for sub in "$src"/*/; do
                 [ -f "$sub/metadata.desktop" ] || continue
                 dst="$name-$(basename "${sub%/}")"
@@ -77,7 +77,7 @@ if [ "${1:-}" = "--qylock" ]; then
     echo
     echo "thèmes présents dans /usr/share/sddm/themes :"
     ls -1d /usr/share/sddm/themes/*/ 2>/dev/null | sed 's|.*/themes/||; s|/$||; s|^|  |'
-    echo "(sélection : panneau → Connexion, ou greeter_manager.py apply <nom>)"
+    echo "(sélection : panneau → Connexion, ou as-core greeter apply <nom>)"
     exit 0
 fi
 
@@ -87,7 +87,7 @@ if [ ! -d "$THEME" ]; then
     fi
     die "thème absent : installer sddm-astronaut-theme (AUR : yay -S, ou pacman -U du paquet construit à la main)"
 fi
-[ -f "$DEV/generate.py" ] || die "generate.py introuvable"
+[ -x "$DEV/core/as-core" ] || die "backend as-core introuvable (lancer dev/rust/build.sh)"
 
 # La police est demandée en dur par palette.conf (Font="Inter") : sans elle le
 # thème se rabat sur une autre fonte, sans message. fc-match plutôt que
@@ -103,7 +103,7 @@ case "$(fc-match -f '%{family}' Inter 2>/dev/null || true)" in
 esac
 
 echo "▶ génération depuis style_vars.json"
-python3 "$DEV/generate.py"
+"$DEV/core/as-core" greeter gen-palette
 [ -f "$DEV/out/Themes/palette.conf" ] || die "palette.conf non généré"
 [ -f "$DEV/out/Backgrounds/wallpaper.png" ] || die "fond non généré"
 
@@ -112,7 +112,7 @@ python3 "$DEV/generate.py"
 KB_LAYOUT="fr"
 for candidate_style in "$HOME/.config/quickshell/core/style_vars.json" "$DEV/../core/style_vars.json"; do
     if [ -f "$candidate_style" ]; then
-        detected_kb="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("kb_layout",""))' "$candidate_style" 2>/dev/null || true)"
+        detected_kb="$(jq -r '.kb_layout // ""' "$candidate_style" 2>/dev/null || true)"
         if [[ "$detected_kb" =~ ^[a-z]{2}(-[a-z0-9_]+)?$ ]]; then
             KB_LAYOUT="$detected_kb"
             break

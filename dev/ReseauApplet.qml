@@ -10,7 +10,7 @@ import Quickshell.Hyprland
 // l'îlot droit — l'état, la lecture périodique, le balayage, la connexion et le
 // panneau de gestion. L'îlot n'en sait plus rien.
 //
-// La lecture passe par `system_service.py info` toutes les 10 s plutôt que par
+// La lecture passe par `as-core system-service info` toutes les 10 s plutôt que par
 // le processus système de l'îlot : l'applet doit pouvoir vivre seul, dans
 // n'importe quel îlot, sans dépendre d'un voisin qui l'interrogerait pour lui.
 Item {
@@ -654,7 +654,7 @@ Item {
 
     // ────────────────────────────────────────────────────────────────────────
 
-    // Bluetooth : centralisé dans SystemServices.qml (core/bluetooth_service.py)
+    // Bluetooth : centralisé dans SystemServices.qml (as-core bluetooth)
     readonly property bool btPresent: SystemServices.btPresent
     readonly property bool btAllume: SystemServices.btPowered
     readonly property var btAppareils: SystemServices.btDevices

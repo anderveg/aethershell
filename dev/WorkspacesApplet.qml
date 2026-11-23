@@ -8,7 +8,7 @@ import Quickshell.Hyprland
 //
 // Composant QML (`genre: "qml"`). Il emporte avec lui tout ce qui le faisait
 // vivre : le modèle des bureaux, les envois à Hyprland, l'écoute des événements,
-// le repli sur `workspace_service.py` et la molette. Déplacé dans ce fichier,
+// le repli sur `as-core workspace` et la molette. Déplacé dans ce fichier,
 // il garde exactement le même rendu — mais l'îlot gauche n'est plus qu'un
 // conteneur, et l'applet peut être posé dans n'importe quel îlot.
 Item {
@@ -30,7 +30,7 @@ Item {
     // Permanent workspaces defined in ~/.config/hypr/hyprland.lua
     readonly property var permanentNames: ["一", "二", "三", "四", "五"]
 
-    // Active workspace tracked live via Quickshell.Hyprland (with fallback to workspace_service.py)
+    // Active workspace tracked live via Quickshell.Hyprland (with fallback to as-core workspace)
     property int fallbackActiveId: 1
     readonly property int activeWorkspaceId: (Hyprland.focusedWorkspace && Hyprland.focusedWorkspace.id > 0)
         ? Hyprland.focusedWorkspace.id

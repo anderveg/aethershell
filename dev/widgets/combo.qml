@@ -7,7 +7,7 @@ import Quickshell.Io
 
 // COMBO — horloge, date et météo dans une seule carte.
 //
-// Même source de données que widgets/meteo.qml (core/weather_service.py, cache
+// Même source de données que widgets/meteo.qml (as-core weather, cache
 // partagé de dix minutes, donc aucun appel réseau en double si la météo seule
 // est aussi posée quelque part).
 Item {

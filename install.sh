@@ -497,7 +497,7 @@ MARKER="$CURRENT_HYPR/.quickshell_managed"
 # la liste au cas par cas).
 JSON_DEPLOYES="applets_catalogue.json emoji.json tray_icons.json secrets.example.json"
 
-PRESERVE_CORE="style_vars.json app_vars.json secrets.json autostart.json widgets.json notif_targets.json llm_providers.json bar_applets.json homelab.json launch_history.json todo.json"
+PRESERVE_CORE="style_vars.json app_vars.json secrets.json autostart.json widgets.json notif_targets.json bar_applets.json homelab.json launch_history.json todo.json"
 # colors.lua est *généré* par sync_theme.sh depuis style_vars.json :
 # il n'est ni préservé ni comparé (sinon .upstream à chaque changement de palette).
 # programs.lua est *généré* depuis core/app_vars.json (sync_programs_lua) et
@@ -739,6 +739,29 @@ pkg_for_bin() {
     esac
 }
 
+# ── Backend Rust (`as-core`) ────────────────────────────────────────────────
+# `dev/core/as-core` est ignoré par Git : un clone frais n'en contient aucun, et
+# le shell ne peut rien afficher sans lui (plus un seul script Python ne reste).
+# On compile donc dès que le binaire manque ou qu'une source est plus récente.
+compiler_as_core() {
+    local bin="$DEV_DIR/core/as-core" build="$DEV_DIR/rust/build.sh"
+    [ -f "$build" ] || return 0
+    if [ -x "$bin" ] && [ -z "$(find "$DEV_DIR/rust/as-core/src" "$DEV_DIR/rust/as-core/Cargo.toml" \
+            -newer "$bin" -print -quit 2>/dev/null)" ]; then
+        return 0
+    fi
+    if ! command -v cargo >/dev/null 2>&1; then
+        if [ -x "$bin" ]; then
+            return 0
+        fi
+        echo "⚠️  cargo absent : impossible de compiler le backend as-core." >&2
+        echo "    Installer Rust (rustup ou paquet rust/cargo), puis relancer." >&2
+        return 0
+    fi
+    echo "▶ Compilation du backend as-core (Rust)"
+    bash "$build" || { echo "⚠️  compilation de as-core échouée" >&2; return 0; }
+}
+
 build_pwscope_if_ready() {
     [ "${DRY_RUN:-0}" != "1" ] || return 0
     [ -f "$DEV_DIR/core/pwscope_make.sh" ] || return 0
@@ -880,7 +903,7 @@ install_missing_dependencies() {
 
     case "$PKG_MGR" in
         pacman)
-            local -a official_pkgs=("python-pillow" "python-numpy" "pipewire")
+            local -a official_pkgs=("pipewire")
             local -a aur_pkgs=()
             for p in "${unique_pkgs[@]}"; do
                 if pacman -Si "$p" >/dev/null 2>&1; then
@@ -934,7 +957,7 @@ install_missing_dependencies() {
                 esac
             fi
             if [ "${#dnf_pkgs[@]}" -gt 0 ]; then
-                sudo dnf install -y "${dnf_pkgs[@]}" python3-pillow python3-numpy pipewire-devel || return 1
+                sudo dnf install -y "${dnf_pkgs[@]}" pipewire-devel || return 1
             fi
             if [ "$need_unimatrix" -eq 1 ]; then
                 install_unimatrix_local || return 1
@@ -950,7 +973,7 @@ install_missing_dependencies() {
                 fi
             fi
             sudo apt-get update
-            local -a apt_pkgs=("python3-venv" "python3-pip" "python3-pil" "python3-numpy" "libpipewire-0.3-dev" "curl" "git")
+            local -a apt_pkgs=("libpipewire-0.3-dev" "curl" "git")
             local -a non_apt_pkgs=()
             for p in "${unique_pkgs[@]}"; do
                 if apt-cache show "$p" >/dev/null 2>&1; then
@@ -1267,13 +1290,17 @@ installer_crochets_git() {
 }
 
 # ── Neutralité : ni nom d'utilisateur ni nom de machine en dur ──────────────
-# Le dépôt doit s'installer chez quelqu'un d'autre. `core/neutralite.py` lit les
+# Le dépôt doit s'installer chez quelqu'un d'autre. `as-core neutralite` lit les
 # fichiers suivis et cherche le nom de la personne qui lance le déploiement, son
 # nom d'hôte, et tout `/home/<nom>` qui n'est pas un espace réservé. Avertissement
 # seulement : un déploiement ne doit pas être bloqué par une ligne de commentaire.
 verifier_neutralite() {
     local sortie
-    if ! sortie="$(python3 "$DEV_DIR/core/neutralite.py" 2>&1)"; then
+    # Binaire compilé par dev/rust/build.sh : absent d'un clone frais (il est
+    # ignoré par Git), et la vérification est alors sautée — elle reste un
+    # avertissement, jamais un blocage.
+    [ -x "$DEV_DIR/core/as-core" ] || return 0
+    if ! sortie="$("$DEV_DIR/core/as-core" neutralite 2>&1)"; then
         echo
         echo "⚠️  Neutralité du dépôt — à corriger avant de publier :"
         echo "$sortie" | sed 's/^/    /'
@@ -1779,7 +1806,7 @@ poser_flou_gtk4() {
 #
 # Le dossier cible n'est pas un dépôt git : déployé, le shell ne peut pas
 # répondre seul à « quelle version tourne ? ». Le panneau (« Écrans & Système »)
-# l'affiche et `core/maj_shell.py` la compare au dernier tag publié sur GitHub.
+# l'affiche et `as-core maj-shell` la compare au dernier tag publié sur GitHub.
 # C'est un état de la machine, comme les autres .json non livrés de core/ :
 # `est_etat_machine` le protège, donc aucune version ultérieure ne l'écrase ni
 # ne l'élague — il est réécrit à chaque déploiement, et c'est voulu.
@@ -1854,7 +1881,7 @@ installer_greeter_helper() {
     local kb="fr"
     if [ -f "$CORE_DIR/style_vars.json" ]; then
         local detected_kb
-        detected_kb=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("kb_layout",""))' "$CORE_DIR/style_vars.json" 2>/dev/null || true)
+        detected_kb=$("$CORE_DIR/as-core" config get kb_layout 2>/dev/null || true)
         [[ "$detected_kb" =~ ^[a-z]{2}(-[a-z0-9_]+)?$ ]] && kb="$detected_kb"
     fi
     if [ -x /usr/local/bin/greeter-palette ] && [ -f /etc/polkit-1/rules.d/50-greeter-palette.rules ]; then
@@ -1884,6 +1911,9 @@ EOF
 }
 
 deploy_new_env() {
+    # Le binaire Rust est la seule implémentation restante : sans lui, rien ne
+    # répond dans la barre. Compilé ici, avant la copie vers ~/.config.
+    compiler_as_core
     echo "🚀 Deploying $DISTRO_TITLE ($FORM_TITLE)..."
 
     mkdir -p "$CURRENT_HYPR"
@@ -1943,7 +1973,7 @@ deploy_new_env() {
     # racine, et l'élagage l'aurait retirée de la cible juste après la copie.
     cp -f "$DEPS_FILE" "$CORE_DIR/dependencies.txt" || true
     # Quelle version vient d'être posée : le dossier déployé n'est pas un dépôt
-    # git, le panneau et core/maj_shell.py n'ont que ce fichier pour le savoir.
+    # git, le panneau et as-core maj-shell n'ont que ce fichier pour le savoir.
     ecrire_version_deployee
     # Flou des fenêtres GTK4 (région `backdrop-filter` demandée au compositeur).
     poser_flou_gtk4
@@ -1951,8 +1981,6 @@ deploy_new_env() {
     # pas du dépôt — régénérées à chaque déploiement (et à chaque ouverture).
     if [ -x "$CORE_DIR/as-core" ]; then
         "$CORE_DIR/as-core" app-index --quiet || true
-    elif [ -f "$CORE_DIR/app_index.py" ]; then
-        python3 "$CORE_DIR/app_index.py" --quiet || true
     fi
     build_pwscope_if_ready
 
@@ -1960,9 +1988,6 @@ deploy_new_env() {
     # la copie ci-dessus peut poser la version du dépôt, on réécrit la vraie.
     if [ -x "$CORE_DIR/as-core" ]; then
         "$CORE_DIR/as-core" config sync_generated >/dev/null 2>&1 \
-            || echo "  ⚠️  régénération de programs.lua / autostart_cmds.txt impossible"
-    elif [ -f "$CORE_DIR/config_manager.py" ]; then
-        python3 "$CORE_DIR/config_manager.py" sync_generated >/dev/null 2>&1 \
             || echo "  ⚠️  régénération de programs.lua / autostart_cmds.txt impossible"
     fi
     if [ ! -f "$CORE_DIR/secrets.json" ] && [ -f "$CORE_DIR/secrets.example.json" ]; then

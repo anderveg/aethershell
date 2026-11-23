@@ -8,7 +8,7 @@ import Quickshell.Wayland
 // plugin Noctalia `wallpaper_depth` (MIT) :
 // https://github.com/noctalia-dev/official-plugins/tree/main/wallpaper_depth
 //
-// Le service `core/depth_mask.py` estime une carte de profondeur du fond courant
+// Le service `as-core depth-mask` estime une carte de profondeur du fond courant
 // (Depth Anything V2 Small, en local) et en tire un masque : blanc = devant,
 // noir = derrière. Ce calque dessine ce masque **au-dessus des widgets de bureau
 // et sous les fenêtres** (couche `bottom`) : les widgets apparaissent alors

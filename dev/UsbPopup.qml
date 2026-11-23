@@ -5,7 +5,7 @@ import Quickshell.Io
 // POPUP « PÉRIPHÉRIQUES » — ce qui est branché, ce qui est monté, et les gestes
 // qu'on peut faire dessus sans ouvrir un terminal.
 //
-// Source : `core/usb_applet.py`, qui lit sysfs, udev et mountinfo (aucun démon).
+// Source : `as-core usb`, qui lit sysfs, udev et mountinfo (aucun démon).
 // Les actions passent par udisksctl, donc par polkit : ce que l'utilisateur n'a
 // pas le droit de faire échoue avec le message du système, jamais en silence.
 Item {

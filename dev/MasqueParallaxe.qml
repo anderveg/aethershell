@@ -12,7 +12,7 @@ import Quickshell.Wayland
 // les bosquets de gauche à 0,19 et l'eau à 0,14 — aucun seuil ne peut réunir
 // des zones que le modèle sépare ainsi.
 //
-// Les traits sont envoyés en coordonnées normalisées à core/masque_peinture.py,
+// Les traits sont envoyés en coordonnées normalisées à `as-core masque-peinture`,
 // qui rastérise à la taille de l'écran (blanc, bord adouci) et écrit
 // `<dossier du fond>/masque.png`. La génération des calques suit, avec
 // `--masque-de`, puis `Theme.calquesVersion` fait relire les images au fond.

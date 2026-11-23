@@ -1,7 +1,7 @@
 [
     {
         "name": "Hermes (canal d'approbation)",
-        "cmd": "sh -c 'pgrep -f hermes_approbations.py >/dev/null || exec python3 \"$HOME/.config/quickshell/core/hermes_approbations.py\" serveur' &",
+        "cmd": "sh -c 'pgrep -f \"as-core hermes-approbations\" >/dev/null || exec \"$HOME/.config/quickshell/core/as-core\" hermes-approbations serveur' &",
         "enabled": true
     },
     {
@@ -31,7 +31,7 @@
     },
     {
         "name": "Focus de l'invite polkit",
-        "cmd": "sh -c '/usr/bin/pgrep -f core/polkit_focus.py >/dev/null && exit 0; exec python3 ~/.config/quickshell/core/polkit_focus.py'",
+        "cmd": "sh -c '/usr/bin/pgrep -f \"as-core polkit-focus\" >/dev/null && exit 0; exec \"$HOME/.config/quickshell/core/as-core\" polkit-focus'",
         "enabled": true
     },
     {

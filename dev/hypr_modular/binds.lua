@@ -27,7 +27,7 @@ hl.bind(mainMod .. " + CTRL + Down",  hl.dsp.window.swap({ direction = "d" }), {
 -- relative = true est OBLIGATOIRE : sans lui, x/y sont interprétés comme une
 -- taille absolue (d'où l'erreur « invalid size » à chaque appui).
 -- Le pas est lu dans core/style_vars.json ("resize_step"), modifiable depuis
--- le panneau (Aspect technique). config_manager.py déclenche un `hyprctl reload`
+-- le panneau (Aspect technique). as-core config déclenche un `hyprctl reload`
 -- après modification, ce qui réévalue ce fichier avec la nouvelle valeur.
 local function read_resize_step()
     local p = os.getenv("HOME") .. "/.config/quickshell/core/style_vars.json"

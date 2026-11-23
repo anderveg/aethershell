@@ -54,7 +54,7 @@ hl.config({
 -- doit rester sous l'alpha des surfaces du thème (globalOpacity 0.7-0.85).
 --
 -- Ce bloc est piloté depuis le panneau de configuration (section « Aspect
--- technique du bureau ») : config_manager.py réécrit les trois valeurs entre
+-- technique du bureau ») : as-core config réécrit les trois valeurs entre
 -- les marqueurs BEGIN/END puis recharge Hyprland. Ne pas éditer les valeurs à
 -- la main, elles seraient écrasées au prochain réglage.
 -- BEGIN shell-blur

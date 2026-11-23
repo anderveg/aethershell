@@ -8,7 +8,7 @@ import "."
 // PANNEAU LATÉRAL DE L'ÎLOT (IslandSidePanel.qml) — 340 × 420 px
 // ══════════════════════════════════════════════════════════════════════
 // Déployé à droite du panneau principal pour :
-// - "todo-add"  : création rapide d'une tâche dans todo_applet.py
+// - "todo-add"  : création rapide d'une tâche dans as-core todo
 // - "calendar"  : calendrier mensuel + événements Nextcloud CalDAV
 // - "clipboard" : historique du presse-papiers (cliphist)
 // ══════════════════════════════════════════════════════════════════════

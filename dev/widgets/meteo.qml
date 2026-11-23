@@ -7,7 +7,7 @@ import Quickshell.Io
 
 // MÉTÉO — relevé complet et prévisions à trois jours.
 //
-// Les données viennent de core/weather_service.py (Open-Meteo, sans clé), lancé
+// Les données viennent de as-core weather (Open-Meteo, sans clé), lancé
 // par un Process : c'est le patron du reste du shell, un script Python qui rend
 // une ligne de JSON. Rafraîchissement toutes les dix minutes ; en cas d'échec
 // réseau le service rend la dernière valeur connue, marquée `cached`.

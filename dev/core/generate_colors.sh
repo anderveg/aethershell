@@ -9,19 +9,9 @@ if ! command -v matugen &> /dev/null; then
     exit 1
 fi
 
-WALLPAPER_DIR="$(python3 - "$STYLE_VARS" << 'EOF' 2>/dev/null
-import json, os, sys
-p = sys.argv[1] if len(sys.argv) > 1 else ""
-val = "$HOME/Images/wallpapers/"
-if p and os.path.exists(p):
-    try:
-        with open(p, "r") as f:
-            val = json.load(f).get("wallpaper_dir") or val
-    except Exception:
-        pass
-print(os.path.expandvars(os.path.expanduser(val)))
-EOF
-)"
+# Dossier configuré (valeur stockée avec un $HOME littéral : on l'étend après).
+WALLPAPER_DIR="$(jq -r '.wallpaper_dir // ""' "$STYLE_VARS" 2>/dev/null || true)"
+WALLPAPER_DIR="${WALLPAPER_DIR//\$HOME/$HOME}"
 [ -z "$WALLPAPER_DIR" ] && WALLPAPER_DIR="$HOME/Images/wallpapers/"
 
 WALLPAPER="${1:-}"
@@ -38,24 +28,10 @@ if [ -z "$WALLPAPER" ] || [ ! -f "$WALLPAPER" ]; then
 fi
 
 # Matugen scheme type + contrast level (set from the config panel, stored in style_vars.json)
-MATUGEN_SCHEME="$(python3 - "$STYLE_VARS" << 'EOF' 2>/dev/null
-import json, os, sys
-try:
-    with open(sys.argv[1]) as f:
-        print(json.load(f).get("matugen_scheme") or "scheme-tonal-spot")
-except Exception:
-    print("scheme-tonal-spot")
-EOF
-)"
-MATUGEN_CONTRAST="$(python3 - "$STYLE_VARS" << 'EOF' 2>/dev/null
-import json, os, sys
-try:
-    with open(sys.argv[1]) as f:
-        print(json.load(f).get("matugen_contrast", 0))
-except Exception:
-    print("0")
-EOF
-)"
+MATUGEN_SCHEME="$(jq -r '.matugen_scheme // "scheme-tonal-spot"' "$STYLE_VARS" 2>/dev/null || true)"
+[ -n "$MATUGEN_SCHEME" ] || MATUGEN_SCHEME="scheme-tonal-spot"
+MATUGEN_CONTRAST="$(jq -r '.matugen_contrast // 0' "$STYLE_VARS" 2>/dev/null || true)"
+[ -n "$MATUGEN_CONTRAST" ] || MATUGEN_CONTRAST="0"
 
 MATUGEN_JSON="$(matugen image "$WALLPAPER" -t "$MATUGEN_SCHEME" --contrast "$MATUGEN_CONTRAST" --prefer saturation --dry-run --json hex -q 2>/dev/null)"
 if [ -z "$MATUGEN_JSON" ]; then
@@ -66,66 +42,7 @@ if [ -z "$MATUGEN_JSON" ]; then
     exit 1
 fi
 
-python3 - "$STYLE_VARS" "$MATUGEN_JSON" << 'EOF'
-import json
-import sys
-
-style_path = sys.argv[1]
-raw_json = sys.argv[2]
-
-try:
-    with open(style_path, "r") as f:
-        style_data = json.load(f)
-except Exception:
-    style_data = {
-        "active_theme": "dynamic",
-        "global_radius": 2,
-        "hypr_rounding": 2,
-        "global_opacity": 0.85,
-        "kb_layout": "fr",
-        "first_run_completed": False,
-        "palette": {"dynamic": {}}
-    }
-
-m_data = json.loads(raw_json)
-colors = m_data.get("colors", {})
-
-def get_hex(token, fallback):
-    val = colors.get(token, {})
-    if isinstance(val, dict):
-        dark = val.get("dark", val.get("default", fallback))
-        if isinstance(dark, dict):
-            return dark.get("color", dark.get("hex", fallback))
-        if isinstance(dark, str):
-            return dark if dark.startswith("#") else f"#{dark}"
-    elif isinstance(val, str):
-        return val if val.startswith("#") else f"#{val}"
-    return fallback
-
-style_data.setdefault("palette", {})["dynamic"] = {
-    "bg": get_hex("surface_container_lowest", "#1e1e2e"),
-    "fg": get_hex("on_surface", "#cdd6f4"),
-    "accent": get_hex("primary", "#b4befe"),
-    "accent_muted": get_hex("secondary", "#89b4fa"),
-    "surface": get_hex("surface", "#313244"),
-    "surface_variant": get_hex("surface_container", "#45475a"),
-    "error": get_hex("error", "#f38ba8"),
-    "warn": get_hex("tertiary", "#fab387"),
-    "info": get_hex("secondary", "#89b4fa"),
-    "success": get_hex("tertiary_fixed_dim", "#a6e3a1")
-}
-style_data["active_theme"] = "dynamic"
-
-# Écriture atomique : la palette est relue en continu par le shell (FileView).
-# Un fichier tronqué en cours d'écriture lui ferait perdre toutes ses couleurs,
-# alors qu'un `os.replace` expose l'ancienne version jusqu'à la bascule.
-import os
-tmp_path = style_path + ".tmp"
-with open(tmp_path, "w") as f:
-    json.dump(style_data, f, indent=4)
-os.replace(tmp_path, style_path)
-
-print(f"Dynamic palette updated in {style_path}")
-EOF
+printf '%s' "$MATUGEN_JSON" \
+    | "$SCRIPT_DIR/as-core" colors-matugen --file "$STYLE_VARS"
 
 "$SCRIPT_DIR/sync_theme.sh"

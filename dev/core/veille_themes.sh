@@ -4,7 +4,7 @@
 # Le catalogue est lu une fois au démarrage du shell ; il doit être relu quand un
 # `.colors` apparaît ou disparaît dans l'un des deux dossiers. `inotifywait` fait
 # cette veille en un seul processus, sans sondage : une ligne par événement, et
-# `main.qml` relance `themes_scan.py --sync` quand la ligne nomme un `.colors`.
+# `main.qml` relance `as-core themes-scan --sync` quand la ligne nomme un `.colors`.
 #
 # Sans `inotifywait` (paquet inotify-tools), le script sort en 0 sans rien faire :
 # la lecture du démarrage et celle de l'ouverture du panneau restent, la veille

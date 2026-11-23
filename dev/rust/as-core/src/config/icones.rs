@@ -1,6 +1,6 @@
 use crate::common::contrat::sortir;
 use crate::common::io::run_cmd;
-use crate::common::paths::{config_dir, core_dir, home_dir};
+use crate::common::paths::{config_dir, home_dir};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::fs;
@@ -213,9 +213,11 @@ fn appliquer_theme(theme: &str) -> Value {
     maj_ini_key(&gtk3_ini(), "[Settings]", "gtk-icon-theme-name", t);
     maj_ini_key(&gtk4_ini(), "[Settings]", "gtk-icon-theme-name", t);
     let _ = run_cmd("gsettings", &["set", "org.gnome.desktop.interface", "icon-theme", t]);
-    let app_idx_py = core_dir().join("app_index.py");
-    if app_idx_py.is_file() {
-        let _ = run_cmd("python3", &[&app_idx_py.to_string_lossy(), "--quiet"]);
+    // Index des applications reconstruit par le binaire lui-même (l'ancien
+    // `app_index.py` a été purgé en R4).
+    if let Ok(exe) = std::env::current_exe() {
+        let exe_s = exe.to_string_lossy().to_string();
+        let _ = run_cmd(&exe_s, &["app-index", "--quiet"]);
     }
     let mut res = lister_themes();
     if let Value::Object(ref mut m) = res {

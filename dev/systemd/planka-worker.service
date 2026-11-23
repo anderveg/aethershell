@@ -4,6 +4,6 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 %h/.config/quickshell/core/planka_worker.py
+ExecStart=%h/.config/quickshell/core/as-core planka-worker
 StandardOutput=journal
 StandardError=journal

@@ -53,7 +53,7 @@ curl -fsSL https://raw.githubusercontent.com/anderveg/aethershell/master/install
 Le panneau suit la même version que le script : « Écrans & Système » → « Mise à jour
 du shell » affiche la version déployée, celle publiée sur GitHub, et les deux gestes
 (vérifier tout de suite, mettre à jour dans un terminal, copier la ligne pour une autre
-machine). `core/version.json` est écrit à chaque déploiement, et `core/maj_shell.py`
+machine). `core/version.json` est écrit à chaque déploiement, et `as-core maj-shell`
 n'interroge GitHub qu'une fois toutes les **280 minutes** — entre deux, il répond depuis
 son cache, donc ouvrir le panneau ne sort pas sur le réseau.
 
@@ -94,11 +94,11 @@ Les chemins se composent donc avec une variable, jamais en dur :
 | Contexte | À utiliser |
 |---|---|
 | shell | `"$HOME"`, `"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"` |
-| Python | `Path.home()`, `os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"` |
+| Rust | `paths::home_dir()`, `paths::runtime_dir()` (`dev/rust/as-core/src/common/paths.rs`) |
 | QML | `Quickshell.env("HOME")`, `Quickshell.env("XDG_RUNTIME_DIR")` |
 | unité systemd | `%h` (directive d'unité) |
 
-`python3 dev/core/neutralite.py` vérifie les fichiers **suivis** : il signale tout
+`dev/core/as-core neutralite` vérifie les fichiers **suivis** : il signale tout
 `/home/<nom>` qui n'est pas un espace réservé, ainsi que le nom de la personne et
 celui de sa machine. Le pré-vol du déploiement l'exécute et affiche un
 avertissement. Une ligne peut porter une dérogation explicite — `neutralite:ok —
@@ -121,7 +121,7 @@ avertissement. Une ligne peut porter une dérogation explicite — `neutralite:o
 install.sh            # Script unifié : installation, mise à jour, pré-vol, déploiement et sauvegardes
 dev/
 ├── rust/as-core/     # Backend unifié en Rust (compilé vers dev/core/as-core)
-├── core/             # Binaire as-core, catalogues JSON et helpers image/ML Python
+├── core/             # Binaire as-core, catalogues JSON, cache et scripts shell d'intégration
 ├── widgets/          # Composants de bureau (horloge, todo, système, météo...)
 ├── hypr_modular/     # Configuration Hyprland modulaire en Lua
 ├── hyprquickpaper/   # Moteur de fond d'écran et gestion de palette

@@ -2,6 +2,7 @@ pub mod bluetooth;
 pub mod indicateurs;
 pub mod live_activity;
 pub mod nuit;
+pub mod polkit_focus;
 pub mod reseau;
 pub mod system_service;
 pub mod systeme;

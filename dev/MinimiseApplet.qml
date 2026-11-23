@@ -31,7 +31,7 @@ Item {
     // Fenêtres lues à l'instant : [{ adresse, classe, titre }], dans l'ordre des
     // minimisations (la plus récente en dernier, comme une pile).
     property var fenetres: []
-    // classe → { icone, nom } résolu par `core/app_classes.py`. Une invocation
+    // classe → { icone, nom } résolu par `as-core app-classes`. Une invocation
     // par classe nouvelle de la session : le QML ne parse pas de .desktop.
     property var infos: ({})
     property var enCours: []

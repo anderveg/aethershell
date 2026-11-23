@@ -10,7 +10,7 @@ import "."
 //
 // `root` et `mainFlickable` viennent du panneau sous les noms qu'ils avaient
 // deja dans ce corps, donc les appels a la racine sont restes intacts.
-// `sections` et `cibles` sont remplies apres la decoupe (voir decouper.py) :
+// `sections` et `cibles` sont remplies apres la decoupe (une passe hors dépôt) :
 // le panneau ne peut plus nommer ces ids, il les demande ici.
 Column {
     id: bloc

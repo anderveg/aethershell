@@ -1,6 +1,9 @@
-# Généré par core/config_manager.py — ne pas éditer à la main.
-# Source de vérité : core/autostart.json (modifiable depuis le panneau).
-sh -c '/usr/bin/pgrep -x quickshell >/dev/null || exec quickshell -n' &
+# Généré par as-core — ne pas éditer à la main.
+# Source de vérité : core/autostart.json (socle shell).
+sh -c 'pgrep -f "as-core hermes-approbations" >/dev/null || exec "$HOME/.config/quickshell/core/as-core" hermes-approbations serveur' &
+sh -c '/usr/bin/pgrep -x quickshell >/dev/null || exec "$HOME/.config/quickshell/core/lancer_quickshell.sh"' &
 systemctl --user start hypridle
 sh -c '/usr/bin/pgrep -x awww-daemon >/dev/null || exec awww-daemon' &
-sh -c '/usr/bin/pgrep -x hyprpolkitagent >/dev/null && exit 0; for agent in /usr/lib/hyprpolkitagent/hyprpolkitagent /usr/libexec/hyprpolkitagent /usr/lib/lxqt-policykit-agent /usr/libexec/lxqt-policykit-agent /usr/lib/polkit-kde-authentication-agent-1; do if [ -x "$agent" ]; then exec "$agent"; fi; done' &
+sh -c '/usr/bin/pgrep -f "(polkit-kde-authentication-agent-1|hyprpolkitagent|lxqt-policykit-agent)" >/dev/null && exit 0; for agent in /usr/libexec/kf6/polkit-kde-authentication-agent-1 /usr/lib/polkit-kde-authentication-agent-1 /usr/libexec/polkit-kde-authentication-agent-1 /usr/lib/hyprpolkitagent/hyprpolkitagent /usr/libexec/hyprpolkitagent /usr/libexec/lxqt-policykit-agent /usr/lib/lxqt-policykit-agent; do if [ -x "$agent" ]; then exec "$agent"; fi; done'
+sh -c '/usr/bin/pgrep -f "as-core polkit-focus" >/dev/null && exit 0; exec "$HOME/.config/quickshell/core/as-core" polkit-focus'
+sh -c '$HOME/.config/quickshell/core/cliphist_watch.sh' &

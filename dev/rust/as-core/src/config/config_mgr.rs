@@ -858,6 +858,47 @@ pub fn run(args: &[String]) -> i32 {
     let action = args.first().map(|s| s.as_str()).unwrap_or("state");
     match action {
         "state" => sortir(&get_full_config_state()),
+        // Lecture brute d'une clé de `style_vars.json` (chemin pointé :
+        // `wallpaper_dir`, `palette.dynamic.accent`). Sert aux scripts shell qui
+        // lisaient le fichier en Python : une valeur scalaire est écrite telle
+        // quelle, un objet ou une liste en JSON compact.
+        "get" if args.len() >= 2 => {
+            let cle = args[1].trim();
+            let data = read_json_value(&style_path());
+            let mut courant = Some(&data);
+            for part in cle.split('.') {
+                courant = courant.and_then(|v| v.get(part));
+            }
+            match courant {
+                Some(Value::String(s)) => {
+                    println!("{s}");
+                    0
+                }
+                Some(Value::Bool(b)) => {
+                    println!("{b}");
+                    0
+                }
+                Some(Value::Number(n)) => {
+                    println!("{n}");
+                    0
+                }
+                // Clé absente ou nulle : `dict.get()` en Python rendait `None`,
+                // et les scripts lisent `$(...)` sous `set -e` — donc une ligne
+                // vide et un code 0, avec le défaut optionnel en troisième
+                // argument. Un code non nul interromprait sync_theme.sh.
+                None | Some(Value::Null) => {
+                    match args.get(2) {
+                        Some(defaut) => println!("{defaut}"),
+                        None => println!(),
+                    }
+                    0
+                }
+                Some(other) => {
+                    println!("{other}");
+                    0
+                }
+            }
+        }
         "kb_layout" if args.len() >= 2 => {
             set_kb_layout(&args[1], true);
             sortir(&get_full_config_state())
