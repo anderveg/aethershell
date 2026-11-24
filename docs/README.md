@@ -34,8 +34,17 @@ Rather than a simple bar theme, AetherShell brings together the visual and utili
 ### One-Line Install or Update
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/anderveg/aethershell/master/install.sh | bash
+mkdir -p "$HOME/.cache/quickshell" \
+  && curl -fsSL -o "$HOME/.cache/quickshell/install_aethershell.sh" \
+     https://raw.githubusercontent.com/anderveg/aethershell/master/install.sh \
+  && bash "$HOME/.cache/quickshell/install_aethershell.sh"
 ```
+
+Le script est **téléchargé puis exécuté**, jamais passé par un tube : il se ré-exécute lui-même
+depuis le disque après la préparation du dépôt, et cet `exec` tuerait le `bash` qui lit le tube —
+`curl` sortirait alors en erreur 23 (« Failure writing output to destination ») alors que
+l'installation continue. Un fichier laisse aussi `stdin` au terminal, donc les invites
+(`sudo`, confirmation de désinstallation) fonctionnent.
 
 [`install.sh`](../install.sh) handles everything: it detects the distribution from `/etc/os-release` (Arch or Fedora), clones the repository or fast-forwards it if already present, backs up the environment, and deploys the shell. The exact same command serves for initial installation and subsequent updates.
 
@@ -109,6 +118,7 @@ Paths are constructed using variables, never hardcoded:
 * **Compositor**: [Hyprland](https://hyprland.org) 0.57 or newer (modular Lua configuration);
 * **UI Engine**: [Quickshell](https://quickshell.org) 0.3.2 or newer;
 * **Icon Font**: `0xProto Nerd Font` (installer provided in `dev/core/install_fonts.sh`);
+* **Rust**: `cargo` (`rust` package on Arch) — the `as-core` backend is compiled on deployment; without it, Rust fixes never take effect;
 * **System Dependencies**: listed by distribution in [`dev/dependencies.txt`](../dev/dependencies.txt) (`matugen`, `wireplumber`, `NetworkManager`, `cava`, etc.).
 
 ---

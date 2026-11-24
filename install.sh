@@ -963,6 +963,7 @@ pkg_for_bin() {
                 udisksctl) echo "udisks2" ;;
                 zbarcam) echo "zbar" ;;
                 cc) echo "gcc" ;;
+                cargo) echo "cargo" ;;
                 *) echo "$bin" ;;
             esac
             ;;
@@ -981,6 +982,7 @@ pkg_for_bin() {
                 udisksctl) echo "udisks2" ;;
                 zbarcam) echo "zbar-tools" ;;
                 cc) echo "gcc" ;;
+                cargo) echo "cargo" ;;
                 *) echo "$bin" ;;
             esac
             ;;
@@ -999,6 +1001,7 @@ pkg_for_bin() {
                 udisksctl) echo "udisks2" ;;
                 zbarcam) echo "zbar" ;;
                 cc) echo "gcc" ;;
+                cargo) echo "rust" ;;
                 matugen) echo "matugen-bin" ;;
                 unimatrix) echo "unimatrix-git" ;;
                 *) echo "$bin" ;;
@@ -1020,6 +1023,15 @@ compiler_as_core() {
     fi
     if ! command -v cargo >/dev/null 2>&1; then
         if [ -x "$bin" ]; then
+            # Le binaire du dépôt est périmé (des sources sont plus récentes) et
+            # rien ne peut le recompiler ici : le déploiement allait le poser en
+            # silence, donc les correctifs Rust restaient sans effet. Cas réel :
+            # un portable sans Rust a gardé un as-core antérieur au correctif de
+            # limite de charge pendant deux mises à jour.
+            echo "⚠️  cargo absent : le binaire as-core du dépôt est plus ancien que les sources." >&2
+            echo "    Les correctifs Rust NE SERONT PAS actifs. Deux remèdes :" >&2
+            echo "      • installer Rust ici (paquet cargo, ou rustup), puis redéployer ;" >&2
+            echo "      • copier dev/core/as-core depuis une machine qui compile (dev/sync.sh)." >&2
             return 0
         fi
         echo "⚠️  cargo absent : impossible de compiler le backend as-core." >&2
@@ -2126,7 +2138,11 @@ ecrire_version_deployee() {
     # un tag ancien — version.json annonce une version que la machine n'a pas,
     # et le panneau propose une mise à jour qui n'existe pas. Le CHANGELOG étant
     # livré avec le code, sa version en tête fait foi.
-    local journal="$DEV_DIR/CHANGELOG.md" version_journal=""
+    # Le journal est à la RACINE du dépôt, pas dans `dev/` : la première version
+    # de ce repli lisait `$DEV_DIR/CHANGELOG.md` (inexistant), donc il ne
+    # s'appliquait jamais et une machine sans tags restait bloquée sur l'ancien
+    # « +N » — cas constaté sur le portable, à jour du code mais étiqueté v0.4.5.1.
+    local journal="$DEV_DIR/../CHANGELOG.md" version_journal=""
     if [ -f "$journal" ]; then
         version_journal="$(sed -n 's/^##[[:space:]]*\[\([0-9][0-9.]*\)\].*/v\1/p' "$journal" 2>/dev/null | head -n 1)"
     fi

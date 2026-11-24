@@ -173,7 +173,18 @@ pub fn run_maj_shell(args: &[String]) -> i32 {
         "https://raw.githubusercontent.com/{}/{}/install.sh",
         DEPOT, BRANCHE
     );
-    let commande = format!("curl -fsSL {} | bash", lien);
+    // Télécharger PUIS exécuter, jamais `curl | bash` : le script se ré-exécute
+    // depuis le disque (`exec env AETHER_REEXEC=1 bash "$CIBLE/install.sh"`) dès
+    // qu'il tourne depuis un pipe. Cet `exec` remplace le `bash` qui lisait le
+    // flux, `curl` perd son lecteur et sort en **erreur 23** (« Failure writing
+    // output to destination ») alors que la mise à jour continue — l'utilisateur
+    // voit un échec qui n'en est pas un. Un fichier temporaire supprime le pipe,
+    // et stdin reste le terminal (les invites `read`/`sudo` fonctionnent).
+    let commande = format!(
+        "mkdir -p \"$HOME/.cache/quickshell\" && \
+         curl -fsSL --retry 3 --retry-delay 2 -o \"$HOME/.cache/quickshell/install_aethershell.sh\" {lien} && \
+         bash \"$HOME/.cache/quickshell/install_aethershell.sh\""
+    );
 
     if args.iter().any(|a| a == "--lien") {
         println!("{}", commande);

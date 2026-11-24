@@ -35,8 +35,17 @@ Plutôt qu'un simple thème de barre, AetherShell regroupe les éléments visuel
 ### Installer ou mettre à jour en une ligne
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/anderveg/aethershell/master/install.sh | bash
+mkdir -p "$HOME/.cache/quickshell" \
+  && curl -fsSL -o "$HOME/.cache/quickshell/install_aethershell.sh" \
+     https://raw.githubusercontent.com/anderveg/aethershell/master/install.sh \
+  && bash "$HOME/.cache/quickshell/install_aethershell.sh"
 ```
+
+Le script est **téléchargé puis exécuté**, jamais passé par un tube : il se ré-exécute lui-même
+depuis le disque après la préparation du dépôt, et cet `exec` tuerait le `bash` qui lit le tube —
+`curl` sortirait alors en erreur 23 (« Failure writing output to destination ») alors que
+l'installation continue. Un fichier laisse aussi `stdin` au terminal, donc les invites
+(`sudo`, confirmation de désinstallation) fonctionnent.
 
 [`install.sh`](install.sh) fait tout : il lit la distribution dans `/etc/os-release`
 (Arch ou Fedora), clone le dépôt ou le met à jour en avance rapide s'il est déjà là,
@@ -127,6 +136,7 @@ avertissement. Une ligne peut porter une dérogation explicite — `neutralite:o
 * **Compositeur** : [Hyprland](https://hyprland.org) 0.57 ou plus récent (configuration modulaire en Lua) ;
 * **Moteur d'interface** : [Quickshell](https://quickshell.org) 0.3.2 ou supérieur ;
 * **Police d'icônes** : `0xProto Nerd Font` (installeur fourni dans `dev/core/install_fonts.sh`) ;
+* **Rust** : `cargo` (paquet `rust` sur Arch) — le backend `as-core` est compilé au déploiement ; sans lui, les correctifs Rust ne prennent pas effet ;
 * **Dépendances système** : répertoriées par distribution dans [`dev/dependencies.txt`](dev/dependencies.txt) (`matugen`, `wireplumber`, `NetworkManager`, `cava`, etc.).
 
 ---

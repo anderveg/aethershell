@@ -59,7 +59,10 @@ Column {
     function commandeDesinstallation() {
         return 'for d in "${AETHERSHELL_DIR:-}" "$HOME/dev/aethershell" "$HOME/dev/aethershell"; do '
              + '[ -f "$d/install.sh" ] && exec bash "$d/install.sh" --uninstall; done; '
-             + 'curl -fsSL https://raw.githubusercontent.com/anderveg/aethershell/master/install.sh | bash -s -- --uninstall'
+             + 'mkdir -p "$HOME/.cache/quickshell"; '
+             + 'curl -fsSL --retry 3 -o "$HOME/.cache/quickshell/install_aethershell.sh" '
+             + 'https://raw.githubusercontent.com/anderveg/aethershell/master/install.sh '
+             + '&& bash "$HOME/.cache/quickshell/install_aethershell.sh" --uninstall'
     }
 
     function refreshDiag(src) {

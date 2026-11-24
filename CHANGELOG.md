@@ -9,6 +9,14 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **`x.yy.x.x`** : ajout de fonctionnalités décisives (ex. : ajout de l'Îlot dynamique).
 - **Version majeure (`y.x.x.x`)** : conservation du schéma déjà en place (proposée lorsque l'ampleur des changements le justifie ; décision finale validée par l'utilisateur).
 
+## [0.4.6.1] — 2026-11-24
+
+### Corrigé
+- **Bouton « Mettre à jour » : `curl: (23) Failure writing output to destination`** (`as-core maj-shell`, `OngletEcrans.qml`, `dev/core/maj_terminal.sh`) : la commande passait le script par un tube (`curl … | bash`). Or `install.sh` se **ré-exécute depuis le disque** (`exec env AETHER_REEXEC=1 bash "$CIBLE/install.sh"`) dès qu'il ne tourne pas depuis le dépôt ; cet `exec` remplace le `bash` qui lisait le tube, `curl` perd son lecteur et sort en 23 — alors que la mise à jour continue. La commande télécharge désormais le script dans `~/.cache/quickshell/install_aethershell.sh` puis l'exécute : plus de tube, et `stdin` reste le terminal (les invites `sudo` et la confirmation de désinstallation fonctionnent). Même correction pour le repli GitHub de la désinstallation, qui souffrait du même défaut.
+- **Étiquette de version figée sur une version périmée** (`install.sh`) : le repli qui fait foi du `CHANGELOG.md` quand `git describe` retombe sur un tag ancien lisait `$DEV_DIR/CHANGELOG.md` — un chemin **inexistant**, le journal étant à la racine du dépôt. Sur une machine sans tag récent (rsync n'apporte pas `.git/`, `git fetch` sans `--tags`), le panneau affichait donc `v0.4.5.1+5` alors que le code déployé était en 0.4.6.0. Le chemin est corrigé (`$DEV_DIR/../CHANGELOG.md`).
+- **Correctifs Rust déployés sans être compilés** (`install.sh`, `dev/dependencies.txt`) : sans `cargo`, `compiler_as_core()` sortait **silencieusement** en posant le binaire du dépôt même plus ancien que les sources. Un portable sans Rust a ainsi gardé un `as-core` antérieur au correctif de limite de charge pendant deux mises à jour, alors que la correction était dans le code livré. Le message est désormais explicite (« Les correctifs Rust NE SERONT PAS actifs ») et **`cargo` entre dans les dépendances communes** (`cargo` sur Fedora/Debian, `rust` sur Arch), donc l'installateur le propose et l'installe au lieu de dépendre d'un binaire synchronisé à la main.
+- **Documentation** (`README.md`, `docs/README.md`) : la commande d'installation/mise à jour en une ligne passe par un fichier, avec l'explication ; Rust/cargo apparaît dans les prérequis.
+
 ## [0.4.6.0] — 2026-11-24
 
 ### Ajouté
