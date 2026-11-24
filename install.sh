@@ -763,7 +763,7 @@ MARKER="$CURRENT_HYPR/.quickshell_managed"
 # écrasé. La règle est structurelle : elle couvre les fichiers futurs sans qu'on
 # ait à les inscrire un par un (deux incidents successifs ont montré le coût de
 # la liste au cas par cas).
-JSON_DEPLOYES="applets_catalogue.json emoji.json tray_icons.json secrets.example.json"
+JSON_DEPLOYES="applets_catalogue.json emoji.json tray_icons.json secrets.example.json theme_profiles.catalog.json"
 
 PRESERVE_CORE="style_vars.json app_vars.json secrets.json autostart.json widgets.json notif_targets.json bar_applets.json homelab.json launch_history.json todo.json"
 # colors.lua est *généré* par sync_theme.sh depuis style_vars.json :
@@ -1750,6 +1750,35 @@ preflight_diff() {
         fi
     fi
 
+    # 4 bis. Fonds d'écran livrés (dev/wallpapers → quickshell/wallpapers).
+    # Ils sont posés tels quels sur la cible ; `as-core catalogue install` les
+    # recopie ensuite dans le dossier de fonds choisi par l'utilisateur.
+    if [ -d "$DEV_DIR/wallpapers" ]; then
+        for f in "$DEV_DIR/wallpapers"/*.jpg; do
+            [ -f "$f" ] || continue
+            name="$(basename "$f")"
+            dst="$QS_DIR/wallpapers/$name"
+            if [ -f "$dst" ]; then
+                if cmp -s "$f" "$dst"; then
+                    count_ident=$((count_ident + 1))
+                else
+                    stats=$(compute_diff_stats "$dst" "$f")
+                    list_modified+=("quickshell/wallpapers/$name ($stats)")
+                fi
+            else
+                list_added+=("quickshell/wallpapers/$name")
+            fi
+        done
+        if [ -d "$QS_DIR/wallpapers" ]; then
+            for f in "$QS_DIR/wallpapers"/*.jpg; do
+                [ -f "$f" ] || continue
+                name="$(basename "$f")"
+                [ -f "$DEV_DIR/wallpapers/$name" ] && continue
+                list_pruned+=("quickshell/wallpapers/$name")
+            done
+        fi
+    fi
+
     # 5. Hyprquickpaper
     if [ -d "$DEV_DIR/shaders" ]; then
         mkdir -p "$QS_DIR/shaders"
@@ -1850,7 +1879,14 @@ backup_env() {
     local stamp archive contenu
     stamp=$(date +%Y%m%d_%H%M%S)
     archive="$BACKUP_DIR/backup_${DISTRO}_hq_$stamp.tar.gz"
-    if ! tar -czf "$archive" -C "$HOME/.config" hypr quickshell 2>/dev/null; then
+    # `tar` sort en 1 quand un fichier change pendant la lecture (« file changed
+    # as we read it ») : c'est le cas normal d'une sauvegarde prise pendant que
+    # quickshell redémarre et réécrit ses caches. Ce n'est pas un échec — la
+    # vérification du sommaire plus bas tranche. Tout autre code, si.
+    local tar_code=0
+    tar -czf "$archive" --warning=no-file-changed -C "$HOME/.config" hypr quickshell 2>/dev/null \
+        || tar_code=$?
+    if [ "$tar_code" -ne 0 ] && { [ "$tar_code" -ne 1 ] || ! tar -tzf "$archive" >/dev/null 2>&1; }; then
         rm -f "$archive"
         echo "⚠️ Backup failed, nothing written."
         return 1
@@ -2011,8 +2047,8 @@ restore_hq() {
 }
 
 
-# Ghostty n'est pas géré par le dépôt : Ryoku pose sa configuration et sa palette
-# (matugen). Mais le flou derrière la fenêtre dépend d'un réglage que Ghostty ne
+# Ghostty : la palette est posée par le thème dynamique du shell (matugen /
+# as-core), mais le flou derrière la fenêtre dépend d'un réglage que Ghostty ne
 # demande pas de lui-même, et `user.conf` est le seul fichier inclus en dernier —
 # donc celui qui survit aux régénérations de palette. On l'assure à chaque
 # déploiement pour que le réglage existe aussi sur l'autre machine, sans écraser
@@ -2106,8 +2142,24 @@ ecrire_version_deployee() {
             tag="$retenu"
         fi
     fi
-    printf '{"version": "%s", "tag": "%s", "commit": "%s", "deploye_le": "%s"}\n' \
-        "$decrite" "$tag" "$commit" "$(date -Iseconds)" \
+    # Libellé affiché par le panneau : le tag posé, suivi de « +N » quand le code
+    # déployé va au-delà (commits non étiquetés). Pas de « -dirty » : le code
+    # déployé vient d'un arbre de travail par construction, ce marqueur ne dit
+    # rien de la version qui tourne et brouille la comparaison au tag publié.
+    # Le `describe` brut reste dans le fichier, pour le diagnostic.
+    local version_affichee="$decrite" avance=0
+    if [ -n "$tag" ]; then
+        avance="$(git -C "$DEV_DIR" rev-list --count "$tag..HEAD" 2>/dev/null || echo 0)"
+        case "$avance" in
+            ''|*[!0-9]*) avance=0 ;;
+        esac
+        version_affichee="$tag"
+        if [ "$avance" -gt 0 ]; then
+            version_affichee="${tag}+${avance}"
+        fi
+    fi
+    printf '{"version": "%s", "tag": "%s", "commit": "%s", "describe": "%s", "deploye_le": "%s"}\n' \
+        "$version_affichee" "$tag" "$commit" "$decrite" "$(date -Iseconds)" \
         > "$CORE_DIR/version.json.new" || return 0
     mv -f "$CORE_DIR/version.json.new" "$CORE_DIR/version.json" || true
 }
@@ -2282,6 +2334,11 @@ deploy_new_env() {
     if [ ! -f "$CORE_DIR/secrets.json" ] && [ -f "$CORE_DIR/secrets.example.json" ]; then
         cp "$CORE_DIR/secrets.example.json" "$CORE_DIR/secrets.json"
     fi
+    # Catalogue de thèmes (B4) : amorcé UNE fois. Ensuite le fichier est un état
+    # de la machine (règle `est_etat_machine`), jamais réécrit par un déploiement.
+    if [ ! -f "$CORE_DIR/theme_profiles.json" ] && [ -f "$CORE_DIR/theme_profiles.catalog.json" ]; then
+        cp "$CORE_DIR/theme_profiles.catalog.json" "$CORE_DIR/theme_profiles.json"
+    fi
     chmod +x "$CORE_DIR/"*.sh
     [ -f "$CORE_DIR/as-core" ] && chmod +x "$CORE_DIR/as-core"
 
@@ -2311,6 +2368,19 @@ deploy_new_env() {
         (cd "$DEV_DIR/widgets" && ls -1 *.qml 2>/dev/null) > "$w_manifest"
         prune_target "$QS_DIR/widgets" "$w_manifest"
         rm -f "$w_manifest"
+    fi
+
+    # Fonds d'écran livrés : présents sur la cible pour `as-core catalogue
+    # install` (first-run) et pour les profils de thème qui ne stockent qu'un
+    # nom de fichier.
+    if [ -d "$DEV_DIR/wallpapers" ]; then
+        mkdir -p "$QS_DIR/wallpapers"
+        cp -f "$DEV_DIR/wallpapers/"*.jpg "$QS_DIR/wallpapers/" 2>/dev/null || true
+        local wp_manifest
+        wp_manifest=$(mktemp)
+        (cd "$DEV_DIR/wallpapers" && ls -1 *.jpg 2>/dev/null) > "$wp_manifest"
+        prune_target "$QS_DIR/wallpapers" "$wp_manifest"
+        rm -f "$wp_manifest"
     fi
 
     local qs_manifest

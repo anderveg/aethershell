@@ -1,5 +1,6 @@
 use crate::common::contrat::sortir;
 use crate::common::io::{now_secs, read_json_value, run_cmd, write_json_atomic, write_private_json, write_text_atomic};
+use crate::common::lock::FileLock;
 use crate::config::presets;
 use crate::common::paths::{cache_dir, core_dir, home_dir, style_vars_path};
 use crate::config::config_hypr::{
@@ -56,6 +57,67 @@ fn todo_focus_path() -> PathBuf { cache_dir().join("todo-focus.json") }
 fn notif_targets_path() -> PathBuf { core_dir().join("notif_targets.json") }
 fn autostart_path() -> PathBuf { core_dir().join("autostart.json") }
 fn presets_path() -> PathBuf { core_dir().join("presets.json") }
+
+/// Profil d'énergie actif. D-Bus d'abord : `powerprofilesctl` est un script
+/// Python qui meurt sur `import gi` quand `python-gobject` n'est pas installé
+/// (constaté sur cette machine), donc tout le mode « performance / éco » restait
+/// silencieusement sans effet.
+fn profil_energie() -> Option<String> {
+    if let Some(o) = run_cmd(
+        "busctl",
+        &[
+            "get-property",
+            "net.hadess.PowerProfiles",
+            "/net/hadess/PowerProfiles",
+            "net.hadess.PowerProfiles",
+            "ActiveProfile",
+        ],
+    ) {
+        if o.status.success() {
+            let brut = String::from_utf8_lossy(&o.stdout);
+            let v = brut
+                .trim()
+                .trim_start_matches("s ")
+                .trim()
+                .trim_matches('"')
+                .to_string();
+            if !v.is_empty() {
+                return Some(v);
+            }
+        }
+    }
+    run_cmd("powerprofilesctl", &["get"])
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn definir_energie(profil: &str) -> bool {
+    let p = profil.trim();
+    if p.is_empty() {
+        return false;
+    }
+    let via_dbus = run_cmd(
+        "busctl",
+        &[
+            "set-property",
+            "net.hadess.PowerProfiles",
+            "/net/hadess/PowerProfiles",
+            "net.hadess.PowerProfiles",
+            "ActiveProfile",
+            "s",
+            p,
+        ],
+    )
+    .map(|o| o.status.success())
+    .unwrap_or(false);
+    if via_dbus {
+        return true;
+    }
+    run_cmd("powerprofilesctl", &["set", p])
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
 
 fn read_map(path: &PathBuf) -> Map<String, Value> {
     match read_json_value(path) {
@@ -239,7 +301,9 @@ fn update_style_var(key: &str, value: &str) {
         | "blur_enabled" | "depth_wallpaper" | "wallpaper_slide" | "depth_mask"
         | "panel_accordion" | "widgets_locked" | "first_run_completed"
         | "ilot_projets_actif" | "ilot_coins_groupes" | "bar_bottom" | "bar_left"
-        | "bar_right" | "show_config_button" | "maj_seulement_si_dispo" => {
+        | "bar_right" | "show_config_button" | "maj_seulement_si_dispo"
+        | "caffeine_actif" | "widgets_bureau_visibles"
+        | "theme_apply_icons" | "theme_apply_cursor" => {
             data.insert(key.into(), json!(is_true(value)));
         }
         "global_radius" | "selecteur_radius" => {
@@ -306,6 +370,12 @@ fn update_style_var(key: &str, value: &str) {
             data.insert(key.into(), json!(if matches!(v.as_str(), "tiling" | "tile") { "tiling" } else { "float" }));
         }
         "matugen_scheme" if MATUGEN_SCHEMES.contains(&value) => { data.insert(key.into(), json!(value)); }
+        // Axe clair/sombre (lot B8), transversal aux profils : `auto` laisse
+        // matugen déduire le mode de la luminance du fond, `dark`/`light` le forcent.
+        "theme_mode" => {
+            let v = value.trim().to_ascii_lowercase();
+            data.insert(key.into(), json!(if matches!(v.as_str(), "dark" | "light") { v } else { "auto".to_string() }));
+        }
         "matugen_contrast" => { data.insert(key.into(), json!(fval.clamp(-1.0, 1.0))); }
         "blur_size" => { data.insert(key.into(), json!((fval as i64).clamp(1, 20))); }
         "blur_passes" => { data.insert(key.into(), json!((fval as i64).clamp(1, 8))); }
@@ -698,6 +768,10 @@ pub fn get_full_config_state() -> Value {
         "shell_opacity": get_f("shell_opacity", 0.7),
         "cheatsheet_opacity": get_f("cheatsheet_opacity", 0.88),
         "bar_style": get_s("bar_style", "classic"),
+        // Interrupteurs Q4 : un profil applique ses icônes et son curseur par
+        // défaut ; on peut figer l'un des deux si le pack a été choisi à la main.
+        "theme_apply_icons": get_b("theme_apply_icons", true),
+        "theme_apply_cursor": get_b("theme_apply_cursor", true),
         "panel_anim_duration": get_i("panel_anim_duration", 240),
         "bar_border": get_b("bar_border", true),
         "bar_gaps_transparent": get_b("bar_gaps_transparent", false),
@@ -720,6 +794,7 @@ pub fn get_full_config_state() -> Value {
         "lock_bg_color": get_s("lock_bg_color", ""),
         "lock_bg_image": get_s("lock_bg_image", ""),
         "matugen_scheme": get_s("matugen_scheme", "scheme-tonal-spot"),
+        "theme_mode": get_s("theme_mode", "auto"),
         "matugen_contrast": get_f("matugen_contrast", 0.0),
         "blur_enabled": get_b("blur_enabled", true),
         "blur_size": get_i("blur_size", 3),
@@ -757,6 +832,8 @@ pub fn get_full_config_state() -> Value {
             "to": get_s("night_to", ""),
         },
         "do_not_disturb": get_b("do_not_disturb", false),
+        "caffeine_actif": get_b("caffeine_actif", false),
+        "widgets_bureau_visibles": get_b("widgets_bureau_visibles", true),
         "idle_suspend_timeout": get_idle_suspend_timeout(&style),
         "screensaver_timeout": get_screensaver_timeout(&style),
         "screensaver_app": get_screensaver_app(&style),
@@ -1420,11 +1497,22 @@ pub fn run(args: &[String]) -> i32 {
             if name.is_empty() {
                 return sortir(&json!({ "ok": false, "message": "Nom requis" }));
             }
+            let pp = presets_path();
+            let _lock = FileLock::acquire(&pp);
             let style = read_map(&style_path());
             let widgets = load_widgets_vec();
-            let mut data = read_map(&presets_path());
-            data.insert(name.into(), presets::capture_preset(&style, &widgets, now_secs()));
-            let ok = write_json_atomic(&presets_path(), &Value::Object(data.clone()), 0o644).is_ok();
+            // Le profil d'énergie ne vit pas dans style_vars.json : on le lit au
+            // moment de la capture, sinon le preset restaurerait un mode périmé.
+            // D-Bus d'abord : `powerprofilesctl` est un script Python qui, sur une
+            // machine sans `python-gobject`, meurt sur `import gi` (constaté ici).
+            let power = profil_energie().unwrap_or_default();
+            let env = presets::capture_env(&style, &power);
+            let mut data = read_map(&pp);
+            data.insert(
+                name.into(),
+                presets::capture_preset(&style, &widgets, &env, now_secs()),
+            );
+            let ok = write_json_atomic(&pp, &Value::Object(data.clone()), 0o644).is_ok();
             sortir(&json!({ "ok": ok, "presets": presets::summarize_presets(&data) }))
         }
         "preset_apply" if args.len() >= 2 => {
@@ -1437,20 +1525,47 @@ pub fn run(args: &[String]) -> i32 {
             let Some(widgets) = presets::apply_preset_into(preset, &mut style) else {
                 return sortir(&json!({ "ok": false, "message": "Profil invalide" }));
             };
+            // Bloc `env` : présent dans les profils v2, absent dans les v1 (on
+            // applique alors le style seul, et l'UI le signale).
+            let env = presets::apply_env_into(preset, &mut style);
             let _ = write_json_atomic(&style_path(), &Value::Object(style), 0o644);
             save_widgets_vec(&widgets);
+            if let Some(e) = &env {
+                // Le démon de nuit relit `night_mode`/`night_temp` depuis le style
+                // qu'on vient d'écrire : il faut donc l'appeler APRÈS la sauvegarde.
+                let allume = e
+                    .get("night_mode")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                if let Ok(exe) = std::env::current_exe() {
+                    let _ = run_cmd(
+                        &exe.to_string_lossy(),
+                        &["nuit", if allume { "activer" } else { "desactiver" }],
+                    );
+                }
+                if let Some(p) = e.get("power_profile").and_then(|v| v.as_str()) {
+                    let _ = definir_energie(p);
+                }
+            }
             let sync_script = core_dir().join("sync_theme.sh");
             if sync_script.is_file() {
                 let _ = Command::new("bash").arg(&sync_script).status();
             }
-            sortir(&json!({ "ok": true, "applied": name }))
+            sortir(&json!({
+                "ok": true,
+                "applied": name,
+                "env": env.clone().unwrap_or(Value::Null),
+                "env_v2": env.is_some(),
+            }))
         }
         "preset_delete" if args.len() >= 2 => {
             let name = args[1].trim();
-            let mut data = read_map(&presets_path());
+            let pp = presets_path();
+            let _lock = FileLock::acquire(&pp);
+            let mut data = read_map(&pp);
             let removed = data.remove(name).is_some();
             if removed {
-                let _ = write_json_atomic(&presets_path(), &Value::Object(data.clone()), 0o644);
+                let _ = write_json_atomic(&pp, &Value::Object(data.clone()), 0o644);
             }
             sortir(&json!({ "ok": removed, "presets": presets::summarize_presets(&data) }))
         }

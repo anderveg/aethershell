@@ -9,7 +9,13 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-const HELPER_CHARGE: &str = "/usr/local/bin/aethershell-charge-limit";
+// Le helper est installé par `dev/charge-limit/install.sh` sous le nom
+// `aether-charge-limit`. L'ancien nom est gardé en second : une machine qui a
+// reçu une version antérieure du helper continue de fonctionner.
+const HELPERS_CHARGE: &[&str] = &[
+    "/usr/local/bin/aether-charge-limit",
+    "/usr/local/bin/aethershell-charge-limit",
+];
 const HELPER_LENOVO_CONS: &str = "/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/conservation_mode";
 const SEUIL_CIBLE_PCT: i64 = 80;
 
@@ -315,19 +321,61 @@ fn connect_wifi(ssid: &str, password: &str) -> Value {
     }
 }
 
+/// Premier helper réellement exécutable parmi les chemins proposés.
+fn choisir_helper<'a>(chemins: &[&'a str]) -> Option<&'a str> {
+    chemins.iter().copied().find(|p| {
+        Path::new(p)
+            .metadata()
+            .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+    })
+}
+
 fn set_battery_limit(limit: i64) -> Value {
     let target_pct = if limit <= 80 { 80 } else { 100 };
     let target_str = target_pct.to_string();
-    let helper = Path::new(HELPER_CHARGE);
-    if helper.metadata().map(|m| m.permissions().mode() & 0o111 != 0).unwrap_or(false) {
-        if let Some(o) = run_cmd("pkexec", &[HELPER_CHARGE, &target_str]) {
-            if o.status.success() {
-                let (l80, lpct, lkind) = get_charge_limit_info();
-                return json!({ "ok": true, "limit_80": l80, "limit_pct": lpct, "limit_kind": lkind });
-            }
-        }
+
+    // Chaque cause d'échec a son message : « impossible d'appliquer le seuil »
+    // ne disait pas si le helper manquait, si pkexec refusait, ou si la machine
+    // n'expose aucun mécanisme — et c'est ce message que l'applet affiche.
+    let Some(helper) = choisir_helper(HELPERS_CHARGE) else {
+        return json!({
+            "ok": false,
+            "error": format!(
+                "Helper de limite de charge absent ({}). À installer une fois : sudo bash dev/charge-limit/install.sh",
+                HELPERS_CHARGE[0]
+            ),
+        });
+    };
+
+    let Some(o) = run_cmd("pkexec", &[helper, &target_str]) else {
+        return json!({
+            "ok": false,
+            "error": "pkexec introuvable : impossible d'élever les droits pour écrire le seuil de charge",
+        });
+    };
+
+    if o.status.success() {
+        let (l80, lpct, lkind) = get_charge_limit_info();
+        return json!({ "ok": true, "limit_80": l80, "limit_pct": lpct, "limit_kind": lkind });
     }
-    json!({ "ok": false, "error": "Impossible d'appliquer le seuil de charge" })
+
+    let code = o
+        .status
+        .code()
+        .map(|c| c.to_string())
+        .unwrap_or_else(|| "signal".to_string());
+    let mut detail = String::from_utf8_lossy(&o.stderr).trim().to_string();
+    if detail.is_empty() {
+        detail = String::from_utf8_lossy(&o.stdout).trim().to_string();
+    }
+    if detail.is_empty() {
+        detail = "aucun détail renvoyé".to_string();
+    }
+    json!({
+        "ok": false,
+        "error": format!("Le helper de limite de charge a échoué (code {code}) : {detail}"),
+    })
 }
 
 pub fn run(args: &[String]) -> i32 {
@@ -370,5 +418,31 @@ pub fn run(args: &[String]) -> i32 {
             eprintln!("system-service: action inconnue: {action}");
             2
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn choisit_le_premier_helper_executable() {
+        let base = std::env::temp_dir().join(format!("as_helper_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).unwrap();
+        let inerte = base.join("non_executable");
+        let script = base.join("executable");
+        fs::write(&inerte, b"x").unwrap();
+        let mut f = fs::File::create(&script).unwrap();
+        writeln!(f, "#!/bin/sh").unwrap();
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+
+        let a = inerte.to_string_lossy().to_string();
+        let b = script.to_string_lossy().to_string();
+        let trouve = choisir_helper(&[a.as_str(), b.as_str()]);
+        assert_eq!(trouve, Some(b.as_str()), "le non-exécutable doit être ignoré");
+        assert_eq!(choisir_helper(&[a.as_str()]), None);
+        let _ = fs::remove_dir_all(&base);
     }
 }

@@ -104,8 +104,26 @@ pub fn run_sync_apps() -> i32 {
         upsert_marked_block(&cfg.join(ver).join("gtk.css"), &css);
     }
 
-    let scheme = if is_dark(&bg) { "prefer-dark" } else { "prefer-light" };
+    let sombre = is_dark(&bg);
+    let scheme = if sombre { "prefer-dark" } else { "prefer-light" };
     let _ = run_cmd("gsettings", &["set", "org.gnome.desktop.interface", "color-scheme", scheme]);
+    // `color-scheme` ne suffit pas si `gtk-application-prefer-dark-theme` est figé
+    // à `true` dans settings.ini (reste d'une installation antérieure) : GTK4 et
+    // libadwaita le respectent au-dessus du schéma, donc une app déjà ouverte
+    // restait sombre en mode clair. On aligne les deux INI sur la palette.
+    // Le thème GTK lui-même peut n'exister qu'en variante sombre (`adw-gtk3-dark`) :
+    // `color-scheme` ne repeint pas une app qui charge un thème sombre. On bascule
+    // donc le nom du thème quand la variante opposée est installée.
+    appliquer_variante_theme_gtk(sombre);
+    let tendu = if sombre { "true" } else { "false" };
+    for ver in ["gtk-3.0", "gtk-4.0"] {
+        crate::config::icones::maj_ini_key(
+            &cfg.join(ver).join("settings.ini"),
+            "[Settings]",
+            "gtk-application-prefer-dark-theme",
+            tendu,
+        );
+    }
 
     let active_colors = [
         fg.as_str(), surface.as_str(), surface_var.as_str(), surface_var.as_str(),
@@ -124,6 +142,38 @@ pub fn run_sync_apps() -> i32 {
         let _ = fs::write(cdir.join("aethershell.conf"), &scheme_conf);
     }
     0
+}
+
+/// Bascule `gtk-theme` entre `<base>` et `<base>-dark` selon le mode, uniquement
+/// si la variante visée existe sur le disque (aucune invention de nom de thème).
+fn appliquer_variante_theme_gtk(sombre: bool) {
+    let actuel = match run_cmd("gsettings", &["get", "org.gnome.desktop.interface", "gtk-theme"]) {
+        Some(o) => String::from_utf8_lossy(&o.stdout).trim().trim_matches('\'').to_string(),
+        None => return,
+    };
+    if actuel.is_empty() {
+        return;
+    }
+    let base = actuel.trim_end_matches("-dark").to_string();
+    let cible = if sombre { format!("{base}-dark") } else { base.clone() };
+    if cible == actuel {
+        return;
+    }
+    let installe = Path::new("/usr/share/themes").join(&cible).is_dir()
+        || Path::new("/usr/local/share/themes").join(&cible).is_dir()
+        || home_dir().join(".themes").join(&cible).is_dir();
+    if !installe {
+        return;
+    }
+    let _ = run_cmd("gsettings", &["set", "org.gnome.desktop.interface", "gtk-theme", &cible]);
+    for ver in ["gtk-3.0", "gtk-4.0"] {
+        crate::config::icones::maj_ini_key(
+            &config_dir().join(ver).join("settings.ini"),
+            "[Settings]",
+            "gtk-theme-name",
+            &cible,
+        );
+    }
 }
 
 fn hex_to_rgb(h_in: &str) -> (f64, f64, f64) {

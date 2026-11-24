@@ -38,5 +38,10 @@
         "name": "Presse-papiers (veilleurs cliphist)",
         "cmd": "sh -c '$HOME/.config/quickshell/core/cliphist_watch.sh' &",
         "enabled": true
+    },
+    {
+        "name": "Préchauffage du terminal (Ghostty)",
+        "cmd": "sh -c '$HOME/.config/quickshell/core/terminal_warm.sh' &",
+        "enabled": true
     }
 ]

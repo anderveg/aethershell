@@ -98,9 +98,21 @@ hl.bind(mainMod .. " + SHIFT + agrave", hl.dsp.window.move({ workspace = 10, fol
 hl.bind(mainMod .. " + ALT + agrave",  hl.dsp.window.move({ workspace = 10 }), { description = "envoyer la fenêtre sur le bureau 10 et l'y suivre" })
 
 --: Applications
-hl.bind(mainMod .. " + Return", hl.dsp.exec_cmd(terminal), { description = "terminal" })  -- essentiel
+-- Instance unique de Ghostty : core/terminal_warm.sh préchauffe un process
+-- résident au démarrage de session (window `special:keepalive`, invisible).
+-- Sans le drapeau, chaque lancement repayait l'initialisation complète de
+-- l'application (~780 ms mesurés ici : GTK4 + libadwaita + OpenGL + fontconfig) ;
+-- avec, une fenêtre s'ouvre dans le process déjà chaud en ~110 ms. Le drapeau
+-- n'est ajouté que pour le binaire nu : le lanceur `terminal-ghostty` de
+-- core/lien_systeme.rs pose déjà --gtk-single-instance=false (il ouvre un
+-- terminal dans un dossier, il ne doit pas rejoindre l'instance existante).
+local terminal_cmd = terminal
+if terminal == "ghostty" then
+    terminal_cmd = terminal .. " --gtk-single-instance=true"
+end
+hl.bind(mainMod .. " + Return", hl.dsp.exec_cmd(terminal_cmd), { description = "terminal" })  -- essentiel
 hl.bind(mainMod .. " + SHIFT + Return", hl.dsp.exec_cmd(
-    "sh -c 'case \"$1\" in *ghostty*) exec \"$1\" --class=org.aether.floating-terminal ;; *kitty*) exec \"$1\" --class org.aether.floating-terminal ;; *alacritty*) exec \"$1\" --class org.aether.floating-terminal ;; *foot*) exec \"$1\" --app-id org.aether.floating-terminal ;; *) exec \"$1\" ;; esac' _ " .. terminal
+    "sh -c 'case \"$1\" in *ghostty*) exec \"$1\" --gtk-single-instance=true --class=org.aether.floating-terminal ;; *kitty*) exec \"$1\" --class org.aether.floating-terminal ;; *alacritty*) exec \"$1\" --class org.aether.floating-terminal ;; *foot*) exec \"$1\" --app-id org.aether.floating-terminal ;; *) exec \"$1\" ;; esac' _ " .. terminal
 ), { description = "terminal flottant" })
 hl.bind(mainMod .. " + B", hl.dsp.exec_cmd(browser1), { description = "navigateur" })  -- essentiel
 hl.bind(mainMod .. " + Z", hl.dsp.exec_cmd(browser2), { description = "navigateur secondaire" })

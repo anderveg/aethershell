@@ -160,6 +160,101 @@ Rectangle {
         iconesProc.running = true
     }
 
+    // ── Curseurs (lot B2) ────────────────────────────────────────────────
+    // État porté par le panneau et non par la section : `OngletApparence.qml`
+    // est déchargé quand on change d'onglet (même piège que les profils).
+    property var curseursEtat: ({ ok: false, actif: "", taille: 24, themes: [] })
+    property string curseursMessage: ""
+    // Un `Process` ne porte qu'une commande à la fois : appliquer puis
+    // rafraîchir dans la foulée écraserait la seconde. File d'attente, comme
+    // `EnvPresets.qml`.
+    property var curseursEnAttente: []
+    // Aperçus de curseurs, indexés par identifiant de thème : alimentés par
+    // `as-core curseurs preview` (le PNG est généré une fois puis servi du cache).
+    property var curseursApercus: ({})
+
+    Process {
+        id: curseursProc
+        stdout: StdioCollector {
+            id: curseursSortie
+        }
+        onExited: {
+            const txt = curseursSortie.text.trim()
+            try {
+                const d = JSON.parse(txt)
+                if (d && d.ok) {
+                    if (d.themes) {
+                        root.curseursEtat = d
+                        root.preparerApercusCurseurs()
+                    } else if (d.id && d.chemin) {
+                        // Réponse de `curseurs preview` : la carte se remplit.
+                        const c = Object.assign({}, root.curseursApercus)
+                        c[String(d.id)] = String(d.chemin)
+                        root.curseursApercus = c
+                    } else {
+                        root.rafraichirCurseurs()
+                    }
+                    if (d.message) root.curseursMessage = String(d.message)
+                } else if (d && d.error) {
+                    root.curseursMessage = String(d.error)
+                }
+            } catch (e) {
+                if (txt !== "") root.curseursMessage = "Réponse illisible de as-core (curseurs)"
+            }
+            root.curseursSuivante()
+        }
+    }
+
+    function curseursLancer(cmd) {
+        root.curseursEnAttente.push(cmd)
+        if (!curseursProc.running) root.curseursSuivante()
+    }
+
+    function curseursSuivante() {
+        if (root.curseursEnAttente.length === 0) return
+        const cmd = root.curseursEnAttente.shift()
+        curseursProc.command = cmd
+        curseursProc.running = true
+    }
+
+    function rafraichirCurseurs() {
+        curseursLancer([Quickshell.shellPath("core/as-core"), "curseurs", "list"])
+    }
+
+    /// Demande l'aperçu des thèmes qui n'en ont pas encore. Le backend rend le
+    /// cache en ~2 ms ; seule la première conversion passe par `hyprcursor-util`.
+    /// On ne redemande jamais un aperçu déjà connu, sinon chaque rafraîchissement
+    /// de liste relancerait la file entière.
+    function preparerApercusCurseurs() {
+        const liste = root.curseursEtat.themes || []
+        for (let i = 0; i < liste.length; i++) {
+            const id = String(liste[i].id || "")
+            if (id === "" || root.curseursApercus[id]) continue
+            curseursLancer([Quickshell.shellPath("core/as-core"), "curseurs", "preview", id])
+        }
+    }
+
+    function appliquerCurseur(id, taille) {
+        root.curseursMessage = "Application de « " + id + " »…"
+        curseursLancer([Quickshell.shellPath("core/as-core"), "curseurs", "apply", String(id), String(taille)])
+    }
+
+    function definirTailleCurseur(taille) {
+        const actif = root.curseursEtat.actif || ""
+        if (actif === "") return
+        root.curseursMessage = "Taille " + taille + " px…"
+        curseursLancer([Quickshell.shellPath("core/as-core"), "curseurs", "apply", String(actif), String(taille)])
+    }
+
+    function installerPackCurseurs(chemin) {
+        root.curseursMessage = "Installation de l'archive…"
+        curseursLancer([Quickshell.shellPath("core/as-core"), "curseurs", "install", String(chemin)])
+    }
+
+    function supprimerCurseur(id) {
+        curseursLancer([Quickshell.shellPath("core/as-core"), "curseurs", "remove", String(id)])
+    }
+
     // Recherche : requête courante, alimentée par le champ de la §3.
     property string searchQuery: ""
     // Résultats calculés (label, tab, section, target) — voir searchIndex.
@@ -196,6 +291,10 @@ Rectangle {
           tab: 2, section: "widgets", target: "secWidgets" },
         { label: "Position du lanceur", words: "lanceur position capsule haut bas centre gauche droite",
           tab: 2, section: "widgets", target: "secWidgets" },
+        { label: "Profils de thème (fond, palette, icônes, curseur)", words: "profil profils theme theme profiles ambiance wallpaper palette icones curseur pack complet preset", tab: 0,
+          section: "esthetique_profils", target: "secProfils" },
+        { label: "Enregistrer le thème courant comme profil", words: "enregistrer sauver profil theme courant nom modes environnement", tab: 0,
+          section: "esthetique_profils", target: "profEnregistrerRow" },
         { label: "Thème et fond d'écran", words: "theme fond ecran wallpaper couleur",
           tab: 0, section: "esthetique_theme", target: "secTheme" },
         { label: "Jeux de couleurs Matugen", words: "matugen palette preset couleurs saturation",
@@ -210,6 +309,10 @@ Rectangle {
           tab: 0, section: "esthetique_fonds", target: "masqueProfondeurRow" },
         { label: "Thèmes et packs d'icônes", words: "icones icone pack theme qt6ct gtk papirus archive zip tar",
           tab: 0, section: "esthetique_icones", target: "secIcones" },
+        { label: "Thème de curseur (pointeur)", words: "curseur curseurs pointeur curseur souris icone xcursor hyprcursor taille",
+          tab: 0, section: "esthetique_curseurs", target: "secCurseurs" },
+        { label: "Taille du pointeur", words: "taille curseur pointeur px dimension taille souris",
+          tab: 0, section: "esthetique_curseurs", target: "curseurTailleRow" },
         { label: "Dossier des captures d'écran", words: "capture ecran screenshot dossier chemin enregistrement image",
           tab: 3, section: "ecrans_captures", target: "screenshotsDirRow" },
         { label: "Gaps internes et externes", words: "gaps espacement interieur exterieur marge",
@@ -314,6 +417,8 @@ Rectangle {
         "apps_programs": "secApps",
         "donnees_localisation": "secLocalisation",
         "ecrans_captures": "secCaptures",
+        "esthetique_profils": "secProfils",
+        "esthetique_curseurs": "secCurseurs",
         "systeme_maj": "shellMajRow"
     })
 
@@ -323,8 +428,9 @@ Rectangle {
     // le clic milieu et la recherche ouvraient le panneau sur « Bureau » en dépliant
     // une section cachée. Neuf sections manquaient.
     readonly property var ongletDeSection: ({
+        "esthetique_profils": 0,
         "esthetique_theme": 0, "esthetique_fonds": 0, "esthetique_aspect": 0,
-        "esthetique_icones": 0, "quickshell_barre": 0, "greeter_theme": 0,
+        "esthetique_icones": 0, "esthetique_curseurs": 0, "quickshell_barre": 0, "greeter_theme": 0,
         "quickshell_applets": 1, "quickshell_barres": 1, "quickshell_disques": 1,
         "quickshell_visualiseur": 1,
         "ilot_config": 1, "ilot_indicateurs": 1, "ilot_applets": 1,
@@ -2001,6 +2107,8 @@ Rectangle {
             root.runConfigCmd(["style", "lock_bg_mode", "image"])
         } else if (c === "icon_pack") {
             root.installerPackIcones(chemin)
+        } else if (c === "cursor_pack") {
+            root.installerPackCurseurs(chemin)
         }
         root.selecteurFichierCible = ""
     }

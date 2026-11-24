@@ -70,6 +70,12 @@ QtObject {
     property bool barBorder: true
     // Style d'agencement de la barre : "classic" (3 îlots) ou "island" (îlot central dynamique)
     property string barStyle: "classic"
+    // Interrupteurs Q4 : un profil de thème applique ses icônes et son curseur
+    // par défaut. Décocher fige le pack choisi à la main sur cette machine.
+    property bool applyIcons: true
+    property bool applyCursor: true
+    // Axe clair/sombre (lot B8) : « auto » suit le fond, sinon forcé.
+    property string themeMode: "auto"
     // État du panneau étendu de l'Îlot dynamique (Phase 3)
     property bool islandPanelOpen: false
     property bool wallpaperPickerOpen: false
@@ -616,6 +622,9 @@ QtObject {
             typeof data.bar_gaps_out_v === "number" ? data.bar_gaps_out_v : margeOut)))
         if (typeof data.bar_border === "boolean") root.barBorder = data.bar_border
         if (typeof data.bar_style === "string") root.barStyle = data.bar_style
+        if (typeof data.theme_apply_icons === "boolean") root.applyIcons = data.theme_apply_icons
+        if (typeof data.theme_apply_cursor === "boolean") root.applyCursor = data.theme_apply_cursor
+        if (typeof data.theme_mode === "string") root.themeMode = data.theme_mode
         if (typeof data.bar_gaps_transparent === "boolean") root.barGapsTransparent = data.bar_gaps_transparent
         if (typeof data.widgets_locked === "boolean") root.widgetsLocked = data.widgets_locked
         if (typeof data.viz_fps === "number") root.vizFps = Math.max(10, Math.min(60, Math.round(data.viz_fps)))

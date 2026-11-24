@@ -564,7 +564,7 @@ Item {
             ShellState.doNotDisturb = !ShellState.doNotDisturb
             Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "config", "style", "do_not_disturb", ShellState.doNotDisturb ? "true" : "false"])
         } else if (act === "caffeine") {
-            SystemServices.caffeineActif = !SystemServices.caffeineActif
+            SystemServices.definirCaffeine(!SystemServices.caffeineActif)
         } else if (act === "nuit") {
             Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "nuit", "basculer"])
         } else if (act === "nuit_temp") {
@@ -573,7 +573,7 @@ Item {
             const next = Theme.barStyle === "island" ? "classic" : "island"
             Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "config", "style", "bar_style", next])
         } else if (act === "widgets") {
-            Theme.widgetsBureauVisibles = !Theme.widgetsBureauVisibles
+            ShellState.setWidgetsBureauVisibles(!Theme.widgetsBureauVisibles)
         } else if (act === "theme_picker") {
             Theme.themePickerOpen = true
         } else if (act === "theme_apply" && entry.asArg) {

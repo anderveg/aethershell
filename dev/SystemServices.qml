@@ -40,10 +40,19 @@ QtObject {
     }
 
     // ── Caffeine (inhibition mise en veille) ─────────────────────────────────
+    // État partagé (style_vars.json via ConfigStore) : un profil d'environnement
+    // l'enregistre, et il survit à une relance du shell.
     property bool caffeineActif: false
     property Process caffeineProc: Process {
         command: ["systemd-inhibit", "--what=idle", "--who=AetherShell", "--why=Mode Caffeine", "sleep", "infinity"]
         running: root.caffeineActif
+    }
+
+    function definirCaffeine(actif) {
+        const v = Boolean(actif)
+        root.caffeineActif = v
+        Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "config", "style",
+                                 "caffeine_actif", v ? "true" : "false"])
     }
 
     // ── Météo partagée (as-core weather) ─────────────────────────────

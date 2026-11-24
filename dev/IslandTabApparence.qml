@@ -12,7 +12,6 @@ Item {
     id: root
 
     property bool themesExpanded: false
-    property var envPresets: []
     readonly property var tousThemes: (Theme.paletteNoms && Theme.paletteNoms.length > 0)
         ? Theme.paletteNoms : ["dynamic", "catppuccin"]
     readonly property var themesAffiches: themesExpanded
@@ -22,27 +21,16 @@ Item {
         id: cfgProc
     }
 
-    Process {
-        id: presetProc
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    const d = JSON.parse(text.trim())
-                    if (d && Array.isArray(d.presets)) {
-                        root.envPresets = d.presets
-                    } else if (d && d.ok && d.applied) {
-                        ConfigStore.refresh()
-                    }
-                } catch (e) {}
-            }
-        }
+    // Les profils vivent dans le singleton EnvPresets : cet onglet est détruit
+    // par le Loader de IslandPanel à chaque changement d'onglet, donc plus aucun
+    // état de liste ici. `rafraichir()` ne fait que demander une relecture.
+    function rafraichir() {
+        EnvPresets.refresh()
+        ThemeProfiles.refresh()
+        if (!themesScanProc.running) themesScanProc.running = true
     }
 
-    function runPresetCmd(args) {
-        presetProc.command = [Quickshell.shellPath("core/as-core"), "config"].concat(args)
-        presetProc.running = false
-        presetProc.running = true
-    }
+    Component.onCompleted: root.rafraichir()
 
     Process {
         id: themesScanProc
@@ -50,16 +38,20 @@ Item {
         running: false
     }
 
-    onVisibleChanged: {
-        if (visible && Theme.islandPanelOpen && Theme.islandPanelTab === 3) {
-            if (!themesScanProc.running) themesScanProc.running = true
-            root.runPresetCmd(["preset_list"])
-        }
-    }
+    onVisibleChanged: if (visible) root.rafraichir()
 
     function runStyle(key, val) {
         cfgProc.command = [Quickshell.shellPath("core/as-core"), "config", "style", String(key), String(val)]
         cfgProc.running = true
+    }
+
+    // Mode clair/sombre : on écrit le choix puis on régénère la palette, qui
+    // diffuse (gsettings color-scheme, gtk.css, bordure Hyprland) sans relance.
+    function setThemeMode(mode) {
+        const m = String(mode)
+        Theme.themeMode = m
+        root.runStyle("theme_mode", m)
+        Quickshell.execDetached(["bash", Quickshell.shellPath("core/generate_colors.sh")])
     }
 
     function applyPreset(name) {
@@ -114,6 +106,78 @@ Item {
             font.pixelSize: Theme.textXs
             font.weight: Font.Bold
             color: Qt.alpha(Theme.fg, 0.65)
+        }
+
+        // Profils de thème (lot B3) : le geste principal. Un profil applique
+        // fond + palette + icônes + curseur + modes d'un coup ; la rangée de
+        // palettes brutes qui suit reste le réglage de finesse.
+        Flow {
+            Layout.fillWidth: true
+            Layout.preferredHeight: implicitHeight
+            spacing: 6
+            visible: ThemeProfiles.profils.length > 0
+
+            Repeater {
+                model: ThemeProfiles.profils
+                delegate: Rectangle {
+                    required property var modelData
+                    readonly property bool actif: ThemeProfiles.dernierApplique === modelData.name
+                    width: Math.max(96, Math.floor((mainCol.width - 12) / 2))
+                    height: 44
+                    radius: 10
+                    color: actif ? Qt.alpha(Theme.accent, 0.26)
+                         : (tpMa.containsMouse ? Qt.alpha(Theme.accent, 0.18)
+                                               : Qt.alpha(Theme.surfaceVariant, 0.4))
+                    border.width: 1
+                    border.color: actif ? Theme.accent : Qt.alpha(Theme.fg, 0.1)
+
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 0
+                        width: parent.width - 12
+
+                        Text {
+                            width: parent.width
+                            horizontalAlignment: Text.AlignHCenter
+                            text: modelData.name
+                            color: actif ? Theme.accent : Theme.fg
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.textXs
+                            font.weight: actif ? Font.Bold : Font.Normal
+                            elide: Text.ElideRight
+                        }
+
+                        Text {
+                            width: parent.width
+                            horizontalAlignment: Text.AlignHCenter
+                            text: String(modelData.palette_label || "")
+                                  + (modelData.env_ref ? " · " + modelData.env_ref : "")
+                            color: Qt.alpha(Theme.fg, 0.6)
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.text2xs
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    MouseArea {
+                        id: tpMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: ThemeProfiles.apply(modelData.name)
+                    }
+                }
+            }
+        }
+
+        Text {
+            Layout.fillWidth: true
+            visible: ThemeProfiles.message !== ""
+            text: ThemeProfiles.message
+            color: Theme.accent
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.textXs
+            elide: Text.ElideRight
         }
 
         Flow {
@@ -185,6 +249,54 @@ Item {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: root.themesExpanded = !root.themesExpanded
+            }
+        }
+
+        // Mode clair/sombre (lot B8) : un axe à part, transversal aux profils.
+        // `auto` suit la luminance du fond, `dark`/`light` imposent le mode.
+        Text {
+            text: "MODE CLAIR / SOMBRE"
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.textXs
+            font.weight: Font.Bold
+            color: Qt.alpha(Theme.fg, 0.65)
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            Repeater {
+                model: [
+                    { key: "auto", label: "Auto (fond)" },
+                    { key: "light", label: "Clair" },
+                    { key: "dark", label: "Sombre" }
+                ]
+                delegate: Rectangle {
+                    required property var modelData
+                    readonly property bool active: Theme.themeMode === modelData.key
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 28
+                    radius: 8
+                    color: active ? Qt.alpha(Theme.accent, 0.24) : Qt.alpha(Theme.surfaceVariant, 0.34)
+                    border.width: 1
+                    border.color: active ? Theme.accent : Qt.alpha(Theme.fg, 0.1)
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: (active ? "✓ " : "") + parent.modelData.label
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.textXs
+                        font.weight: active ? Font.Bold : Font.Normal
+                        color: active ? Theme.accent : Theme.fg
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.setThemeMode(parent.modelData.key)
+                    }
+                }
             }
         }
 
@@ -399,6 +511,18 @@ Item {
                 color: Qt.alpha(Theme.fg, 0.55)
             }
 
+            // Retour d'action : sans lui, appliquer un profil identique à l'état
+            // courant ne produit aucun changement visible et passe pour un bug.
+            Text {
+                Layout.fillWidth: true
+                visible: EnvPresets.message !== ""
+                text: EnvPresets.message
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.textXs
+                color: Theme.accent
+                elide: Text.ElideRight
+            }
+
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 6
@@ -424,7 +548,7 @@ Item {
                         onAccepted: {
                             const n = text.trim()
                             if (!n) return
-                            root.runPresetCmd(["preset_save", n])
+                            EnvPresets.save(n)
                             text = ""
                         }
 
@@ -465,7 +589,7 @@ Item {
                         onClicked: {
                             const n = presetInput.text.trim()
                             if (!n) return
-                            root.runPresetCmd(["preset_save", n])
+                            EnvPresets.save(n)
                             presetInput.text = ""
                         }
                     }
@@ -475,17 +599,19 @@ Item {
             Flow {
                 Layout.fillWidth: true
                 spacing: 6
-                visible: root.envPresets.length > 0
+                visible: EnvPresets.presets.length > 0
 
                 Repeater {
-                    model: root.envPresets
+                    model: EnvPresets.presets
                     delegate: Rectangle {
                         required property var modelData
                         width: prRow.implicitWidth + 14
                         height: 26
                         radius: 8
-                        color: prMa.containsMouse ? Qt.alpha(Theme.accent, 0.22) : Qt.alpha(Theme.surfaceVariant, 0.5)
-                        border.color: Qt.alpha(Theme.fg, 0.14)
+                        readonly property bool actif: EnvPresets.dernierApplique === modelData.name
+                        color: actif ? Qt.alpha(Theme.accent, 0.28)
+                             : (prMa.containsMouse ? Qt.alpha(Theme.accent, 0.22) : Qt.alpha(Theme.surfaceVariant, 0.5))
+                        border.color: actif ? Theme.accent : Qt.alpha(Theme.fg, 0.14)
                         border.width: 1
 
                         Row {
@@ -496,9 +622,30 @@ Item {
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: modelData.name + " · " + modelData.theme
+                                      + (modelData.env_v2 === false ? " · style seul" : "")
                                 font.family: Theme.fontUi
                                 font.pixelSize: 11
                                 color: Theme.fg
+                            }
+
+                            // ⟳ : réenregistre le profil sous le même nom avec l'état
+                            // courant, ce qui lui ajoute les modes (bloc `env`). Les
+                            // profils antérieurs n'en ont pas et ne peuvent donc pas
+                            // les restaurer.
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "⟳"
+                                font.pixelSize: 11
+                                color: majPrMa.containsMouse ? Theme.accent : Qt.alpha(Theme.fg, 0.55)
+
+                                MouseArea {
+                                    id: majPrMa
+                                    anchors.fill: parent
+                                    anchors.margins: -3
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: EnvPresets.save(modelData.name)
+                                }
                             }
 
                             Text {
@@ -513,7 +660,7 @@ Item {
                                     anchors.margins: -3
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.runPresetCmd(["preset_delete", modelData.name])
+                                    onClicked: EnvPresets.remove(modelData.name)
                                 }
                             }
                         }
@@ -524,7 +671,7 @@ Item {
                             anchors.rightMargin: 18
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: root.runPresetCmd(["preset_apply", modelData.name])
+                            onClicked: EnvPresets.apply(modelData.name)
                         }
                     }
                 }

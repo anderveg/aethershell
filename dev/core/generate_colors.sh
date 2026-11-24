@@ -33,9 +33,19 @@ MATUGEN_SCHEME="$(jq -r '.matugen_scheme // "scheme-tonal-spot"' "$STYLE_VARS" 2
 MATUGEN_CONTRAST="$(jq -r '.matugen_contrast // 0' "$STYLE_VARS" 2>/dev/null || true)"
 [ -n "$MATUGEN_CONTRAST" ] || MATUGEN_CONTRAST="0"
 
-MATUGEN_JSON="$(matugen image "$WALLPAPER" -t "$MATUGEN_SCHEME" --contrast "$MATUGEN_CONTRAST" --prefer saturation --dry-run --json hex -q 2>/dev/null)"
+# Mode clair/sombre (lot B8) : `auto` = matugen décide d'après le fond, sinon
+# on impose le mode. Le reste de la chaîne (gsettings color-scheme, gtk.css) suit
+# la luminance de la palette produite, donc rien d'autre à piloter ici.
+THEME_MODE="$(jq -r '.theme_mode // "auto"' "$STYLE_VARS" 2>/dev/null || true)"
+MODE_ARG=""
+case "$THEME_MODE" in
+    dark)  MODE_ARG="-m dark" ;;
+    light) MODE_ARG="-m light" ;;
+esac
+
+MATUGEN_JSON="$(matugen image "$WALLPAPER" -t "$MATUGEN_SCHEME" $MODE_ARG --contrast "$MATUGEN_CONTRAST" --prefer saturation --dry-run --json hex -q 2>/dev/null)"
 if [ -z "$MATUGEN_JSON" ]; then
-    MATUGEN_JSON="$(matugen image "$WALLPAPER" -t "$MATUGEN_SCHEME" --contrast "$MATUGEN_CONTRAST" --source-color-index 0 --dry-run --json hex -q 2>/dev/null)"
+    MATUGEN_JSON="$(matugen image "$WALLPAPER" -t "$MATUGEN_SCHEME" $MODE_ARG --contrast "$MATUGEN_CONTRAST" --source-color-index 0 --dry-run --json hex -q 2>/dev/null)"
 fi
 if [ -z "$MATUGEN_JSON" ]; then
     echo "Matugen failed to extract palette from $WALLPAPER"

@@ -257,23 +257,66 @@ pub fn run_sync(args: &[String]) -> i32 {
     0
 }
 
+/// Variante de jeton à lire. Matugen publie le même jeton en `dark`, `light` et
+/// `default` ; `default` suit le mode qu'il a résolu. Un mode explicite
+/// (`theme_mode` dans `style_vars.json`, sinon `mode`/`is_dark_mode` de la
+/// sortie) tranche ; sans indication on lit `default` d'abord, puis `dark`
+/// comme avant, pour ne rien changer aux machines existantes.
+fn variante_matugen(style: &Map<String, Value>, matugen: &Value) -> String {
+    if let Some(m) = style.get("theme_mode").and_then(|v| v.as_str()) {
+        if m == "light" || m == "dark" {
+            return m.to_string();
+        }
+    }
+    if let Some(m) = matugen.get("mode").and_then(|v| v.as_str()) {
+        if m == "light" || m == "dark" {
+            return m.to_string();
+        }
+    }
+    match matugen.get("is_dark_mode").and_then(|v| v.as_bool()) {
+        Some(true) => "dark".to_string(),
+        Some(false) => "light".to_string(),
+        None => "default".to_string(),
+    }
+}
+
+/// Ordre de lecture des variantes pour un jeton.
+fn ordre_variantes(variante: &str) -> [&'static str; 3] {
+    match variante {
+        "light" => ["light", "default", "dark"],
+        "dark" => ["dark", "default", "light"],
+        _ => ["default", "dark", "light"],
+    }
+}
+
 /// Couleur d'un jeton Matugen : `{"dark": {"color": "#…"}}`, `{"dark": "#…"}` ou
 /// `"#…"`, selon la version de Matugen et le format demandé.
-fn jeton(colors: &Map<String, Value>, token: &str, defaut: &str) -> String {
+fn jeton(colors: &Map<String, Value>, token: &str, defaut: &str, variante: &str) -> String {
     let val = match colors.get(token) {
         Some(v) => v,
         None => return defaut.to_string(),
     };
     let candidat = match val {
-        Value::Object(m) => match m.get("dark").or_else(|| m.get("default")) {
-            Some(Value::Object(inner)) => inner
-                .get("color")
-                .or_else(|| inner.get("hex"))
-                .and_then(|v| v.as_str())
-                .map(str::to_string),
-            Some(Value::String(s)) => Some(s.clone()),
-            _ => None,
-        },
+        Value::Object(m) => {
+            let mut trouve = None;
+            for cle in ordre_variantes(variante) {
+                match m.get(cle) {
+                    Some(Value::Object(inner)) => {
+                        trouve = inner
+                            .get("color")
+                            .or_else(|| inner.get("hex"))
+                            .and_then(|v| v.as_str())
+                            .map(str::to_string);
+                    }
+                    Some(Value::String(s)) => trouve = Some(s.clone()),
+                    _ => {}
+                }
+                if trouve.is_some() {
+                    break;
+                }
+            }
+            trouve
+        }
         Value::String(s) => Some(s.clone()),
         _ => None,
     };
@@ -320,17 +363,18 @@ pub fn run_matugen(args: &[String]) -> i32 {
 
     let chemin = style_path_depuis(args);
     let mut style = read_map(&chemin);
+    let variante = variante_matugen(&style, &matugen);
     let mut palette = Map::new();
-    palette.insert("bg".into(), json!(jeton(colors, "surface_container_lowest", "#1e1e2e")));
-    palette.insert("fg".into(), json!(jeton(colors, "on_surface", "#cdd6f4")));
-    palette.insert("accent".into(), json!(jeton(colors, "primary", "#b4befe")));
-    palette.insert("accent_muted".into(), json!(jeton(colors, "secondary", "#89b4fa")));
-    palette.insert("surface".into(), json!(jeton(colors, "surface", "#313244")));
-    palette.insert("surface_variant".into(), json!(jeton(colors, "surface_container", "#45475a")));
-    palette.insert("error".into(), json!(jeton(colors, "error", "#f38ba8")));
-    palette.insert("warn".into(), json!(jeton(colors, "tertiary", "#fab387")));
-    palette.insert("info".into(), json!(jeton(colors, "secondary", "#89b4fa")));
-    palette.insert("success".into(), json!(jeton(colors, "tertiary_fixed_dim", "#a6e3a1")));
+    palette.insert("bg".into(), json!(jeton(colors, "surface_container_lowest", "#1e1e2e", &variante)));
+    palette.insert("fg".into(), json!(jeton(colors, "on_surface", "#cdd6f4", &variante)));
+    palette.insert("accent".into(), json!(jeton(colors, "primary", "#b4befe", &variante)));
+    palette.insert("accent_muted".into(), json!(jeton(colors, "secondary", "#89b4fa", &variante)));
+    palette.insert("surface".into(), json!(jeton(colors, "surface", "#313244", &variante)));
+    palette.insert("surface_variant".into(), json!(jeton(colors, "surface_container", "#45475a", &variante)));
+    palette.insert("error".into(), json!(jeton(colors, "error", "#f38ba8", &variante)));
+    palette.insert("warn".into(), json!(jeton(colors, "tertiary", "#fab387", &variante)));
+    palette.insert("info".into(), json!(jeton(colors, "secondary", "#89b4fa", &variante)));
+    palette.insert("success".into(), json!(jeton(colors, "tertiary_fixed_dim", "#a6e3a1", &variante)));
 
     let mut palettes = match style.remove("palette") {
         Some(Value::Object(m)) => m,
@@ -369,10 +413,32 @@ mod tests {
             "secondary": { "dark": "#00ff00" },
             "tertiary": "0000ff",
         }));
-        assert_eq!(jeton(&colors, "primary", "#111111"), "#ff0000");
-        assert_eq!(jeton(&colors, "secondary", "#111111"), "#00ff00");
-        assert_eq!(jeton(&colors, "tertiary", "#111111"), "#0000ff");
-        assert_eq!(jeton(&colors, "absent", "#111111"), "#111111");
+        assert_eq!(jeton(&colors, "primary", "#111111", "dark"), "#ff0000");
+        assert_eq!(jeton(&colors, "secondary", "#111111", "dark"), "#00ff00");
+        assert_eq!(jeton(&colors, "tertiary", "#111111", "dark"), "#0000ff");
+        assert_eq!(jeton(&colors, "absent", "#111111", "dark"), "#111111");
+    }
+
+    #[test]
+    fn variante_claire_lit_les_jetons_light() {
+        let colors = map(json!({
+            "surface": { "dark": { "color": "#1e100d" }, "light": { "color": "#fff8f6" } },
+            "primary": { "dark": { "color": "#ffb4a5" }, "light": { "color": "#ba1c00" } },
+        }));
+        assert_eq!(jeton(&colors, "surface", "#000000", "light"), "#fff8f6");
+        assert_eq!(jeton(&colors, "surface", "#000000", "dark"), "#1e100d");
+        assert_eq!(jeton(&colors, "primary", "#000000", "auto"), "#ffb4a5");
+    }
+
+    #[test]
+    fn mode_explicite_prime_sur_la_sortie_matugen() {
+        let matugen = json!({ "mode": "light", "is_dark_mode": false });
+        let force = map(json!({ "theme_mode": "dark" }));
+        assert_eq!(variante_matugen(&force, &matugen), "dark");
+        let auto = map(json!({ "theme_mode": "auto" }));
+        assert_eq!(variante_matugen(&auto, &matugen), "light");
+        let muet = map(json!({}));
+        assert_eq!(variante_matugen(&muet, &matugen), "light");
     }
 
     #[test]

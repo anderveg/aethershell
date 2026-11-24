@@ -83,6 +83,13 @@ Scope {
     property int resizeStep: 15
     property var panelSections: ({})
 
+    // Modes d'environnement exposés par le backend (caféine, DND, widgets) :
+    // ce sont eux qu'un profil enregistre et restaure, et c'est ici qu'ils sont
+    // réhydratés au démarrage — sinon la caféine repart à « off » à chaque
+    // relance alors que style_vars.json dit le contraire.
+    property bool caffeineActif: false
+    property bool widgetsBureauVisibles: true
+
     property var cmdQueue: []
 
     function resumeChemin(chemin) {
@@ -212,6 +219,17 @@ Scope {
             if (typeof data.display.ntp === "boolean") root.ntpSynced = data.display.ntp
         }
         if (typeof data.idle_suspend_timeout === "number") root.idleSuspendTimeout = data.idle_suspend_timeout
+        // Modes d'environnement : on les propage aux singletons qui les affichent.
+        // Point unique de réhydratation — au démarrage comme après un profil.
+        if (typeof data.caffeine_actif === "boolean") {
+            root.caffeineActif = data.caffeine_actif
+            SystemServices.caffeineActif = data.caffeine_actif
+        }
+        if (typeof data.widgets_bureau_visibles === "boolean") {
+            root.widgetsBureauVisibles = data.widgets_bureau_visibles
+            Theme.widgetsBureauVisibles = data.widgets_bureau_visibles
+        }
+        if (typeof data.do_not_disturb === "boolean") ShellState.doNotDisturb = data.do_not_disturb
         if (typeof data.screensaver_timeout === "number") root.screensaverTimeout = data.screensaver_timeout
         if (typeof data.screensaver_app === "string") root.screensaverApp = data.screensaver_app
         if (typeof data.screensaver_random_colors === "boolean") root.screensaverRandomColors = data.screensaver_random_colors

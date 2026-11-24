@@ -171,7 +171,10 @@ pub fn lister_themes() -> Value {
     json!({ "ok": true, "actif": actif, "themes": themes })
 }
 
-fn maj_ini_key(path: &Path, section: &str, key: &str, value: &str) {
+/// Écrit/remplace une clé d'un INI en préservant le reste du fichier (sections
+/// comprises). Partagé avec `theme_sync`/`terminal_theme` : plusieurs réglages
+/// GTK doivent suivre la palette, pas seulement le jeu d'icônes.
+pub(crate) fn maj_ini_key(path: &Path, section: &str, key: &str, value: &str) {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }

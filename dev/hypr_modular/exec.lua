@@ -11,8 +11,40 @@
 -- fois au chargement du fichier (donc au démarrage de session), pas au
 -- hyprctl reload (qui re-exécute le fichier mais le timer est déjà passé).
 
-hl.env("XCURSOR_SIZE", "24")
-hl.env("HYPRCURSOR_SIZE", "24")
+-- Curseur : thème et taille lus dans style_vars.json (posés par le panneau via
+-- `as-core curseurs apply`) puis poussés aux applications lancées par le
+-- compositeur. `environment.d` couvre celles lancées hors de Hyprland et n'est
+-- relu qu'à la connexion : les deux canaux doivent rester alignés.
+-- Repli dur (Vimix-cursors / 24) et bornage 16..64 : une valeur absente ou
+-- aberrante ne doit jamais empêcher le chargement de la config.
+local function read_style_vars_texte()
+    local p = os.getenv("HOME") .. "/.config/quickshell/core/style_vars.json"
+    local f = io.open(p, "r")
+    if not f then return nil end
+    local s = f:read("*a")
+    f:close()
+    return s
+end
+
+local function read_cursor_settings()
+    local s = read_style_vars_texte()
+    local theme = "Vimix-cursors"
+    local size = 24
+    if s then
+        local t = s:match('"cursor_theme"%s*:%s*"([^"]*)"')
+        if t and t ~= "" then theme = t end
+        local n = s:match('"cursor_size"%s*:%s*(%d+)')
+        local v = tonumber(n)
+        if v and v >= 16 and v <= 64 then size = v end
+    end
+    return theme, tostring(size)
+end
+
+local CURSOR_THEME, CURSOR_SIZE = read_cursor_settings()
+hl.env("XCURSOR_THEME", CURSOR_THEME)
+hl.env("HYPRCURSOR_THEME", CURSOR_THEME)
+hl.env("XCURSOR_SIZE", CURSOR_SIZE)
+hl.env("HYPRCURSOR_SIZE", CURSOR_SIZE)
 
 local function get_marker_path()
     local sig = os.getenv("HYPRLAND_INSTANCE_SIGNATURE") or "default"

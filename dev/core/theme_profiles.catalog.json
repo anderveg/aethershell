@@ -1,0 +1,263 @@
+{
+  "Clairière": {
+    "created_at": 0,
+    "style": {
+      "bar_style": "classic",
+      "global_opacity": 0.82,
+      "shell_opacity": 0.86,
+      "blur_enabled": true,
+      "blur_size": 6,
+      "blur_vibrancy": 0.5,
+      "bar_border": true
+    },
+    "palette": {
+      "mode": "matugen",
+      "scheme": "scheme-content",
+      "contrast": 0.0
+    },
+    "wallpaper": {
+      "file": "clairiere.jpg"
+    },
+    "icons": {
+      "theme": "Papirus-Light"
+    },
+    "cursor": {
+      "theme": "Vimix-cursors",
+      "size": 24
+    },
+    "env_ref": null,
+    "theme_mode": "light"
+  },
+  "Coucher d'automne": {
+    "created_at": 0,
+    "style": {
+      "bar_style": "island",
+      "global_opacity": 0.78,
+      "shell_opacity": 0.82,
+      "blur_enabled": true,
+      "blur_size": 8,
+      "blur_vibrancy": 0.6,
+      "bar_border": true
+    },
+    "palette": {
+      "mode": "matugen",
+      "scheme": "scheme-fidelity",
+      "contrast": 0.0
+    },
+    "wallpaper": {
+      "file": "coucher-automne.jpg"
+    },
+    "icons": {
+      "theme": "Papirus-Dark"
+    },
+    "cursor": {
+      "theme": "Vimix-white-cursors",
+      "size": 24
+    },
+    "env_ref": null,
+    "theme_mode": "dark"
+  },
+  "Village d'été": {
+    "created_at": 0,
+    "style": {
+      "bar_style": "classic",
+      "global_opacity": 0.86,
+      "shell_opacity": 0.88,
+      "blur_enabled": true,
+      "blur_size": 6,
+      "blur_vibrancy": 0.45,
+      "bar_border": true
+    },
+    "palette": {
+      "mode": "matugen",
+      "scheme": "scheme-tonal-spot",
+      "contrast": 0.0
+    },
+    "wallpaper": {
+      "file": "village-ete.jpg"
+    },
+    "icons": {
+      "theme": "Papirus-Light"
+    },
+    "cursor": {
+      "theme": "Vimix-cursors",
+      "size": 24
+    },
+    "env_ref": null,
+    "theme_mode": "light"
+  },
+  "Ville blanche": {
+    "created_at": 0,
+    "style": {
+      "bar_style": "classic",
+      "global_opacity": 0.9,
+      "shell_opacity": 0.92,
+      "blur_enabled": true,
+      "blur_size": 4,
+      "blur_vibrancy": 0.35,
+      "bar_border": true
+    },
+    "palette": {
+      "mode": "matugen",
+      "scheme": "scheme-neutral",
+      "contrast": 0.25
+    },
+    "wallpaper": {
+      "file": "ville-blanche.jpg"
+    },
+    "icons": {
+      "theme": "Papirus-Light"
+    },
+    "cursor": {
+      "theme": "Vimix-cursors",
+      "size": 24
+    },
+    "env_ref": null,
+    "theme_mode": "light"
+  },
+  "Carte du monde": {
+    "created_at": 0,
+    "style": {
+      "bar_style": "island",
+      "global_opacity": 0.74,
+      "shell_opacity": 0.8,
+      "blur_enabled": true,
+      "blur_size": 8,
+      "blur_vibrancy": 0.65,
+      "bar_border": true
+    },
+    "palette": {
+      "mode": "matugen",
+      "scheme": "scheme-vibrant",
+      "contrast": 0.0
+    },
+    "wallpaper": {
+      "file": "carte-du-monde.jpg"
+    },
+    "icons": {
+      "theme": "Papirus-Light"
+    },
+    "cursor": {
+      "theme": "Vimix-cursors",
+      "size": 24
+    },
+    "env_ref": null,
+    "theme_mode": "light"
+  },
+  "Sanctuaire": {
+    "created_at": 0,
+    "style": {
+      "bar_style": "island",
+      "global_opacity": 0.7,
+      "shell_opacity": 0.76,
+      "blur_enabled": true,
+      "blur_size": 8,
+      "blur_vibrancy": 0.55,
+      "bar_border": true
+    },
+    "palette": {
+      "mode": "matugen",
+      "scheme": "scheme-expressive",
+      "contrast": 0.0
+    },
+    "wallpaper": {
+      "file": "sanctuaire.jpg"
+    },
+    "icons": {
+      "theme": "Papirus-Dark"
+    },
+    "cursor": {
+      "theme": "Vimix-white-cursors",
+      "size": 24
+    },
+    "env_ref": null,
+    "theme_mode": "dark"
+  },
+  "Hornet": {
+    "created_at": 0,
+    "style": {
+      "bar_style": "island",
+      "global_opacity": 0.68,
+      "shell_opacity": 0.74,
+      "blur_enabled": true,
+      "blur_size": 10,
+      "blur_vibrancy": 0.7,
+      "bar_border": true
+    },
+    "palette": {
+      "mode": "matugen",
+      "scheme": "scheme-fidelity",
+      "contrast": 0.1
+    },
+    "wallpaper": {
+      "file": "hornet.jpg"
+    },
+    "icons": {
+      "theme": "Papirus-Dark"
+    },
+    "cursor": {
+      "theme": "Vimix-white-cursors",
+      "size": 24
+    },
+    "env_ref": null,
+    "theme_mode": "dark"
+  },
+  "Néon magenta": {
+    "created_at": 0,
+    "style": {
+      "bar_style": "island",
+      "global_opacity": 0.72,
+      "shell_opacity": 0.78,
+      "blur_enabled": true,
+      "blur_size": 12,
+      "blur_vibrancy": 0.75,
+      "bar_border": true
+    },
+    "palette": {
+      "mode": "matugen",
+      "scheme": "scheme-expressive",
+      "contrast": 0.15
+    },
+    "wallpaper": {
+      "file": "neon-magenta.jpg"
+    },
+    "icons": {
+      "theme": "Papirus-Dark"
+    },
+    "cursor": {
+      "theme": "Vimix-white-cursors",
+      "size": 24
+    },
+    "env_ref": null,
+    "theme_mode": "dark"
+  },
+  "Grande Vague": {
+    "created_at": 0,
+    "style": {
+      "bar_style": "classic",
+      "global_opacity": 0.84,
+      "shell_opacity": 0.86,
+      "blur_enabled": true,
+      "blur_size": 6,
+      "blur_vibrancy": 0.5,
+      "bar_border": true
+    },
+    "palette": {
+      "mode": "matugen",
+      "scheme": "scheme-neutral",
+      "contrast": 0.0
+    },
+    "wallpaper": {
+      "file": "grande-vague.jpg"
+    },
+    "icons": {
+      "theme": "Papirus-Dark"
+    },
+    "cursor": {
+      "theme": "Vimix-white-cursors",
+      "size": 24
+    },
+    "env_ref": null,
+    "theme_mode": "dark"
+  }
+}

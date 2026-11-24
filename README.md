@@ -23,6 +23,9 @@ Plutôt qu'un simple thème de barre, AetherShell regroupe les éléments visuel
 * **Visualiseur audio réactif** : intégration discrète d'une onde PipeWire native (`pwscope`) ou de barres spectrales (`cava`), avec extinction automatique après dix secondes de silence pour préserver les ressources GPU/CPU.
 * **Suivi de tâches & intégration Hermes** : gestion locale de checklists Markdown (`- [ ]`) avec sélecteur de fichiers graphique et interrupteur de surveillance optionnel confiant l'exécution des tâches cochées à l'agent Hermes via un worker d'arrière-plan.
 * **Sélecteurs graphiques intégrés** : feuilles modales dessinées directement dans la surface du shell ([`SelecteurDossier.qml`](dev/SelecteurDossier.qml), [`SelecteurFichier.qml`](dev/SelecteurFichier.qml)), contournant la limitation des dialogues Wayland traditionnels qui s'ouvriraient sous la surface de couche (`Overlay`).
+* **Profils de thème & catalogue livré** (`theme_profile`) : un seul geste applique un bureau entier — fond d'écran, palette Matugen, ambiance du shell (28 clés de style), jeu d'icônes, curseur, et une **référence** vers un profil d'environnement (nuit, focus…) plutôt qu'une copie de ses modes. Neuf presets accompagnés de leurs fonds 1920×1080 (≈ 2,6 Mo, `dev/wallpapers/`) sont copiés dans le dossier choisi au premier démarrage et référencés par **nom de fichier seul**. Chaque application est transactionnelle : l'état précédent est archivé, une palette qui échoue restaure le style *avant* de toucher aux icônes ou au curseur, et « appliqué » n'est annoncé qu'après relecture de l'état réel.
+* **Gestionnaire de curseurs** (`curseurs`) : liste, aperçu, installation et application d'un pack sur les cinq canaux d'un coup — compositeur (`hyprctl setcursor`), réglages GNOME, INI GTK3/GTK4, `environment.d` et `style_vars.json` — tailles de 16 à 64 px.
+* **Axe clair / sombre** (`theme_mode: auto | dark | light`) : Matugen est appelé dans le mode demandé et la variante de chaque couleur est lue en conséquence, si bien qu'un même fond peut être forcé clair ou sombre. Le shell, la barre, les panneaux et Hyprland basculent instantanément ; les applications GTK et Qt ne suivent qu'à leur lancement (leurs fichiers de thème sont lus au démarrage), ce que l'interface indique explicitement.
 * **Gestionnaire d'écran de connexion (SDDM)** : réglage du thème Astronaut et de variantes Qylock depuis le panneau, synchronisation automatique de la disposition clavier et de la locale UTF-8 dès l'assistant de premier démarrage (ou l'onglet Clavier), et lanceur de prévisualisation sécurisé isolant le test sur un bureau dédié (`workspace 99`) pour ne jamais bloquer la session active.
 
 ---
@@ -90,7 +93,7 @@ onglet **Système** ➜ tiroir **Mise à jour du shell** ➜ *Désinstaller Aeth
 
 ### Protection stricte des données locales
 Le déploiement ne remplace jamais aveuglément les fichiers vivants :
-* **États locaux protégés** : `style_vars.json`, `bar_applets.json`, `widgets.json`, `autostart.json`, `todo.json`, `secrets.json`, etc. ne sont jamais écrasés s'ils existent déjà sur la machine cible.
+* **États locaux protégés** : `style_vars.json`, `bar_applets.json`, `widgets.json`, `autostart.json`, `todo.json`, `secrets.json`, `theme_profiles.json` (vos propres profils), etc. ne sont jamais écrasés s'ils existent déjà sur la machine cible. Les presets livrés portent `created_at: 0` et sont rafraîchis par `as-core catalogue install` ; dès que vous réenregistrez l'un d'eux, il prend votre date et n'est plus jamais remplacé.
 * **Configuration Hyprland personnalisée** : les fichiers personnels sous `~/.config/hypr/user/` (`binds.lua`, `autostart.txt`), ainsi que `input.lua`, `general.lua` et les profils matériels restent maîtres. En cas de différence avec le dépôt, une copie comparative `.upstream` est générée sans toucher au fichier actif.
 * **Filet de sécurité granulaire** : chaque déploiement crée une archive `.tar.gz` de secours et un snapshot décompressé miroir sous `~/.config/backups_env/snapshots/<horodatage>/` avec table d'empreintes sha256 (`manifest.json`), permettant de restaurer un seul fichier en cas de besoin (`./install.sh --restore-file <chemin>`).
 
@@ -138,6 +141,8 @@ dev/
 ├── widgets/          # Composants de bureau (horloge, todo, système, météo...)
 ├── hypr_modular/     # Configuration Hyprland modulaire en Lua
 ├── hyprquickpaper/   # Moteur de fond d'écran et gestion de palette
+├── wallpapers/       # Neuf fonds 1920×1080 livrés avec le catalogue de thèmes (≈ 2,6 Mo)
+├── charge-limit/     # Action polkit + helper root de la limite de charge batterie
 ├── sddm/             # Scripts et helpers pour l'écran de connexion SDDM
 ├── systemd/          # Définitions des unités utilisateur (quickshell.service...)
 └── *.qml             # Surfaces Quickshell (barre, panneau, popups, sélecteurs...)

@@ -22,6 +22,9 @@ Rather than a simple bar theme, AetherShell brings together the visual and utili
 * **Reactive Audio Visualizer**: discreet integration of a native PipeWire waveform (`pwscope`) or spectral bars (`cava`), with automatic sleep after ten seconds of silence to conserve GPU/CPU resources.
 * **Task Tracking & Hermes Integration**: local Markdown checklist management (`- [ ]`) with a graphical file picker and an optional monitoring switch delegating checked tasks to the Hermes agent via a background worker.
 * **Integrated Graphical Selectors**: modal sheets drawn directly within the shell surface ([`SelecteurDossier.qml`](../dev/SelecteurDossier.qml), [`SelecteurFichier.qml`](../dev/SelecteurFichier.qml)), bypassing the limitation of traditional Wayland dialogs that would open beneath the overlay layer surface.
+* **Theme Profiles & Shipped Catalog** (`theme_profile`): one gesture applies a whole desktop — wallpaper, Matugen palette, shell ambience (28 style keys), icon pack, cursor and an optional reference to an environment profile (night, focus, cafés…). Nine curated presets ship with their 1920×1080 wallpapers (`dev/wallpapers/`, ~2.6 MB total), copied into the folder chosen during the first-run wizard and referenced by **file name only**. Each application is transactional: the previous state is archived (`__avant__`), a failing palette restores the shell style *before* touching icons or cursor, and "applied" is only announced after re-reading the live state.
+* **Cursor Manager** (`curseurs`): lists, previews, installs and applies cursor packs across all five channels at once — compositor (`hyprctl setcursor`), GNOME settings, GTK3/GTK4 INI, `environment.d` and `style_vars.json` — with a size range of 16–64 px.
+* **Light / Dark Axis** (`theme_mode: auto | dark | light`): Matugen is called with the matching mode and the variant of each token is read accordingly, so a wallpaper can be forced light or dark. The shell, the bar, the panels and Hyprland switch instantly; GTK and Qt applications only follow at launch (their theme files are read at startup), which the UI states explicitly.
 * **Login Screen Manager (SDDM)**: configuration of the Astronaut theme and Qylock variants from the panel, automatic keyboard layout and UTF-8 locale synchronization from the first-run wizard (or Keyboard tab), and a safe preview launcher isolating tests on a dedicated workspace (`workspace 99`) to never freeze the active session.
 
 ---
@@ -78,7 +81,7 @@ panel: **System** tab ➜ **Shell update** drawer ➜ *Uninstall AetherShell*.
 ### Strict Protection of Local Data
 
 Deployment never blindly replaces live files:
-* **Protected local states**: `style_vars.json`, `bar_applets.json`, `widgets.json`, `autostart.json`, `todo.json`, `secrets.json`, etc. are never overwritten if they already exist on the target machine.
+* **Protected local states**: `style_vars.json`, `bar_applets.json`, `widgets.json`, `autostart.json`, `todo.json`, `secrets.json`, `theme_profiles.json` (your own profiles), etc. are never overwritten if they already exist on the target machine. Shipped theme presets carry `created_at: 0` and are refreshed by `as-core catalogue install`; as soon as you re-save one, it takes your own date and is never replaced.
 * **Custom Hyprland configuration**: `binds.lua`, `input.lua`, `general.lua`, and hardware profiles remain authoritative. In case of differences with the repository, a comparative `.upstream` copy is created without touching the active file.
 * **Granular safety net**: each deployment creates a backup `.tar.gz` archive and an uncompressed mirror snapshot under `~/.config/backups_env/snapshots/<timestamp>/` with a SHA-256 fingerprint table (`manifest.json`), enabling single-file restoration when needed (`./install.sh --restore-file <path>`).
 
@@ -117,10 +120,12 @@ install.sh            # Unified script: install, update, pre-flight checks, depl
 dev/
 ├── rust/as-core/     # Unified Rust backend (compiled to dev/core/as-core)
 ├── core/             # as-core binary, JSON catalogues, caches and shell integration scripts
+├── wallpapers/       # Nine 1920×1080 wallpapers shipped with the theme catalog (~2.6 MB)
 ├── widgets/          # Desktop components (clock, todo, system, weather...)
 ├── hypr_modular/     # Modular Hyprland configuration in Lua
 ├── hyprquickpaper/   # Wallpaper engine and palette management
 ├── sddm/             # Scripts and helpers for SDDM login screen
+├── charge-limit/     # polkit action + root helper for the battery charge limit (`aether-charge-limit`)
 ├── systemd/          # User systemd units (quickshell.service...)
 └── *.qml             # Quickshell surfaces (bar, panel, popups, selectors...)
 ```

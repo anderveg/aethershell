@@ -562,6 +562,20 @@ fn run_apply(args: &[String]) -> i32 {
         }
     }
 
+    // Fonds d'écran et profils de thème livrés (lot B4) : copiés dans le
+    // dossier « Images » retenu, puis référencés par leur nom seul (arbitrage
+    // Q2 : aucun chemin absolu dans un profil). Une copie ratée est signalée
+    // mais n'empêche pas de terminer le first-run.
+    let dest_fonds: Option<String> = dossiers_out
+        .iter()
+        .find(|d| d.get("xdg").and_then(|v| v.as_str()) == Some("PICTURES"))
+        .and_then(|d| d.get("chemin").and_then(|v| v.as_str()))
+        .map(|c| format!("{}/wallpapers", c.trim_end_matches('/')));
+    let fonds_rapport = crate::config::catalogue::installer_vers(dest_fonds);
+    if fonds_rapport.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+        erreurs.push("fonds d'écran livrés : installation incomplète".to_string());
+    }
+
     if erreurs.is_empty() {
         let _ = exec_self("config", &["complete_first_run"]);
     }
@@ -577,6 +591,7 @@ fn run_apply(args: &[String]) -> i32 {
         rapport.insert("bar_style".into(), json!(bs));
     }
     rapport.insert("bouton_reglages".into(), json!(bouton_reglages));
+    rapport.insert("fonds".into(), fonds_rapport);
     rapport.insert("erreurs".into(), json!(erreurs));
     let ok = erreurs.is_empty();
     println!("{}", Value::Object(rapport));

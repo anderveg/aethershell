@@ -27,19 +27,25 @@ Column {
     spacing: 10
 
     readonly property var sections: ({
+        "esthetique_profils": secProfils,
         "esthetique_theme": secTheme,
         "esthetique_fonds": secFonds,
         "esthetique_icones": secIcones,
+        "esthetique_curseurs": secCurseurs,
         "esthetique_aspect": secAspect,
         "quickshell_barre": secBarre
     })
 
     readonly property var cibles: ({
+        "secProfils": secProfils,
+        "profEnregistrerRow": profEnregistrerRow,
         "secTheme": secTheme,
         "matugenRow": matugenRow,
         "wallpaperDirRow": wallpaperDirRow,
         "masqueProfondeurRow": masqueProfondeurRow,
         "secIcones": secIcones,
+        "secCurseurs": secCurseurs,
+        "curseurTailleRow": curseurTailleRow,
         "gapsRow": gapsRow,
         "borderRow": borderRow,
         "roundingWinRow": roundingWinRow,
@@ -50,6 +56,539 @@ Column {
         "shellBlurRow": shellBlurRow,
         "secBarre": secBarre
     })
+
+    // 0. Profils de thème (lot B3) : une carte par profil — fond, palette,
+    // icônes, curseur, modes référencés. L'état et la file vivent dans
+    // `ThemeProfiles.qml` (singleton) : cet onglet est détruit au changement
+    // d'onglet et le panneau le décharge, donc aucune liste ici.
+    //
+    // Point d'entrée voulu : c'est le geste « je veux ce bureau-là », avant les
+    // réglages unitaires qui suivent.
+CollapsibleSection {
+    id: secProfils
+    objectName: "secProfils"
+    title: "Profils de thème"
+    summary: ThemeProfiles.dernierApplique !== ""
+        ? ("Appliqué : " + ThemeProfiles.dernierApplique)
+        : (ThemeProfiles.profils.length > 0
+           ? (ThemeProfiles.profils.length + " profil(s) — fond, palette, icônes, curseur")
+           : "Enregistrer l'état courant comme un thème complet")
+    icon: "palette"
+    expanded: root ? root.sectionOpen("esthetique_profils", false) : false
+    espacementContenu: 8
+    onToggled: expanded => {
+        if (!root) return
+        root.setPanelSection("esthetique_profils", expanded)
+        if (expanded && Theme.panelAccordion) root.fermerAutresTiroirs("esthetique_profils")
+        if (expanded) ThemeProfiles.refresh()
+    }
+    Component.onCompleted: ThemeProfiles.refresh()
+
+    function dossierFonds() {
+        let d = String(Theme.wallpaperDir || "")
+        if (d.indexOf("$HOME") === 0) d = Quickshell.env("HOME") + d.slice(5)
+        if (d !== "" && !d.endsWith("/")) d += "/"
+        return d
+    }
+
+    Text {
+        width: parent.width
+        visible: ThemeProfiles.message !== ""
+        text: ThemeProfiles.message
+        color: ThemeProfiles.alertes.length > 0 ? Theme.error : Theme.accent
+        font.pixelSize: Theme.textXs
+        wrapMode: Text.WordWrap
+    }
+
+    // Enregistrement : nom du profil + référence optionnelle vers un profil
+    // d'environnement (nuit, Focus…). L'arbitrage Q1 fait de ce lien une
+    // référence, pas une copie : corriger « nuit » profite à tous les thèmes.
+    Row {
+        id: profEnregistrerRow
+        width: parent.width
+        spacing: 6
+
+        Rectangle {
+            width: Math.max(120, parent.width - 100 - 112 - parent.spacing * 2)
+            height: 28
+            radius: Theme.globalRadius
+            color: Qt.alpha(Theme.surfaceVariant, 0.45)
+            border.width: 1
+            border.color: profNomInput.activeFocus ? Theme.accent : Qt.alpha(Theme.fg, 0.12)
+
+            TextInput {
+                id: profNomInput
+                anchors.fill: parent
+                anchors.leftMargin: 8
+                anchors.rightMargin: 8
+                verticalAlignment: TextInput.AlignVCenter
+                color: Theme.fg
+                font.pixelSize: Theme.textXs
+                clip: true
+                onAccepted: {
+                    const n = text.trim()
+                    if (!n) return
+                    ThemeProfiles.save(n, profEnvInput.text)
+                    text = ""
+                    profEnvInput.text = ""
+                }
+                Text {
+                    anchors.fill: parent
+                    verticalAlignment: Text.AlignVCenter
+                    visible: parent.text === "" && !parent.activeFocus
+                    text: "Enregistrer l'état courant sous…"
+                    color: Qt.alpha(Theme.fg, 0.4)
+                    font: parent.font
+                }
+            }
+        }
+
+        Rectangle {
+            width: 100
+            height: 28
+            radius: Theme.globalRadius
+            color: Qt.alpha(Theme.surfaceVariant, 0.3)
+            border.width: 1
+            border.color: profEnvInput.activeFocus ? Theme.accent : Qt.alpha(Theme.fg, 0.08)
+
+            TextInput {
+                id: profEnvInput
+                anchors.fill: parent
+                anchors.leftMargin: 8
+                anchors.rightMargin: 8
+                verticalAlignment: TextInput.AlignVCenter
+                color: Theme.fg
+                font.pixelSize: Theme.textXs
+                clip: true
+                Text {
+                    anchors.fill: parent
+                    verticalAlignment: Text.AlignVCenter
+                    visible: parent.text === "" && !parent.activeFocus
+                    text: "modes (opt.)"
+                    color: Qt.alpha(Theme.fg, 0.35)
+                    font: parent.font
+                }
+            }
+        }
+
+        Rectangle {
+            width: 112
+            height: 28
+            radius: Theme.globalRadius
+            color: profSaveMa.containsMouse ? Theme.accentMuted : Theme.accent
+
+            Text {
+                anchors.centerIn: parent
+                text: "Enregistrer"
+                color: Theme.bg
+                font.pixelSize: Theme.textXs
+                font.bold: true
+            }
+
+            MouseArea {
+                id: profSaveMa
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    const n = profNomInput.text.trim()
+                    if (!n) return
+                    ThemeProfiles.save(n, profEnvInput.text)
+                    profNomInput.text = ""
+                    profEnvInput.text = ""
+                }
+            }
+        }
+    }
+
+    // Interrupteurs Q4 : un profil applique ses icônes et son curseur par
+    // défaut ; on peut figer l'un des deux si le pack a été choisi à la main.
+    Row {
+        width: parent.width
+        spacing: 6
+
+        Text {
+            width: 132
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Appliquer du profil"
+            color: Theme.fg
+            font.pixelSize: Theme.textSm
+            elide: Text.ElideRight
+        }
+
+        ConfigToggle {
+            anchors.verticalCenter: parent.verticalCenter
+            pillWidth: 74
+            active: Theme.applyIcons !== false
+            onLabel: "✓ Icônes"
+            offLabel: "✕ Icônes"
+            onToggled: {
+                const v = !(Theme.applyIcons !== false)
+                Theme.applyIcons = v
+                Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "config", "style",
+                                         "theme_apply_icons", v ? "true" : "false"])
+            }
+        }
+
+        ConfigToggle {
+            anchors.verticalCenter: parent.verticalCenter
+            pillWidth: 78
+            active: Theme.applyCursor !== false
+            onLabel: "✓ Curseur"
+            offLabel: "✕ Curseur"
+            onToggled: {
+                const v = !(Theme.applyCursor !== false)
+                Theme.applyCursor = v
+                Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "config", "style",
+                                         "theme_apply_cursor", v ? "true" : "false"])
+            }
+        }
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "décocher pour garder le choix courant"
+            color: Qt.alpha(Theme.fg, 0.55)
+            font.pixelSize: Theme.text2xs
+        }
+    }
+
+    // Mode clair/sombre (lot B8) : transversal aux profils — changer de profil
+    // ne le réinitialise pas, changer de mode ne change pas de profil.
+    Row {
+        width: parent.width
+        spacing: 6
+
+        Text {
+            width: 132
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Clair / sombre"
+            color: Theme.fg
+            font.pixelSize: Theme.textSm
+            elide: Text.ElideRight
+        }
+
+        Repeater {
+            model: [
+                { key: "auto", label: "Auto" },
+                { key: "light", label: "Clair" },
+                { key: "dark", label: "Sombre" }
+            ]
+
+            delegate: Rectangle {
+                required property var modelData
+                readonly property bool actif: Theme.themeMode === modelData.key
+                anchors.verticalCenter: parent.verticalCenter
+                width: 74
+                height: 24
+                radius: Theme.globalRadius
+                color: actif ? Qt.alpha(Theme.accent, 0.26) : Qt.alpha(Theme.surfaceVariant, 0.45)
+                border.width: 1
+                border.color: actif ? Theme.accent : Qt.alpha(Theme.fg, 0.1)
+
+                Text {
+                    anchors.centerIn: parent
+                    text: (actif ? "✓ " : "") + parent.modelData.label
+                    color: actif ? Theme.accent : Theme.fg
+                    font.pixelSize: Theme.text2xs
+                    font.bold: actif
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        Theme.themeMode = parent.modelData.key
+                        Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "config", "style",
+                                                 "theme_mode", parent.modelData.key])
+                        Quickshell.execDetached(["bash", Quickshell.shellPath("core/generate_colors.sh")])
+                    }
+                }
+            }
+        }
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "à chaud ; Qt et GTK3 demandent une relance de l'app"
+            color: Qt.alpha(Theme.fg, 0.55)
+            font.pixelSize: Theme.text2xs
+        }
+    }
+
+    // Grille 4 colonnes : l'aperçu occupe toute la largeur utile du tiroir et
+    // grandit avec lui (aucune taille fixe, sinon le panneau déborde ou laisse
+    // un vide). Les actions vivent DANS l'aperçu — scrim en bas, pastille
+    // d'état, ✕ et ⟳ en surimpression — pour ne pas consommer une ligne de
+    // boutons par profil.
+    Grid {
+        id: grilleProfils
+        width: parent.width
+        columns: 4
+        spacing: 10
+
+        readonly property real cellule: Math.max(110, Math.floor((width - spacing * (columns - 1)) / columns))
+        readonly property real apercu: Math.round(cellule * 9 / 16)
+
+        Repeater {
+            model: ThemeProfiles.profils
+
+            delegate: Item {
+                id: carteProf
+                required property var modelData
+                readonly property bool actif: ThemeProfiles.dernierApplique === modelData.name
+                width: grilleProfils.cellule
+                height: grilleProfils.apercu
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 12
+                    clip: true
+                    color: Qt.alpha(Theme.surfaceVariant, 0.55)
+                    border.width: carteProf.actif ? 2 : 1
+                    border.color: carteProf.actif ? Theme.accent : Qt.alpha(Theme.fg, 0.12)
+
+                    // Le profil ne stocke que le nom du fichier, résolu par
+                    // `wallpaperDir` (arbitrage Q2) : aucun chemin absolu.
+                    Image {
+                        id: apercuProf
+                        anchors.fill: parent
+                        asynchronous: true
+                        cache: true
+                        fillMode: Image.PreserveAspectCrop
+                        source: modelData.wallpaper
+                            ? ("file://" + secProfils.dossierFonds() + modelData.wallpaper)
+                            : ""
+                        visible: status === Image.Ready
+                    }
+
+                    Text {
+                        anchors.centerIn: parent
+                        visible: !apercuProf.visible
+                        text: "▧"
+                        color: Qt.alpha(Theme.fg, 0.4)
+                        font.pixelSize: Math.round(grilleProfils.cellule * 0.2)
+                    }
+
+                    // Voile du bas : garantit la lisibilité du nom et des
+                    // boutons quelle que soit l'image (claire ou sombre).
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        height: Math.round(parent.height * 0.8)
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: "transparent" }
+                            GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.85) }
+                        }
+                    }
+
+                    // Nom et actions DANS l'aperçu : le nom garde toute la
+                    // largeur, le résumé passe sur sa propre ligne, les boutons
+                    // sont alignés à droite sous le résumé.
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 8
+                        anchors.bottomMargin: 8
+                        spacing: 2
+
+                        Text {
+                            width: parent.width
+                            text: modelData.name
+                            color: "white"
+                            font.pixelSize: Math.max(11, Math.round(grilleProfils.cellule * 0.062))
+                            font.bold: carteProf.actif
+                            elide: Text.ElideRight
+                        }
+
+                        Text {
+                            width: parent.width
+                            // Nom court du schéma : « matugen scheme-vibrant » ne
+                            // tenait pas et se faisait tronquer avant les icônes.
+                            text: String(modelData.palette_label || "").replace("scheme-", "")
+                                  + (modelData.icons ? " · " + modelData.icons : "")
+                            color: Qt.rgba(1, 1, 1, 0.72)
+                            font.pixelSize: Math.max(9, Math.round(grilleProfils.cellule * 0.042))
+                            elide: Text.ElideRight
+                        }
+
+                        Row {
+                            id: actionsProf
+                            anchors.right: parent.right
+                            spacing: 6
+
+                            Rectangle {
+                                width: carteProf.actif ? 88 : 74
+                                height: 24
+                                radius: 12
+                                color: carteProf.actif
+                                    ? Theme.accent
+                                    : (applMa.containsMouse ? Qt.rgba(1, 1, 1, 0.95) : Qt.rgba(1, 1, 1, 0.8))
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: carteProf.actif ? "✓ Appliqué" : "Appliquer"
+                                    color: carteProf.actif ? Theme.bg : "#101014"
+                                    font.pixelSize: Theme.text2xs
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: applMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: if (!carteProf.actif) ThemeProfiles.apply(modelData.name)
+                                }
+                            }
+
+                            Rectangle {
+                                width: 24
+                                height: 24
+                                radius: 12
+                                color: delMa.containsMouse ? Qt.rgba(1, 1, 1, 0.95) : Qt.rgba(0, 0, 0, 0.55)
+                                border.width: 1
+                                border.color: Qt.rgba(1, 1, 1, 0.4)
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "✕"
+                                    color: delMa.containsMouse ? "#8a1c1c" : "white"
+                                    font.pixelSize: Theme.text2xs
+                                }
+
+                                MouseArea {
+                                    id: delMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: ThemeProfiles.remove(modelData.name)
+                                }
+                            }
+                        }
+                    }
+
+
+                    // ⟳ : réenregistre le profil sous le même nom avec l'état
+                    // courant (même geste que les profils d'environnement).
+                    Rectangle {
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.margins: 8
+                        width: 26
+                        height: 24
+                        radius: 12
+                        color: majMa.containsMouse ? Qt.rgba(1, 1, 1, 0.9) : Qt.rgba(0, 0, 0, 0.45)
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "⟳"
+                            color: majMa.containsMouse ? "#101014" : "white"
+                            font.pixelSize: Theme.text2xs
+                        }
+
+                        MouseArea {
+                            id: majMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: ThemeProfiles.save(modelData.name, modelData.env_ref)
+                        }
+                    }
+
+                    // Badge de mode (clair/sombre) et de modes liés, en haut à gauche.
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.margins: 8
+                        width: badgeTexte.width + 14
+                        height: 20
+                        radius: 10
+                        color: Qt.rgba(0, 0, 0, 0.5)
+
+                        Text {
+                            id: badgeTexte
+                            anchors.centerIn: parent
+                            // Pas de glyphe soleil/lune : la police du shell n'a pas
+                            // ces symboles et affichait un carré vide.
+                            text: (String(modelData.theme_mode || "auto") === "light" ? "clair"
+                                 : String(modelData.theme_mode || "auto") === "dark" ? "sombre"
+                                 : "auto")
+                                  + (modelData.env_ref ? " · " + modelData.env_ref : "")
+                            color: "white"
+                            font.pixelSize: Theme.text2xs
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Row {
+        width: parent.width
+        spacing: 8
+        visible: ThemeProfiles.avant !== null
+
+        Rectangle {
+            width: 150
+            height: 26
+            radius: Theme.globalRadius
+            color: profUndoMa.containsMouse ? Theme.surfaceVariant : Qt.alpha(Theme.surfaceVariant, 0.4)
+            border.width: 1
+            border.color: Qt.alpha(Theme.fg, 0.1)
+
+            Text {
+                anchors.centerIn: parent
+                text: "↶  État d'avant"
+                color: Theme.fg
+                font.pixelSize: Theme.text2xs
+            }
+
+            MouseArea {
+                id: profUndoMa
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: ThemeProfiles.annuler()
+            }
+        }
+
+        Rectangle {
+            width: 104
+            height: 26
+            radius: Theme.globalRadius
+            color: profRefreshMa.containsMouse ? Theme.surfaceVariant : Qt.alpha(Theme.surfaceVariant, 0.4)
+            border.width: 1
+            border.color: Qt.alpha(Theme.fg, 0.1)
+
+            Text {
+                anchors.centerIn: parent
+                text: ThemeProfiles.occupe ? "…" : "Actualiser"
+                color: Theme.fg
+                font.pixelSize: Theme.text2xs
+            }
+
+            MouseArea {
+                id: profRefreshMa
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: ThemeProfiles.refresh()
+            }
+        }
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            width: Math.max(80, parent.width - 268)
+            visible: ThemeProfiles.alertes.length > 0
+            text: "⚠ " + ThemeProfiles.alertes.join(" · ")
+            color: Theme.error
+            font.pixelSize: Theme.text2xs
+            elide: Text.ElideRight
+        }
+    }
+}
 
     // 1+2. Thème & Fond d'écran (jeux de couleurs, wallpaper, matugen, palette hex custom)
 // 1. Thème & Palette : jeux de couleurs, schéma et contraste Matugen,
@@ -1575,110 +2114,201 @@ CollapsibleSection {
         }
     }
 
-    Repeater {
-        model: (root && root.iconesEtat && root.iconesEtat.themes) ? root.iconesEtat.themes : []
+    // Grille 4 colonnes, même modèle que les profils de thème : aperçu large,
+    // nom + identifiant, actions DANS la carte (CarteApercu.qml).
+    Grid {
+        id: grilleIcones
+        width: parent.width
+        columns: 4
+        spacing: 10
 
-        delegate: Rectangle {
-            required property var modelData
-            readonly property bool estActif: root && root.iconesEtat && root.iconesEtat.actif === modelData.id
-            width: parent ? parent.width : 0
-            height: 46
-            radius: Math.max(8, Math.round(Theme.globalRadius * 0.6))
-            color: estActif ? Qt.alpha(Theme.accent, 0.14) : Qt.alpha(Theme.surfaceVariant, 0.35)
-            border.color: estActif ? Theme.accent : Qt.alpha(Theme.fg, 0.08)
+        readonly property real cellule: Math.max(110, Math.floor((width - spacing * (columns - 1)) / columns))
+
+        Repeater {
+            model: (root && root.iconesEtat && root.iconesEtat.themes) ? root.iconesEtat.themes : []
+
+            delegate: CarteApercu {
+                required property var modelData
+                readonly property bool estActif: root && root.iconesEtat && root.iconesEtat.actif === modelData.id
+                width: grilleIcones.cellule
+                // Carré : quatre icônes + le bloc texte ne tiennent pas en 16:9.
+                height: grilleIcones.cellule
+                images: modelData.apercu || []
+                titre: modelData.nom
+                sousTitre: modelData.id
+                badge: modelData.utilisateur ? "perso" : "système"
+                actif: estActif
+                montrerSupprimer: modelData.utilisateur === true && !estActif
+                onAppliquer: if (root) root.appliquerThemeIcones(modelData.id)
+                onSupprimer: if (root) root.supprimerPackIcones(modelData.id)
+            }
+        }
+    }
+}
+
+// Curseurs (lot B2) : un seul `apply` écrit les quatre canaux — compositeur
+// (hyprctl setcursor), GTK3/GTK4 (INI + gsettings), Qt (variables de session)
+// et `style_vars.json`, que `exec.lua` repousse aux applications lancées
+// ensuite. La liste vient d'`as-core curseurs list` ; l'état vit dans le
+// panneau (config_panel.qml) pour survivre au déchargement de cet onglet.
+CollapsibleSection {
+    id: secCurseurs
+    objectName: "secCurseurs"
+    title: "Curseurs"
+    summary: (root && root.curseursEtat && root.curseursEtat.actif)
+        ? ("Actif : " + root.curseursEtat.actif + " · " + root.curseursEtat.taille + " px")
+        : "Thème et taille du pointeur"
+    icon: "selection"
+    expanded: root ? root.sectionOpen("esthetique_curseurs", false) : false
+    espacementContenu: 8
+    onToggled: expanded => {
+        if (!root) return
+        root.setPanelSection("esthetique_curseurs", expanded)
+        if (expanded && Theme.panelAccordion) root.fermerAutresTiroirs("esthetique_curseurs")
+        if (expanded && (!root.curseursEtat.themes || root.curseursEtat.themes.length === 0)) {
+            root.rafraichirCurseurs()
+        }
+    }
+    Component.onCompleted: {
+        if (root && (!root.curseursEtat.themes || root.curseursEtat.themes.length === 0)) {
+            root.rafraichirCurseurs()
+        }
+    }
+
+    Row {
+        id: curseurTailleRow
+        width: parent.width
+        spacing: 6
+
+        Text {
+            width: 132
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Taille du pointeur"
+            color: Theme.fg
+            font.pixelSize: Theme.textSm
+            elide: Text.ElideRight
+        }
+
+        Stepper {
+            anchors.verticalCenter: parent.verticalCenter
+            width: 96
+            value: (root && root.curseursEtat) ? root.curseursEtat.taille : 24
+            minimumValue: 16
+            maximumValue: 64
+            stepSize: 2
+            onValueModified: newVal => {
+                if (root) root.definirTailleCurseur(newVal)
+            }
+        }
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "px, appliqué immédiatement"
+            color: Qt.alpha(Theme.fg, 0.6)
+            font.pixelSize: Theme.text2xs
+        }
+    }
+
+    Row {
+        width: parent.width
+        spacing: 8
+
+        Rectangle {
+            width: 250
+            height: 30
+            radius: Theme.globalRadius
+            color: curInstallMa.containsMouse ? Theme.accentMuted : Theme.accent
+
+            Text {
+                anchors.centerIn: parent
+                text: "Installer un pack de curseurs (.zip / .tar.gz)…"
+                color: Theme.bg
+                font.pixelSize: Theme.textXs
+                font.bold: true
+            }
+
+            MouseArea {
+                id: curInstallMa
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: if (root) root.ouvrirSelecteurFichier(
+                    "cursor_pack",
+                    "Choisir une archive de thème de curseur",
+                    "~/Téléchargements",
+                    ["zip", "tar.gz", "tgz", "tar.xz", "txz", "tar.zst", "tar"],
+                    "folder"
+                )
+            }
+        }
+
+        Rectangle {
+            width: 96
+            height: 30
+            radius: Theme.globalRadius
+            color: curRefreshMa.containsMouse ? Theme.surfaceVariant : Qt.alpha(Theme.surfaceVariant, 0.55)
+            border.color: Theme.surfaceVariant
             border.width: 1
 
-            Item {
+            Text {
+                anchors.centerIn: parent
+                text: "Actualiser"
+                color: Theme.fg
+                font.pixelSize: Theme.textXs
+            }
+
+            MouseArea {
+                id: curRefreshMa
                 anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.rightMargin: 10
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: if (root) root.rafraichirCurseurs()
+            }
+        }
 
-                // Aperçu visuel (emplacement fixe de 4 icônes pour aligner les noms)
-                Row {
-                    id: previewRow
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 100
-                    spacing: 4
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root && root.curseursMessage !== ""
+            text: root ? root.curseursMessage : ""
+            color: Theme.accent
+            font.pixelSize: Theme.textXs
+            elide: Text.ElideRight
+            width: Math.max(80, parent.width - 362)
+        }
+    }
 
-                    Repeater {
-                        model: modelData.apercu || []
-                        Image {
-                            required property string modelData
-                            width: 22
-                            height: 22
-                            fillMode: Image.PreserveAspectFit
-                            asynchronous: true
-                            sourceSize.width: 24
-                            sourceSize.height: 24
-                            source: "file://" + modelData
-                        }
-                    }
-                }
+    // Même modèle que les thèmes : 4 colonnes, aperçu 16:9, actions dans
+    // l'image. L'aperçu (`as-core curseurs preview`) est généré en tâche de
+    // fond : la carte se remplit quand le PNG arrive (panneau : curseursApercus).
+    Grid {
+        id: grilleCurseurs
+        width: parent.width
+        columns: 4
+        spacing: 10
 
-                Column {
-                    anchors.left: previewRow.right
-                    anchors.leftMargin: 12
-                    anchors.right: btnSupprimer.visible ? btnSupprimer.left : btnAppliquer.left
-                    anchors.rightMargin: 10
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 1
+        readonly property real cellule: Math.max(110, Math.floor((width - spacing * (columns - 1)) / columns))
 
-                    Text {
-                        width: parent.width
-                        text: modelData.nom + (modelData.utilisateur ? " · perso" : "")
-                        color: Theme.fg
-                        font.pixelSize: Theme.textSm
-                        font.bold: estActif
-                        elide: Text.ElideRight
-                    }
+        Repeater {
+            model: (root && root.curseursEtat && root.curseursEtat.themes) ? root.curseursEtat.themes : []
 
-                    Text {
-                        width: parent.width
-                        text: modelData.id
-                        color: Qt.alpha(Theme.fg, 0.55)
-                        font.pixelSize: Theme.text2xs
-                        elide: Text.ElideRight
-                    }
-                }
-
-                Rectangle {
-                    id: btnSupprimer
-                    visible: modelData.utilisateur === true && !estActif
-                    anchors.right: btnAppliquer.left
-                    anchors.rightMargin: 8
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 78
-                    height: 26
-                    radius: Theme.globalRadius
-                    color: Qt.alpha(Theme.error, 0.14)
-                    border.color: Qt.alpha(Theme.error, 0.4)
-                    border.width: 1
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "Supprimer"
-                        color: Theme.error
-                        font.pixelSize: Theme.text2xs
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: if (root) root.supprimerPackIcones(modelData.id)
-                    }
-                }
-
-                ConfigToggle {
-                    id: btnAppliquer
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    pillWidth: 88
-                    active: estActif
-                    onLabel: "✓ Actif"
-                    offLabel: "Appliquer"
-                    onToggled: if (root && !estActif) root.appliquerThemeIcones(modelData.id)
-                }
+            delegate: CarteApercu {
+                required property var modelData
+                readonly property bool estActif: root && root.curseursEtat && root.curseursEtat.actif === modelData.id
+                readonly property string apercu: (root && root.curseursApercus)
+                    ? String(root.curseursApercus[modelData.id] || "") : ""
+                width: grilleCurseurs.cellule
+                height: Math.round(grilleCurseurs.cellule * 9 / 16)
+                images: apercu !== "" ? [apercu] : []
+                // Un curseur se regarde entier : contenu avec une marge, pas
+                // recadré comme un fond d'écran.
+                pleinCadre: false
+                titre: modelData.nom
+                sousTitre: modelData.id + (estActif ? " · " + (root ? root.curseursEtat.taille : 24) + " px" : "")
+                badge: modelData.hyprcursor ? "hyprcursor" : (modelData.utilisateur ? "perso" : "système")
+                actif: estActif
+                montrerSupprimer: modelData.utilisateur === true && !estActif
+                onAppliquer: if (root) root.appliquerCurseur(modelData.id, root.curseursEtat.taille)
+                onSupprimer: if (root) root.supprimerCurseur(modelData.id)
             }
         }
     }

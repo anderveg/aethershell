@@ -54,6 +54,7 @@ dev/core/*_cache.json
 !README.md
 !**/README.md
 !CHANGELOG.md
+!CHANGELOG.en.md
 
 # Scripts de synchronisation entre machines — locaux, jamais dans le dépôt
 sync.sh

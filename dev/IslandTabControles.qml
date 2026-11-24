@@ -826,7 +826,7 @@ Item {
                 title: "Caffeine"
                 subtitle: SystemServices.caffeineActif ? "Veille bloquée" : "Inactif"
                 active: SystemServices.caffeineActif
-                onToggled: SystemServices.caffeineActif = !SystemServices.caffeineActif
+                onToggled: SystemServices.definirCaffeine(!SystemServices.caffeineActif)
             }
 
             // Tuile 8 : Profil de performance

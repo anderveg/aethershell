@@ -256,6 +256,16 @@ QtObject {
         { id: "detente", label: "Détente",      desc: "DND off · Nuit 3800K · Éco · Widgets visibles",     icon: "weather-night", dnd: false, caffeine: false, power: "power-saver", night: true,  nightTemp: 3800, widgets: true }
     ]
 
+    // Visibilité des widgets du bureau : persistée dans style_vars.json pour
+    // qu'un profil d'environnement puisse l'enregistrer et la restaurer (même
+    // mécanisme que le DND et la caféine).
+    function setWidgetsBureauVisibles(v) {
+        const b = Boolean(v)
+        Theme.widgetsBureauVisibles = b
+        Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "config", "style",
+                                 "widgets_bureau_visibles", b ? "true" : "false"])
+    }
+
     function applyContext(ctxId) {
         const q = String(ctxId || "").trim().toLowerCase()
         const aliasMap = { "code": "focus", "travail": "focus", "meeting": "reunion", "relax": "detente" }
@@ -271,9 +281,11 @@ QtObject {
         root.activeContext = found.id
         root.doNotDisturb = found.dnd
         SystemServices.caffeineActif = found.caffeine
-        Theme.widgetsBureauVisibles = found.widgets
+        root.setWidgetsBureauVisibles(found.widgets)
         Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "config", "style", "do_not_disturb", found.dnd ? "true" : "false"])
-        Quickshell.execDetached(["powerprofilesctl", "set", found.power])
+        Quickshell.execDetached(["busctl", "set-property", "net.hadess.PowerProfiles",
+                                 "/net/hadess/PowerProfiles", "net.hadess.PowerProfiles",
+                                 "ActiveProfile", "s", found.power])
         if (found.night) {
             Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "nuit", "temperature", String(found.nightTemp)])
             Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "nuit", "activer"])
@@ -296,6 +308,28 @@ QtObject {
         }
         function openWidgetMenu(id: string) {
             root.widgetMenuRequested(id)
+        }
+        // Profils d'environnement : joignables en IPC pour tester l'application
+        // sans passer par l'interface, et pour un futur raccourci clavier.
+        function profilEnv(nom: string) {
+            EnvPresets.apply(nom)
+        }
+        function profilsEnvListe() {
+            EnvPresets.refresh()
+        }
+        // Profils de thème (lot B3) : mêmes raisons — vérifier sans souris, et
+        // brancher plus tard un raccourci clavier par profil.
+        function themeProfilsListe() {
+            ThemeProfiles.refresh()
+        }
+        function themeProfilApplique(nom: string) {
+            ThemeProfiles.apply(nom)
+        }
+        function themeProfilEnregistre(nom: string, modes: string) {
+            ThemeProfiles.save(nom, modes)
+        }
+        function themeProfilAnnule() {
+            ThemeProfiles.annuler()
         }
         function toggleConfig() {
             Theme.configPanelVisible = !Theme.configPanelVisible

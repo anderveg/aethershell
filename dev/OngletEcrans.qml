@@ -168,6 +168,31 @@ Column {
         }
     }
 
+    // ── Terminal d'action (mise à jour, désinstallation) ─────────────────────
+    // Le panneau de configuration est une couche `Top` du compositeur : un
+    // terminal ordinaire s'ouvre **derrière** lui et l'utilisateur ne voit rien
+    // se passer. Le panneau s'efface donc le temps de la commande (le même
+    // mécanisme que les boîtes modales polkit, `configPanelYieldFocus`) et
+    // revient dès qu'elle se termine — en relisant l'état des versions, puisque
+    // `install.sh` réécrit `core/version.json` quand le déploiement a réussi.
+    function lancerDansTerminal(commande) {
+        if (!commande || procTerminal.running) return
+        Theme.configPanelYieldFocus = true
+        procTerminal.command = ["bash", Quickshell.shellPath("core/maj_terminal.sh"), commande]
+        procTerminal.running = true
+    }
+
+    Process {
+        id: procTerminal
+        onExited: {
+            Theme.configPanelYieldFocus = false
+            // `install.sh` vient peut-être de réécrire core/version.json : on
+            // relit l'état pour que le panneau affiche la version posée, sans
+            // attendre le prochain passage du minuteur.
+            bloc.verifierMaj(false)
+        }
+    }
+
     // Toutes les 280 minutes, et seulement tant que l'onglet est à l'écran :
     // fermer le panneau ne laisse aucun minuteur derrière lui. `triggeredOnStart`
     // donne l'état dès l'ouverture, sans attendre la première échéance.
@@ -1570,8 +1595,7 @@ Column {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: Quickshell.execDetached(["bash", Quickshell.shellPath("core/maj_terminal.sh"),
-                                                    bloc.majCommande])
+                onClicked: bloc.lancerDansTerminal(bloc.majCommande)
             }
         }
 
@@ -1764,8 +1788,7 @@ Column {
                         return
                     }
                     bloc.desinstArme = false
-                    Quickshell.execDetached(["bash", Quickshell.shellPath("core/maj_terminal.sh"),
-                                             bloc.commandeDesinstallation()])
+                    bloc.lancerDansTerminal(bloc.commandeDesinstallation())
                 }
             }
 
