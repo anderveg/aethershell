@@ -67,7 +67,7 @@ Column {
 CollapsibleSection {
     id: secProfils
     objectName: "secProfils"
-    title: "Profils de thème"
+    title: "Profils"
     summary: ThemeProfiles.dernierApplique !== ""
         ? ("Appliqué : " + ThemeProfiles.dernierApplique)
         : (ThemeProfiles.profils.length > 0
@@ -596,7 +596,7 @@ CollapsibleSection {
 CollapsibleSection {
     id: secTheme
     objectName: "secTheme"
-    title: "Thème & palette"
+    title: "Palette & mode"
     summary: String(Theme.paletteEtiquettes[Theme.activeTheme] || Theme.activeTheme)
     icon: "palette"
     expanded: root.sectionOpen("esthetique_theme", false)
@@ -1742,7 +1742,7 @@ anchors.verticalCenter: parent.verticalCenter
 value: Theme.globalOpacity
 minimumValue: 0.30
 maximumValue: 1.00
-stepSize: 0.05
+stepSize: 0.02
 decimals: 2
 textFormatter: v => Math.round(v * 100) + " %"
 onValueModified: newVal => {
@@ -1880,7 +1880,7 @@ Stepper {
     value: Theme.shellOpacity
     minimumValue: 0.20
     maximumValue: 1.00
-    stepSize: 0.05
+    stepSize: 0.02
     decimals: 2
     textFormatter: v => Math.round(v * 100) + " %"
     onValueModified: newVal => {
@@ -2025,7 +2025,7 @@ Text {
 CollapsibleSection {
     id: secIcones
     objectName: "secIcones"
-    title: "Thèmes & Packs d'icônes"
+    title: "Icônes"
     summary: (root && root.iconesEtat && root.iconesEtat.actif)
         ? ("Actif : " + root.iconesEtat.actif)
         : "Sélection et installation de packs d'icônes"

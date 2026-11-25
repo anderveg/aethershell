@@ -101,7 +101,7 @@ Item {
 
         // Thème & fond d'écran
         Text {
-            text: "THÈME & FOND D'ÉCRAN"
+            text: "PROFILS & COULEURS"
             font.family: Theme.fontUi
             font.pixelSize: Theme.textXs
             font.weight: Font.Bold
@@ -431,7 +431,7 @@ Item {
                     cursorShape: Qt.PointingHandCursor
                     function setOp(mx) {
                         let v = 0.3 + Math.max(0, Math.min(1, mx / width)) * 0.7
-                        v = Math.round(v * 20) / 20
+                        v = Math.round(v * 50) / 50
                         Theme.shellOpacity = v
                         root.runStyle("shell_opacity", v.toFixed(2))
                     }

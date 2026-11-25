@@ -2,6 +2,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "."
 
 // Services système partagés : Wi-Fi, scan QR Wi-Fi, Bluetooth et lancement isolé.
 QtObject {
@@ -257,16 +258,21 @@ QtObject {
         if (s >= 75) return "wifi-full"
         if (s >= 50) return "wifi-high"
         if (s >= 25) return "wifi-medium"
-        return s > 0 ? "wifi-low" : "wifi-none"
+        if (s > 0) return "wifi-low"
+        // Connecté mais force inconnue (noyau sans /proc/net/wireless) : icône
+        // « wifi » simple — jamais l'icône « déconnecté » alors qu'on est lié.
+        return connected === true ? "wifi" : "wifi-none"
     }
 
     // ── Bluetooth ────────────────────────────────────────────────────────────
     property bool btPresent: false
     property bool btPowered: false
     property var btDevices: []
+    property var btNearby: []
     property int btConnectedCount: 0
     property string btDevice: ""
     property bool btBusy: false
+    property bool btScanning: false
 
     function _applyBtState(txt) {
         try {
@@ -274,6 +280,11 @@ QtObject {
             root.btPresent = d.present === true
             root.btPowered = Boolean(d.allume || d.powered)
             root.btDevices = Array.isArray(d.appaires) ? d.appaires : []
+            if (!root.btPowered) {
+                root.btNearby = []
+            } else if (Array.isArray(d.a_portee)) {
+                root.btNearby = d.a_portee
+            }
             const conns = Array.isArray(d.connectes) ? d.connectes : []
             root.btConnectedCount = conns.length
             root.btDevice = conns.length > 0 ? String(conns[0].nom || conns[0].name || "") : ""
@@ -289,14 +300,24 @@ QtObject {
         stdout: StdioCollector {
             onStreamFinished: {
                 root.btBusy = false
+                root.btScanning = false
                 root._applyBtState(text)
             }
         }
-        onExited: root.btBusy = false
+        onExited: {
+            root.btBusy = false
+            root.btScanning = false
+        }
     }
 
     function refreshBluetooth() {
         if (!btStateProc.running) btStateProc.running = true
+    }
+
+    function scanBluetooth() {
+        if (btActionProc.running) return
+        root.btScanning = true
+        btCommand(["scanner"])
     }
 
     function btCommand(args) {
@@ -304,6 +325,171 @@ QtObject {
         root.btBusy = true
         btActionProc.command = [Quickshell.shellPath("core/as-core"), "bluetooth"].concat(args)
         btActionProc.running = true
+    }
+
+    // ── Audio Bluetooth : profils (A2DP ↔ HFP), micro & bascule auto ─────────
+    property var btAudioCards: []
+    property var audioSinks: []
+    property string defaultSinkName: ""
+    property int volumePct: {
+        const v = (systemInfo && systemInfo.volume && (systemInfo.volume.level !== undefined ? systemInfo.volume.level : systemInfo.volume.percent) !== undefined)
+            ? Number(systemInfo.volume.level !== undefined ? systemInfo.volume.level : systemInfo.volume.percent) : 50
+        return Math.max(0, Math.min(Theme.maxVolumePct, Math.round(v)))
+    }
+    property bool volumeMuted: Boolean(systemInfo && systemInfo.volume && systemInfo.volume.muted)
+    property bool micMuted: false
+
+    function _shortSinkLabel(name) {
+        const s = String(name || "")
+        if (s.indexOf("bluez_output") !== -1) return "Bluetooth"
+        if (s.indexOf("hdmi") !== -1 || s.indexOf("HDMI") !== -1) return "HDMI"
+        if (s.indexOf("usb") !== -1 || s.indexOf("USB") !== -1) return "USB Audio"
+        if (s.indexOf("analog") !== -1 || s.indexOf("pci") !== -1) return "Haut-parleurs"
+        return s.split(".").pop().slice(0, 14)
+    }
+
+    property Process audioSinksProc: Process {
+        command: ["sh", "-c", "pactl get-default-sink 2>/dev/null; echo '---'; pactl list short sinks 2>/dev/null"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const parts = text.split("---\n")
+                root.defaultSinkName = (parts[0] || "").trim()
+                const lines = (parts[1] || "").trim().split("\n")
+                const list = []
+                for (let i = 0; i < lines.length; i++) {
+                    const cols = lines[i].trim().split(/\s+/)
+                    if (cols.length >= 2 && cols[1]) {
+                        list.push({ name: cols[1], label: root._shortSinkLabel(cols[1]) })
+                    }
+                }
+                root.audioSinks = list
+            }
+        }
+    }
+
+    property Process audioSinkSetProc: Process {
+        onExited: root.refreshBtAudio()
+    }
+
+    property Process audioVolSetProc: Process {
+        onExited: root.rafraichirSystemInfo()
+    }
+
+    function setDefaultSink(sinkName) {
+        if (audioSinkSetProc.running) return
+        root.defaultSinkName = String(sinkName)
+        audioSinkSetProc.command = ["pactl", "set-default-sink", String(sinkName)]
+        audioSinkSetProc.running = true
+    }
+
+    function setVolumePct(pct) {
+        const v = Math.max(0, Math.min(Theme.maxVolumePct, Math.round(pct)))
+        audioVolSetProc.command = ["wpctl", "set-volume", "-l", (Theme.maxVolumePct / 100).toFixed(1),
+                                   "@DEFAULT_AUDIO_SINK@", (v / 100).toFixed(2)]
+        audioVolSetProc.running = true
+    }
+
+    function toggleDefaultSinkMute() {
+        audioVolSetProc.command = ["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"]
+        audioVolSetProc.running = true
+    }
+
+    function _labelProfilBt(id) {
+        const s = String(id || "").toLowerCase()
+        if (s.indexOf("a2dp") === 0) return "A2DP (Haute qualité)"
+        if (s.indexOf("headset") === 0 || s.indexOf("hfp") !== -1 || s.indexOf("hsp") !== -1) return "HFP (Micro / Appel)"
+        return id
+    }
+
+    property Process btCardsProc: Process {
+        command: ["pactl", "-f", "json", "list", "cards"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const cards = []
+                try {
+                    const raw = JSON.parse(text.trim())
+                    if (Array.isArray(raw)) {
+                        for (let i = 0; i < raw.length; i++) {
+                            const c = raw[i]
+                            if (!c || String(c.name || "").indexOf("bluez_card.") !== 0) continue
+                            const props = c.properties || ({})
+                            const nom = String(props["device.alias"] || props["device.description"] || c.name)
+                            const actif = String(c.active_profile || "")
+                            const profObj = c.profiles || ({})
+                            const profs = []
+                            const keys = Object.keys(profObj)
+                            for (let j = 0; j < keys.length; j++) {
+                                const k = keys[j]
+                                if (k === "off") continue
+                                const p = profObj[k]
+                                if (p && p.available === "no") continue
+                                profs.push({ id: k, label: root._labelProfilBt(k), desc: String((p && p.description) || k) })
+                            }
+                            cards.push({ name: String(c.name), label: nom, activeProfile: actif, profiles: profs })
+                        }
+                    }
+                } catch (e) {}
+                root.btAudioCards = cards
+            }
+        }
+    }
+
+    property Process micStateProc: Process {
+        command: ["wpctl", "get-volume", "@DEFAULT_AUDIO_SOURCE@"]
+        stdout: StdioCollector {
+            onStreamFinished: root.micMuted = text.indexOf("MUTED") >= 0
+        }
+    }
+
+    property Process btProfileSetProc: Process {
+        onExited: root.refreshBtAudio()
+    }
+
+    property Process micToggleProc: Process {
+        command: ["wpctl", "set-mute", "@DEFAULT_AUDIO_SOURCE@", "toggle"]
+        onExited: if (!micStateProc.running) micStateProc.running = true
+    }
+
+    function refreshBtAudio() {
+        if (!btCardsProc.running) btCardsProc.running = true
+        if (!micStateProc.running) micStateProc.running = true
+        if (!audioSinksProc.running) audioSinksProc.running = true
+    }
+
+    function setBtCardProfile(cardName, profileId) {
+        if (btProfileSetProc.running) return
+        btProfileSetProc.command = ["pactl", "set-card-profile", String(cardName), String(profileId)]
+        btProfileSetProc.running = true
+    }
+
+    function toggleDefaultMic() {
+        if (!micToggleProc.running) micToggleProc.running = true
+    }
+
+    // Bascule automatique vers la sortie Bluetooth lorsqu'un casque se connecte
+    property Timer btAutoSwitchDebounce: Timer {
+        id: btAutoSwitchDebounce
+        interval: 350
+        repeat: false
+        onTriggered: {
+            if (!Theme.btAutoSwitchAudio) return
+            if (!btAutoSwitchProc.running) btAutoSwitchProc.running = true
+        }
+    }
+
+    property Process btSinkSubscribeProc: Process {
+        id: btSinkSubscribeProc
+        command: ["sh", "-c", "LC_ALL=C pactl subscribe 2>/dev/null | grep --line-buffered -E \"Event 'new' on sink\""]
+        running: Theme.btAutoSwitchAudio
+        stdout: SplitParser {
+            onRead: _ => btAutoSwitchDebounce.restart()
+        }
+    }
+
+    property Process btAutoSwitchProc: Process {
+        id: btAutoSwitchProc
+        command: ["sh", "-c", "s=$(pactl list short sinks 2>/dev/null | awk '/bluez_output\\./{print $2; exit}'); [ -n \"$s\" ] && pactl set-default-sink \"$s\" 2>/dev/null || true"]
+        onExited: root.refreshBtAudio()
     }
 
     // ── Formatage partagé (USB / Hermes) ─────────────────────────────────────

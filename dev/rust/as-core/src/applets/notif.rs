@@ -324,8 +324,11 @@ fn path_kind(path: &str) -> &'static str {
 }
 
 fn candidates(text: &str) -> Vec<String> {
-    let file_uri_re = Regex::new(r#"file://[^\s"'<>«»]+"#).unwrap();
-    let path_re = Regex::new(r#"(?:^|[\s(\[«"'])((?:~|/)[^\s"'<>()\[\]«»]+)"#).unwrap();
+    use std::sync::OnceLock;
+    static FILE_URI_RE: OnceLock<Regex> = OnceLock::new();
+    static PATH_RE: OnceLock<Regex> = OnceLock::new();
+    let file_uri_re = FILE_URI_RE.get_or_init(|| Regex::new(r#"file://[^\s"'<>«»]+"#).unwrap());
+    let path_re = PATH_RE.get_or_init(|| Regex::new(r#"(?:^|[\s(\[«"'])((?:~|/)[^\s"'<>()\[\]«»]+)"#).unwrap());
     let mut out = Vec::new();
     for m in file_uri_re.find_iter(text) {
         let raw = m.as_str();
@@ -634,7 +637,9 @@ fn resolve_target(req: &Value) -> Map<String, Value> {
         return res;
     }
 
-    let url_re = Regex::new(r#"https?://[^\s"'<>«»]+"#).unwrap();
+    use std::sync::OnceLock;
+    static URL_RE: OnceLock<Regex> = OnceLock::new();
+    let url_re = URL_RE.get_or_init(|| Regex::new(r#"https?://[^\s"'<>«»]+"#).unwrap());
     if let Some(m) = url_re.find(&text) {
         let alias = targets.get("url").and_then(|v| v.as_str()).unwrap_or("");
         return open_with_alias(alias, m.as_str(), "url", "url");
@@ -693,7 +698,9 @@ fn log_line(req: &Value, res: &Map<String, Value>) {
         }
     }
 
-    let ws_re = Regex::new(r"\s+").unwrap();
+    use std::sync::OnceLock;
+    static WS_RE: OnceLock<Regex> = OnceLock::new();
+    let ws_re = WS_RE.get_or_init(|| Regex::new(r"\s+").unwrap());
     let clean = |val: &str, limit: usize| -> String {
         let collapsed = ws_re.replace_all(val, " ");
         let trimmed = collapsed.trim();
@@ -796,7 +803,7 @@ pub fn run_target(args: &[String]) -> i32 {
         let stdin = io::stdin();
         let stdout = io::stdout();
         let mut out = stdout.lock();
-        for line in stdin.lock().lines().flatten() {
+        for line in stdin.lock().lines().map_while(Result::ok) {
             let trimmed = line.trim();
             if trimmed.is_empty() {
                 continue;

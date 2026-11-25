@@ -9,6 +9,26 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **`x.yy.x.x`** : ajout de fonctionnalités décisives (ex. : ajout de l'Îlot dynamique).
 - **Version majeure (`y.x.x.x`)** : conservation du schéma déjà en place (proposée lorsque l'ampleur des changements le justifie ; décision finale validée par l'utilisateur).
 
+## [0.4.7.0] — 2026-11-25
+
+### Ajouté
+- **Tiroir Audio dans le panneau de configuration** (`SystemSettingsTab.qml`, `AudioApplet.qml`, `ShellState.qml`, `AudioDaemon.qml` / `audio.rs`) : sélecteur de profil Bluetooth A2DP ↔ HFP (`pactl set-card-profile`), choix du périphérique de sortie audio, contrôle du volume jusqu'à 150 % (`audio_allow_boost`) et option de bascule automatique sur casque audio Bluetooth à la connexion.
+- **Scratchpad Lua et contrôles** (`dev/hypr_modular/binds.lua`, `IslandTabControles.qml`, `HyprlandService.qml`) : mise au premier plan au focus clavier (`SUPER + flèches` / `SUPER + Tab`), clic sur les fenêtres du scratchpad dans le panneau étendu pour entrer dans le scratchpad et les mettre au premier plan, noms de fenêtres explicites.
+- **Clavier virtuel du greeter SDDM** (`dev/sddm/clavier/ClavierVirtuel.qml`, `PanneauClavier.qml`, `dev/sddm/install.sh`, `dev/sddm/greeter-palette`) : bouton discret en bas à droite de l'écran de connexion ouvrant `QtVirtualKeyboard` via `Loader`, injecté dans les thèmes `/usr/share/sddm/themes` qui ne le gèrent pas déjà (`InputMethod=qtvirtualkeyboard`, `QT_IM_MODULE=qtvirtualkeyboard`).
+- **Curseurs — Flatpak et greeter SDDM** (`curseurs.rs`, `dev/sddm/greeter-palette`) : `curseurs apply` configure désormais `flatpak override --user` (`XCURSOR_THEME`, `XCURSOR_SIZE`, accès lecture seule aux dossiers d'icônes) et met à jour `CursorTheme`/`CursorSize` dans `/etc/sddm.conf.d/10-sddm-theme.conf` via `greeter-palette set-cursor` lorsque le thème est installé dans `/usr/share/icons`.
+- **Raccourcis clavier par profil de thème** (`dev/hypr_modular/binds.lua`, `theme_profiles.rs`, `ThemeProfiles.qml`, `ShellState.qml`) : `SUPER + F1` à `SUPER + F9` appliquent directement les profils de thème n° 1 à 9 via `quickshell ipc -n call shell themeProfilAppliqueIndex`.
+- **Scan Bluetooth dans l'applet réseau** (`daemon/bluetooth.rs`, `SystemServices.qml`, `ReseauApplet.qml`) : ajout du bouton « ↻ Scan » dans le bloc Bluetooth (`as-core bluetooth scanner`), affichage des périphériques à portée et appairage en un clic (`as-core bluetooth appairer <mac>`).
+- **Verrouillage & nettoyage des binds** (`dev/hypr_modular/binds.lua`) : ajout de `SUPER + L` (`hyprlock`) et suppression de `SUPER + F` (doublon de `SUPER + V`).
+
+### Modifié
+- **Unification des contextes de travail sur `presets.json`** (`presets.rs`, `config_mgr.rs`, `EnvPresets.qml`, `ShellState.qml`, `IslandTabControles.qml`, `DynamicIsland.qml`) : suppression de la liste en dur `workContexts` dans `ShellState.qml` ; `presets.json` est amorcé avec les 4 profils d'environnement par défaut (`Normal`, `Focus / Code`, `Réunion`, `Détente`) et sert de source unique pour l'îlot, le lanceur `as contexte` et l'IPC `setContext`.
+- **Contraste en mode clair / flash workspaces / audit Rust** (`dev/DynamicIsland.qml`, `dev/IslandTabApparence.qml`, `dev/IslandTabControles.qml`, `dev/OngletApparence.qml`, `dev/OngletEcrans.qml`, `dev/OngletIlot.qml`, `dev/SystemServices.qml`, `dev/Theme.qml`, `dev/VolumeApplet.qml`, `dev/config_panel.qml`, `dev/core/theme_profiles.catalog.json`, `dev/rust/as-core/src/applets/disques.rs`, `dev/rust/as-core/src/applets/notif.rs`, `dev/rust/as-core/src/common/lock.rs`, `dev/rust/as-core/src/config/config_mgr.rs`, `dev/rust/as-core/src/config/first_run.rs`, `dev/rust/as-core/src/config/theme_profiles.rs`, `dev/rust/as-core/src/config/theme_sync.rs`, `dev/rust/as-core/src/config/themes.rs`, `dev/rust/as-core/src/daemon/bluetooth.rs`, `dev/rust/as-core/src/daemon/reseau.rs`, `dev/rust/as-core/src/daemon/system_service.rs`, `dev/rust/as-core/src/daemon/tablet_mode.rs`, `dev/rust/as-core/src/main.rs`, `dev/rust/as-core/src/services/nextcloud.rs`) : améliorations du contraste en mode clair, des animations flash sur les espaces de travail et de la robustesse Rust suite à l'audit.
+
+### Corrigé
+- **Signal Wi-Fi sans `/proc/net/wireless` (Fedora)** (`daemon/system_service.rs`, `SystemServices.qml`) : repli sur `nmcli` lorsque `/proc/net/wireless` est absent, et icône `"wifi"` simple tant que la force reste inconnue au lieu d'afficher « déconnecté ».
+- **Compilation `as-core` sur Fedora** (`install.sh`, `dev/dependencies.txt`) : ajout de `c++` aux dépendances et vérification préalable de `libstdc++` / `libsqlite3` avant de lancer `cargo`.
+- **Élagage en sous-dossiers** (`install.sh`) : `prune_target` nettoie désormais aussi `$QS_DIR/sddm`, `$QS_DIR/sddm/clavier` et `$QS_DIR/assets/tray`.
+
 ## [0.4.6.1] — 2026-11-24
 
 ### Corrigé

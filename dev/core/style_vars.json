@@ -10,7 +10,7 @@
     "bar_gaps_out_v": 8,
     "kb_layout": "fr",
     "quiet_notif_apps": [],
-    "first_run_completed": true,
+    "first_run_completed": false,
     "wallpaper_dir": "$HOME/Images/wallpapers/",
     "matugen_scheme": "scheme-vibrant",
     "matugen_contrast": 0.3,

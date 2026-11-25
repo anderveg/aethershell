@@ -216,6 +216,45 @@ Item {
         onTriggered: if (!indicateursProc.running) indicateursProc.running = true
     }
 
+    // Révélation temporaire de l'applet workspaces en mode « étendu seulement »
+    // lors d'un changement de bureau, le temps de voir le nouveau bureau actif.
+    property bool workspaceFlash: false
+    property bool _wsInit: false
+    readonly property int _activeWsId: (Hyprland.focusedWorkspace && Hyprland.focusedWorkspace.id > 0)
+        ? Hyprland.focusedWorkspace.id : -1
+
+    Timer {
+        id: wsFlashTimer
+        interval: 750
+        repeat: false
+        onTriggered: root.workspaceFlash = false
+    }
+
+    function _triggerWorkspaceFlash() {
+        if (Theme.barStyle === "island" && Theme.ilotAppletModeFor("workspaces") === "expanded") {
+            root.workspaceFlash = true
+            wsFlashTimer.restart()
+        }
+    }
+
+    on_ActiveWsIdChanged: {
+        if (!_wsInit) {
+            if (_activeWsId > 0) _wsInit = true
+            return
+        }
+        if (_activeWsId > 0) _triggerWorkspaceFlash()
+    }
+
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) {
+            const ev = String(event && event.name ? event.name : "")
+            if (ev === "workspace" || ev === "workspacev2") {
+                root._triggerWorkspaceFlash()
+            }
+        }
+    }
+
     // Service MPRIS direct pour la réactivité instantanée
     readonly property var players: Mpris.players.values
 
@@ -506,17 +545,18 @@ Item {
 
         if (rl === "contexte" || rl.indexOf("contexte ") === 0) {
             const qCtx = rl.slice(8).trim()
-            const ctxs = ShellState.workContexts || []
+            const ctxs = EnvPresets.presets || []
             for (let i = 0; i < ctxs.length; i++) {
                 const c = ctxs[i]
-                if (qCtx === "" || c.id.indexOf(qCtx) !== -1 || c.label.toLowerCase().indexOf(qCtx) !== -1) {
+                const aliases = (c.aliases || []).join(" ").toLowerCase()
+                if (qCtx === "" || c.name.toLowerCase().indexOf(qCtx) !== -1 || aliases.indexOf(qCtx) !== -1) {
                     out.push({
-                        name: "as contexte " + c.id,
-                        desc: (c.id === ShellState.activeContext ? "Actif · " : "") + c.label + " — " + c.desc,
-                        icon: c.icon,
+                        name: "as contexte " + c.name,
+                        desc: (c.name === EnvPresets.dernierApplique ? "Actif · " : "") + (c.desc || c.name),
+                        icon: c.icon || "widgets",
                         kind: "as",
                         asAction: "contexte",
-                        asArg: c.id
+                        asArg: c.name
                     })
                 }
             }
@@ -1192,15 +1232,15 @@ Item {
             WorkspacesApplet {
                 id: compactWorkspaces
                 visible: Theme.ilotAppletCornerFor("workspaces") === ""
-                    && Theme.ilotVisibleIn(Theme.ilotAppletModeFor("workspaces"), "compact")
+                    && (Theme.ilotVisibleIn(Theme.ilotAppletModeFor("workspaces"), "compact")
+                        || (Theme.ilotAppletModeFor("workspaces") === "expanded" && root.workspaceFlash))
                 dotsMode: true
                 anchors.verticalCenter: parent.verticalCenter
             }
 
             Rectangle {
-                visible: Theme.ilotAppletCornerFor("workspaces") === ""
+                visible: compactWorkspaces.visible
                     && Theme.ilotAppletCornerFor("horloge") === ""
-                    && Theme.ilotVisibleIn(Theme.ilotAppletModeFor("workspaces"), "compact")
                     && Theme.ilotVisibleIn(Theme.ilotAppletModeFor("horloge"), "compact")
                 width: 1
                 height: 12
@@ -1269,9 +1309,9 @@ Item {
             // Icône Projets (columns-3) si échéance Planka < 24h
             PlankaAlertIcon { ilotState: "compact"; boxSize: 20 }
 
-            // Badge contexte actif (si différent de « normal »)
+            // Badge contexte actif (si différent de « Normal » / vide)
             Rectangle {
-                visible: ShellState.activeContext !== "" && ShellState.activeContext !== "normal"
+                visible: EnvPresets.dernierApplique !== "" && EnvPresets.dernierApplique.toLowerCase() !== "normal"
                 height: Math.max(18, Theme.barHeight - 8)
                 width: ctxPillTxt.implicitWidth + 12
                 radius: Math.round(height / 2)
@@ -1283,13 +1323,7 @@ Item {
                 Text {
                     id: ctxPillTxt
                     anchors.centerIn: parent
-                    text: {
-                        const ctxs = ShellState.workContexts || []
-                        for (let i = 0; i < ctxs.length; i++) {
-                            if (ctxs[i].id === ShellState.activeContext) return ctxs[i].label
-                        }
-                        return ShellState.activeContext
-                    }
+                    text: EnvPresets.dernierApplique
                     font.family: Theme.fontUi
                     font.pixelSize: Math.max(8, Math.round(10 * Theme.barScale))
                     font.weight: Font.Bold

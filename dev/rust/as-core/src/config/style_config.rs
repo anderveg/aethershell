@@ -22,6 +22,7 @@ impl StyleConfig {
         Self { raw }
     }
 
+    #[cfg(test)]
     pub fn from_json_str(txt: &str) -> Self {
         let raw = match serde_json::from_str::<Value>(txt) {
             Ok(Value::Object(m)) => m,

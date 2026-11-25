@@ -48,9 +48,9 @@ Item {
     }
 
     function regler(pct) {
-        pourcent = Math.max(0, Math.min(100, Math.round(pct)))
-        reglage.command = ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@",
-                           (pourcent / 100).toFixed(2)]
+        pourcent = Math.max(0, Math.min(Theme.maxVolumePct, Math.round(pct)))
+        reglage.command = ["wpctl", "set-volume", "-l", (Theme.maxVolumePct / 100).toFixed(1),
+                           "@DEFAULT_AUDIO_SINK@", (pourcent / 100).toFixed(2)]
         reglage.running = true
     }
 

@@ -183,7 +183,7 @@ pub fn run_maj_shell(args: &[String]) -> i32 {
     let commande = format!(
         "mkdir -p \"$HOME/.cache/quickshell\" && \
          curl -fsSL --retry 3 --retry-delay 2 -o \"$HOME/.cache/quickshell/install_aethershell.sh\" {lien} && \
-         bash \"$HOME/.cache/quickshell/install_aethershell.sh\""
+         bash \"$HOME/.cache/quickshell/install_aethershell.sh\" --yes"
     );
 
     if args.iter().any(|a| a == "--lien") {

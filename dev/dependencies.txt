@@ -20,7 +20,11 @@ git
 curl
 quickshell
 hyprland
-rofi
+sddm
+kitty
+# Couche Wayland (session, XWayland pour les apps X11)
+wayland-scanner
+Xwayland
 matugen
 inotifywait
 nmcli
@@ -43,6 +47,11 @@ pkg-config
 # les correctifs Rust restent dormants (cas réel : interrupteur de limite de
 # charge corrigé dans le code, jamais compilé sur un portable sans Rust).
 cargo
+# Liaison de as-core : ring et ort sont du C++, et la base SQLite est liée
+# statiquement dans le binaire. Fedora les sépare de gcc/sqlite (paquets
+# gcc-c++ et sqlite-devel) ; Arch et Debian les incluent. `c++` couvre le
+# premier ; le second est vérifié par install.sh au moment de compiler.
+c++
 cava
 # Contrôle audio PipeWire / WirePlumber (commun à tous les postes)
 wpctl

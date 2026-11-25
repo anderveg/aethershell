@@ -602,8 +602,6 @@ pub fn run(args: &[String]) -> i32 {
     let action = args.first().map(|s| s.as_str()).unwrap_or("state");
     if action == "apply" {
         run_apply(&args[1..])
-    } else if action == "state" {
-        run_state()
     } else {
         run_state()
     }

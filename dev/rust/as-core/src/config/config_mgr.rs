@@ -17,7 +17,7 @@ use regex::Regex;
 use serde_json::{json, Map, Value};
 use std::fs;
 use std::os::unix::fs::MetadataExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const DEFAULT_ILOT_ORDER: &[&str] = &[
@@ -57,6 +57,24 @@ fn todo_focus_path() -> PathBuf { cache_dir().join("todo-focus.json") }
 fn notif_targets_path() -> PathBuf { core_dir().join("notif_targets.json") }
 fn autostart_path() -> PathBuf { core_dir().join("autostart.json") }
 fn presets_path() -> PathBuf { core_dir().join("presets.json") }
+
+fn load_or_seed_presets_unlocked(pp: &Path) -> Map<String, Value> {
+    if pp.exists() {
+        return read_map(pp);
+    }
+    let defaults = presets::default_presets();
+    let _ = write_json_atomic(pp, &Value::Object(defaults.clone()), 0o644);
+    defaults
+}
+
+fn load_or_seed_presets() -> Map<String, Value> {
+    let pp = presets_path();
+    if pp.exists() {
+        return read_map(&pp);
+    }
+    let _lock = FileLock::acquire(&pp);
+    load_or_seed_presets_unlocked(&pp)
+}
 
 /// Profil d'énergie actif. D-Bus d'abord : `powerprofilesctl` est un script
 /// Python qui meurt sur `import gi` quand `python-gobject` n'est pas installé
@@ -119,7 +137,7 @@ fn definir_energie(profil: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn read_map(path: &PathBuf) -> Map<String, Value> {
+fn read_map(path: &Path) -> Map<String, Value> {
     match read_json_value(path) {
         Value::Object(m) => m,
         _ => Map::new(),
@@ -303,7 +321,8 @@ fn update_style_var(key: &str, value: &str) {
         | "ilot_projets_actif" | "ilot_coins_groupes" | "bar_bottom" | "bar_left"
         | "bar_right" | "show_config_button" | "maj_seulement_si_dispo"
         | "caffeine_actif" | "widgets_bureau_visibles"
-        | "theme_apply_icons" | "theme_apply_cursor" => {
+        | "theme_apply_icons" | "theme_apply_cursor" | "bt_auto_switch_audio"
+        | "audio_allow_boost" => {
             data.insert(key.into(), json!(is_true(value)));
         }
         "global_radius" | "selecteur_radius" => {
@@ -807,6 +826,8 @@ pub fn get_full_config_state() -> Value {
         "wallpaper_slide": get_b("wallpaper_slide", false),
         "ilot_coins_groupes": get_b("ilot_coins_groupes", false),
         "panel_accordion": get_b("panel_accordion", true),
+        "bt_auto_switch_audio": get_b("bt_auto_switch_audio", true),
+        "audio_allow_boost": get_b("audio_allow_boost", false),
         "user_location_ville": get_s("user_location_ville", ""),
         "user_location_lat": style.get("user_location_lat").cloned().unwrap_or(Value::Null),
         "user_location_lon": style.get("user_location_lon").cloned().unwrap_or(Value::Null),
@@ -1489,7 +1510,7 @@ pub fn run(args: &[String]) -> i32 {
             sortir(&get_full_config_state())
         }
         "preset_list" => {
-            let data = read_map(&presets_path());
+            let data = load_or_seed_presets();
             sortir(&json!({ "ok": true, "presets": presets::summarize_presets(&data) }))
         }
         "preset_save" if args.len() >= 2 => {
@@ -1507,7 +1528,7 @@ pub fn run(args: &[String]) -> i32 {
             // machine sans `python-gobject`, meurt sur `import gi` (constaté ici).
             let power = profil_energie().unwrap_or_default();
             let env = presets::capture_env(&style, &power);
-            let mut data = read_map(&pp);
+            let mut data = load_or_seed_presets_unlocked(&pp);
             data.insert(
                 name.into(),
                 presets::capture_preset(&style, &widgets, &env, now_secs()),
@@ -1517,7 +1538,7 @@ pub fn run(args: &[String]) -> i32 {
         }
         "preset_apply" if args.len() >= 2 => {
             let name = args[1].trim();
-            let data = read_map(&presets_path());
+            let data = load_or_seed_presets();
             let Some(preset) = data.get(name) else {
                 return sortir(&json!({ "ok": false, "message": "Profil introuvable" }));
             };
@@ -1525,11 +1546,14 @@ pub fn run(args: &[String]) -> i32 {
             let Some(widgets) = presets::apply_preset_into(preset, &mut style) else {
                 return sortir(&json!({ "ok": false, "message": "Profil invalide" }));
             };
+            let has_widgets = preset.get("widgets").and_then(|v| v.as_array()).is_some();
             // Bloc `env` : présent dans les profils v2, absent dans les v1 (on
             // applique alors le style seul, et l'UI le signale).
             let env = presets::apply_env_into(preset, &mut style);
             let _ = write_json_atomic(&style_path(), &Value::Object(style), 0o644);
-            save_widgets_vec(&widgets);
+            if has_widgets {
+                save_widgets_vec(&widgets);
+            }
             if let Some(e) = &env {
                 // Le démon de nuit relit `night_mode`/`night_temp` depuis le style
                 // qu'on vient d'écrire : il faut donc l'appeler APRÈS la sauvegarde.
@@ -1562,7 +1586,7 @@ pub fn run(args: &[String]) -> i32 {
             let name = args[1].trim();
             let pp = presets_path();
             let _lock = FileLock::acquire(&pp);
-            let mut data = read_map(&pp);
+            let mut data = load_or_seed_presets_unlocked(&pp);
             let removed = data.remove(name).is_some();
             if removed {
                 let _ = write_json_atomic(&pp, &Value::Object(data.clone()), 0o644);

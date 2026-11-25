@@ -3,20 +3,36 @@
 
 local mainMod = "SUPER"
 
+--: Session
+hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("hyprlock"), { description = "verrouiller la session" })
+
 --: Fenêtres
 hl.bind(mainMod .. " + Q", hl.dsp.window.close(), { description = "fermer la fenêtre" })  -- essentiel
 hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("quickshell ipc -n call shell minimiser"), { description = "mettre la fenêtre de côté" })
 hl.bind(mainMod .. " + SHIFT + D", hl.dsp.exec_cmd("quickshell ipc -n call shell rappelerDerniere"), { description = "rappeler la dernière fenêtre de côté" })
 hl.bind(mainMod .. " + V", hl.dsp.window.float({ action = "toggle" }), { description = "fenêtre flottante" })
 hl.bind(mainMod .. " + SHIFT + V", hl.dsp.exec_cmd("$HOME/.config/quickshell/core/as-core workspace-float-toggle"), { description = "basculer tout le bureau flottant / tiling" })
-hl.bind(mainMod .. " + F", hl.dsp.window.float({ action = "toggle" }), { description = "fenêtre flottante" })  -- essentiel
 hl.bind(mainMod .. " + SHIFT + F", hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle" }), { description = "plein écran" })
 hl.bind(mainMod .. " + CTRL + F", hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" }), { description = "maximiser" })
--- Déplacement du focus avec SUPER + Flèches.
-hl.bind(mainMod .. " + Left",  hl.dsp.focus({ direction = "left" }), { description = "focus à gauche" })  -- essentiel
-hl.bind(mainMod .. " + Right", hl.dsp.focus({ direction = "right" }), { description = "focus à droite" })  -- essentiel
-hl.bind(mainMod .. " + Up",    hl.dsp.focus({ direction = "up" }), { description = "focus en haut" })  -- essentiel
-hl.bind(mainMod .. " + Down",  hl.dsp.focus({ direction = "down" }), { description = "focus en bas" })  -- essentiel
+-- Déplacement du focus avec SUPER + Flèches (+ mise au premier plan pour les flottantes/scratchpad).
+local function focus_and_raise(dir)
+    return function()
+        hl.dispatch(hl.dsp.focus({ direction = dir }))
+        hl.dispatch(hl.dsp.window.bring_to_top())
+    end
+end
+hl.bind(mainMod .. " + Left",  focus_and_raise("left"),  { description = "focus à gauche" })  -- essentiel
+hl.bind(mainMod .. " + Right", focus_and_raise("right"), { description = "focus à droite" })  -- essentiel
+hl.bind(mainMod .. " + Up",    focus_and_raise("up"),    { description = "focus en haut" })   -- essentiel
+hl.bind(mainMod .. " + Down",  focus_and_raise("down"),  { description = "focus en bas" })    -- essentiel
+hl.bind(mainMod .. " + Tab", function()
+    hl.dispatch(hl.dsp.window.cycle_next())
+    hl.dispatch(hl.dsp.window.bring_to_top())
+end, { description = "fenêtre suivante (et au premier plan)" })
+hl.bind(mainMod .. " + SHIFT + Tab", function()
+    hl.dispatch(hl.dsp.window.cycle_next({ prev = true }))
+    hl.dispatch(hl.dsp.window.bring_to_top())
+end, { description = "fenêtre précédente (et au premier plan)" })
 -- Échange de la fenêtre active avec sa voisine (SUPER + CTRL + Flèches).
 -- swap échange les positions sur le MÊME workspace (pas de changement de workspace).
 hl.bind(mainMod .. " + CTRL + Left",  hl.dsp.window.swap({ direction = "l" }), { description = "échanger avec la gauche" })
@@ -131,8 +147,8 @@ hl.bind(mainMod .. " + K", hl.dsp.exec_cmd("quickshell ipc -n call shell toggleC
 hl.bind(mainMod .. " + G", hl.dsp.exec_cmd("quickshell ipc -n call shell toggleOverview"), { description = "vue d'ensemble des fenêtres" })
 hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd("quickshell ipc -n call shell showNotifHistory"), { description = "historique des notifications" })
 hl.bind(mainMod .. " + N", hl.dsp.exec_cmd("quickshell ipc -n call shell toggleNotes"), { description = "notes rapides (îlot)" })
-hl.bind(mainMod .. " + comma", hl.dsp.exec_cmd("hyprctl dispatch togglespecialworkspace scratchpad"), { description = "afficher/masquer le scratchpad" })
-hl.bind(mainMod .. " + SHIFT + comma", hl.dsp.exec_cmd("hyprctl dispatch movetoworkspacesilent special:scratchpad"), { description = "envoyer la fenêtre au scratchpad" })
+hl.bind(mainMod .. " + comma", hl.dsp.workspace.toggle_special("scratchpad"), { description = "afficher/masquer le scratchpad" })
+hl.bind(mainMod .. " + SHIFT + comma", hl.dsp.window.move({ workspace = "special:scratchpad", follow = false }), { description = "envoyer la fenêtre au scratchpad" })
 -- Placement d'un widget de bureau : le shell lit la position du curseur, trouve le
 -- widget dessous et affiche une surface plein écran qui le fait suivre la souris.
 -- SUPER + clic ne peut pas servir (déjà pris par le glisser de fenêtre) et
@@ -220,3 +236,8 @@ hl.define_submap("aether-theme", function()
     hl.bind(mainMod .. " + C", hl.dsp.exec_cmd("quickshell ipc -n call shell themeNav close ; hyprctl dispatch 'hl.dsp.submap(\"reset\")'"), { description = "fermer sélecteur" })
     hl.bind("Q",           hl.dsp.exec_cmd("quickshell ipc -n call shell themeNav close ; hyprctl dispatch 'hl.dsp.submap(\"reset\")'"), { description = "fermer sélecteur" })
 end)
+
+--: Profils de thème (SUPER + F1 à F9)
+for i = 1, 9 do
+    hl.bind(mainMod .. " + F" .. i, hl.dsp.exec_cmd("quickshell ipc -n call shell themeProfilAppliqueIndex " .. i), { description = "appliquer le profil de thème " .. i })
+end

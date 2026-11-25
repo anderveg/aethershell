@@ -62,22 +62,25 @@ fn slug(chemin: &Path) -> String {
 }
 
 fn normaliser_couleur(brut: &str) -> Option<String> {
+    use std::sync::OnceLock;
+    static RE_RGB: OnceLock<Regex> = OnceLock::new();
+    static RE_HEX: OnceLock<Regex> = OnceLock::new();
     let val = brut.trim();
     if val.is_empty() {
         return None;
     }
-    if let Some(cap) = Regex::new(r"^(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})$")
-        .ok()
-        .and_then(|re| re.captures(val))
+    if let Some(cap) = RE_RGB
+        .get_or_init(|| Regex::new(r"^(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})$").unwrap())
+        .captures(val)
     {
         let r = cap[1].parse::<u8>().unwrap_or(0);
         let g = cap[2].parse::<u8>().unwrap_or(0);
         let b = cap[3].parse::<u8>().unwrap_or(0);
         return Some(format!("#{r:02x}{g:02x}{b:02x}"));
     }
-    if let Some(cap) = Regex::new(r"^#?([0-9a-fA-F]{8}|[0-9a-fA-F]{6})$")
-        .ok()
-        .and_then(|re| re.captures(val))
+    if let Some(cap) = RE_HEX
+        .get_or_init(|| Regex::new(r"^#?([0-9a-fA-F]{8}|[0-9a-fA-F]{6})$").unwrap())
+        .captures(val)
     {
         let hex = &cap[1];
         let six = if hex.len() == 8 { &hex[2..] } else { hex };

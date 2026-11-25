@@ -254,7 +254,7 @@ spacing: 12
 CollapsibleSection {
     id: secEcrans
     objectName: "secEcrans"
-    title: "Moniteurs, résolution & échelle"
+    title: "Moniteurs & affichage"
     summary: root.selectedMonitorName + " · " + root.monitorsList.length + " écran(s)"
     icon: "monitor"
     expanded: root.sectionOpen("ecrans_moniteurs", false)
@@ -820,6 +820,306 @@ Column {
         }
     }
 }
+}
+
+// Tiroir : audio (bascule auto casque Bluetooth, profils A2DP/HFP, micro)
+CollapsibleSection {
+    id: secAudio
+    objectName: "secAudio"
+    title: "Audio"
+    summary: Theme.btAutoSwitchAudio ? "Bascule auto casque" : "Bascule manuelle"
+    icon: "volume-high"
+    expanded: root.sectionOpen("systeme_audio", false)
+    onToggled: expanded => {
+        root.onSectionToggled("systeme_audio", expanded)
+        if (expanded) SystemServices.refreshBtAudio()
+    }
+
+    Column {
+        width: parent.width
+        spacing: 12
+
+        // Volume par défaut + dépassement 100 %
+        Row {
+            width: parent.width
+            spacing: 12
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width - 250
+                text: SystemServices.volumeMuted
+                    ? ("Volume : muet (" + SystemServices.volumePct + " %)")
+                    : ("Volume : " + SystemServices.volumePct + " %")
+                color: SystemServices.volumeMuted ? Theme.warn : Theme.fg
+                font.pixelSize: Theme.textSm
+            }
+
+            Stepper {
+                anchors.verticalCenter: parent.verticalCenter
+                value: SystemServices.volumePct
+                minimumValue: 0
+                maximumValue: Theme.maxVolumePct
+                stepSize: 5
+                decimals: 0
+                textFormatter: v => Math.round(v) + " %"
+                onValueModified: newVal => SystemServices.setVolumePct(newVal)
+            }
+
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 78
+                height: 28
+                radius: Theme.globalRadius
+                color: SystemServices.volumeMuted
+                    ? Qt.alpha(Theme.warn, 0.25)
+                    : (muteCfgMa.containsMouse ? Theme.accent : Theme.surfaceVariant)
+
+                Text {
+                    anchors.centerIn: parent
+                    text: SystemServices.volumeMuted ? "Rétablir" : "Muet"
+                    color: SystemServices.volumeMuted ? Theme.warn : (muteCfgMa.containsMouse ? Theme.bg : Theme.fg)
+                    font.pixelSize: Theme.textXs
+                    font.bold: true
+                }
+
+                MouseArea {
+                    id: muteCfgMa
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: SystemServices.toggleDefaultSinkMute()
+                }
+            }
+        }
+
+        Row {
+            width: parent.width
+            spacing: 12
+
+            Column {
+                width: parent.width - 56
+                spacing: 2
+
+                Text {
+                    text: "Autoriser le volume au-delà de 100 %"
+                    color: Theme.fg
+                    font.pixelSize: Theme.textSm
+                    font.bold: true
+                }
+                Text {
+                    width: parent.width
+                    text: "Débloque le plafond du curseur et des réglages jusqu'à 150 %."
+                    color: Qt.alpha(Theme.fg, 0.65)
+                    font.pixelSize: Theme.textXs
+                    wrapMode: Text.WordWrap
+                }
+            }
+
+            ConfigSwitch {
+                anchors.verticalCenter: parent.verticalCenter
+                checked: Theme.audioAllowBoost
+                onToggled: {
+                    const nxt = !Theme.audioAllowBoost
+                    Theme.audioAllowBoost = nxt
+                    root.runConfigCmd(["style", "audio_allow_boost", nxt ? "true" : "false"])
+                }
+            }
+        }
+
+        // Choix de la sortie son par défaut
+        Column {
+            width: parent.width
+            spacing: 6
+
+            Text {
+                text: "Sortie audio par défaut"
+                color: Theme.fg
+                font.pixelSize: Theme.textSm
+                font.bold: true
+            }
+
+            Text {
+                visible: SystemServices.audioSinks.length === 0
+                text: "Aucune sortie détectée."
+                color: Qt.alpha(Theme.fg, 0.55)
+                font.pixelSize: Theme.textXs
+                font.italic: true
+            }
+
+            Flow {
+                width: parent.width
+                spacing: 8
+
+                Repeater {
+                    model: SystemServices.audioSinks
+
+                    Rectangle {
+                        required property var modelData
+                        readonly property bool current: modelData.name === SystemServices.defaultSinkName
+                        width: sinkCfgLbl.implicitWidth + 18
+                        height: 28
+                        radius: Theme.globalRadius
+                        color: current ? Theme.accent : (sinkCfgMa.containsMouse ? Theme.surfaceVariant : Qt.alpha(Theme.surfaceVariant, 0.6))
+                        border.width: 1
+                        border.color: current ? Theme.accent : Qt.alpha(Theme.fg, 0.12)
+
+                        Text {
+                            id: sinkCfgLbl
+                            anchors.centerIn: parent
+                            text: modelData.label
+                            color: current ? Theme.bg : Theme.fg
+                            font.pixelSize: Theme.textXs
+                            font.bold: current
+                        }
+
+                        MouseArea {
+                            id: sinkCfgMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: SystemServices.setDefaultSink(modelData.name)
+                        }
+                    }
+                }
+            }
+        }
+
+        Row {
+            width: parent.width
+            spacing: 12
+
+            Column {
+                width: parent.width - 56
+                spacing: 2
+
+                Text {
+                    text: "Bascule auto sur le casque Bluetooth"
+                    color: Theme.fg
+                    font.pixelSize: Theme.textSm
+                    font.bold: true
+                }
+                Text {
+                    width: parent.width
+                    text: "Passe automatiquement la sortie audio par défaut sur un casque ou des écouteurs Bluetooth dès leur connexion."
+                    color: Qt.alpha(Theme.fg, 0.65)
+                    font.pixelSize: Theme.textXs
+                    wrapMode: Text.WordWrap
+                }
+            }
+
+            ConfigSwitch {
+                anchors.verticalCenter: parent.verticalCenter
+                checked: Theme.btAutoSwitchAudio
+                onToggled: {
+                    const nxt = !Theme.btAutoSwitchAudio
+                    Theme.btAutoSwitchAudio = nxt
+                    root.runConfigCmd(["style", "bt_auto_switch_audio", nxt ? "true" : "false"])
+                }
+            }
+        }
+
+        // Micro par défaut
+        Row {
+            width: parent.width
+            spacing: 12
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width - 130
+                text: SystemServices.micMuted ? "Microphone par défaut : coupé" : "Microphone par défaut : actif"
+                color: SystemServices.micMuted ? Theme.error : Theme.fg
+                font.pixelSize: Theme.textSm
+            }
+
+            Rectangle {
+                width: 118
+                height: 28
+                radius: Theme.globalRadius
+                color: micCfgMa.containsMouse ? Theme.accent : Theme.surfaceVariant
+
+                Text {
+                    anchors.centerIn: parent
+                    text: SystemServices.micMuted ? "Réactiver micro" : "Couper micro"
+                    color: micCfgMa.containsMouse ? Theme.bg : Theme.fg
+                    font.pixelSize: Theme.textXs
+                    font.bold: true
+                }
+
+                MouseArea {
+                    id: micCfgMa
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: SystemServices.toggleDefaultMic()
+                }
+            }
+        }
+
+        // Profils Bluetooth (A2DP ↔ HFP) si un équipement est connecté
+        Text {
+            visible: SystemServices.btAudioCards.length === 0
+            text: "Aucun périphérique audio Bluetooth connecté (A2DP / HFP disponible après connexion)."
+            color: Qt.alpha(Theme.fg, 0.55)
+            font.pixelSize: Theme.textXs
+            font.italic: true
+            width: parent.width
+            wrapMode: Text.WordWrap
+        }
+
+        Repeater {
+            model: SystemServices.btAudioCards
+
+            Column {
+                required property var modelData
+                width: parent.width
+                spacing: 6
+
+                Text {
+                    text: "Profil Bluetooth · " + modelData.label
+                    color: Theme.fg
+                    font.pixelSize: Theme.textSm
+                    font.bold: true
+                }
+
+                Flow {
+                    width: parent.width
+                    spacing: 8
+
+                    Repeater {
+                        model: modelData.profiles
+
+                        Rectangle {
+                            required property var modelData
+                            readonly property bool actif: modelData.id === parent.parent.modelData.activeProfile
+                            width: profCfgLbl.implicitWidth + 18
+                            height: 28
+                            radius: Theme.globalRadius
+                            color: actif ? Theme.accent : (profCfgMa.containsMouse ? Theme.surfaceVariant : Qt.alpha(Theme.surfaceVariant, 0.6))
+                            border.width: 1
+                            border.color: actif ? Theme.accent : Qt.alpha(Theme.fg, 0.12)
+
+                            Text {
+                                id: profCfgLbl
+                                anchors.centerIn: parent
+                                text: modelData.label
+                                color: actif ? Theme.bg : Theme.fg
+                                font.pixelSize: Theme.textXs
+                                font.bold: actif
+                            }
+
+                            MouseArea {
+                                id: profCfgMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: SystemServices.setBtCardProfile(parent.parent.parent.modelData.name, modelData.id)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 // Tiroir : écran de veille terminal (hypridle + as matrix ss)
@@ -1443,7 +1743,7 @@ onClicked: {
 CollapsibleSection {
     id: secMaj
     objectName: "secMaj"
-    title: "Mise à jour du shell"
+    title: "Mises à jour"
     summary: bloc.majResume
     icon: "download"
     expanded: root.sectionOpen("systeme_maj", false)
@@ -1820,7 +2120,7 @@ CollapsibleSection {
     id: secDiagnostic
     objectName: "secDiagnostic"
     width: parent.width
-    title: "Diagnostic, journaux & sauvegardes"
+    title: "Diagnostic & sauvegardes"
     summary: (bloc.diagServices.length > 0
         ? (bloc.diagServices.filter(s => s.active).length + "/" + bloc.diagServices.length + " services actifs")
         : "Services · Journaux · Backups HQ")

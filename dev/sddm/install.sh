@@ -19,6 +19,8 @@
 set -euo pipefail
 
 DEV="$(cd "$(dirname "$0")" && pwd)"
+# Le binaire vit dans dev/core, un cran au-dessus de dev/sddm.
+CORE="$(cd "$DEV/.." && pwd)/core"
 THEME="/usr/share/sddm/themes/sddm-astronaut-theme"
 CONFD="/etc/sddm.conf.d"
 STAMP="$(date +%Y%m%d_%H%M%S)"
@@ -87,7 +89,7 @@ if [ ! -d "$THEME" ]; then
     fi
     die "thème absent : installer sddm-astronaut-theme (AUR : yay -S, ou pacman -U du paquet construit à la main)"
 fi
-[ -x "$DEV/core/as-core" ] || die "backend as-core introuvable (lancer dev/rust/build.sh)"
+[ -x "$CORE/as-core" ] || die "backend as-core introuvable (lancer dev/rust/build.sh)"
 
 # La police est demandée en dur par palette.conf (Font="Inter") : sans elle le
 # thème se rabat sur une autre fonte, sans message. fc-match plutôt que
@@ -103,7 +105,7 @@ case "$(fc-match -f '%{family}' Inter 2>/dev/null || true)" in
 esac
 
 echo "▶ génération depuis style_vars.json"
-"$DEV/core/as-core" greeter gen-palette
+"$CORE/as-core" greeter gen-palette
 [ -f "$DEV/out/Themes/palette.conf" ] || die "palette.conf non généré"
 [ -f "$DEV/out/Backgrounds/wallpaper.png" ] || die "fond non généré"
 
@@ -123,6 +125,52 @@ done
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
+# ── Clavier virtuel ─────────────────────────────────────────────────────────
+# Chaque thème de connexion installé reçoit un bouton discret en bas à droite
+# (`ClavierVirtuel.qml`) qui affiche Qt Virtual Keyboard. Les thèmes qui le
+# gèrent déjà (sddm-astronaut, entre autres) ne sont pas touchés, et un thème
+# dont le Main.qml n'a pas d'`id: root` est laissé tel quel.
+# Les fichiers retouchés sont préparés ici (lecture seule côté utilisateur) ;
+# root.sh ne fait que les copier, original sauvegardé en .aethershell-orig.
+VK_STAGE="$STAGE/themes"
+export VK_STAGE
+if compgen -G "/usr/share/sddm/themes/*/Main.qml" > /dev/null; then
+    while IFS= read -r mainqml; do
+        td="$(dirname "$mainqml")"
+        nom="$(basename "$td")"
+        # Thème qui gère déjà Qt Virtual Keyboard (sddm-astronaut et d'autres) :
+        # on n'ajoute pas un second bouton. Nos deux composants sont exclus du
+        # test, sinon un thème déjà équipé passerait pour incompatible.
+        autres="$(ls "$td"/*.qml "$td"/Components/*.qml 2>/dev/null \
+            | grep -vE "/(ClavierVirtuel|PanneauClavier)\.qml$" | tr '\n' ' ' || true)"
+        grep -qs "InputPanel\|QtQuick.VirtualKeyboard" "$mainqml" $autres && continue
+        grep -q "id: root" "$mainqml" || continue
+        mkdir -p "$VK_STAGE/$nom"
+        # Composants toujours rafraîchis : une correction du bouton ou du panneau
+        # doit atteindre les thèmes déjà équipés.
+        cp -f "$DEV/clavier/ClavierVirtuel.qml" "$DEV/clavier/PanneauClavier.qml" "$VK_STAGE/$nom/"
+        if ! grep -q "ClavierVirtuel" "$mainqml"; then
+            cp -f "$mainqml" "$VK_STAGE/$nom/Main.qml"
+            python3 - "$VK_STAGE/$nom/Main.qml" <<'PYX'
+import sys
+chemin = sys.argv[1]
+src = open(chemin).read()
+bloc = """
+    // AetherShell — clavier virtuel (bouton discret en bas à droite).
+    // Posé par dev/sddm/install.sh ; la version d'origine du thème est
+    // conservée en Main.qml.aethershell-orig.
+    ClavierVirtuel { id: clavierVirtuel; echelle: root.s !== undefined ? root.s : 1 }
+"""
+fin = src.rstrip().rfind("}")
+if fin < 0:
+    sys.exit("Main.qml : accolade finale introuvable")
+open(chemin, "w").write(src.rstrip()[:fin].rstrip("\n") + "\n" + bloc + "}\n")
+PYX
+        fi
+        echo "  clavier virtuel : $nom"
+    done < <(ls -1 /usr/share/sddm/themes/*/Main.qml 2>/dev/null)
+fi
+
 {
     echo '#!/bin/bash'
     echo 'set -euo pipefail'
@@ -133,6 +181,21 @@ trap 'rm -rf "$STAGE"' EXIT
     echo "install -Dm644 '$DEV/50-greeter-palette.rules' /etc/polkit-1/rules.d/50-greeter-palette.rules"
     echo "install -Dm644 '$DEV/out/Themes/palette.conf' '$THEME/Themes/palette.conf'"
     echo "install -Dm644 '$DEV/out/Backgrounds/wallpaper.png' '$THEME/Backgrounds/wallpaper.png'"
+    # Clavier virtuel : les thèmes préparés plus haut reçoivent le bouton discret
+    # en bas à droite. L'original du Main.qml est conservé une seule fois.
+    if [ -n "${VK_STAGE:-}" ] && [ -d "$VK_STAGE" ]; then
+        echo "for t in '$VK_STAGE'/*/; do"
+        echo "  nom=\$(basename \"\$t\")"
+        echo "  cible=/usr/share/sddm/themes/\$nom"
+        echo "  [ -d \"\$cible\" ] || continue"
+        echo "  if [ -f \"\$t/Main.qml\" ]; then"
+        echo "    cp -n \"\$cible/Main.qml\" \"$BACKUP/\${nom}_Main.qml.aethershell-orig\" 2>/dev/null || true"
+        echo "    install -Dm644 \"\$t/Main.qml\" \"\$cible/Main.qml\""
+        echo "  fi"
+        echo "  install -Dm644 \"\$t/ClavierVirtuel.qml\" \"\$cible/ClavierVirtuel.qml\""
+        echo "  install -Dm644 \"\$t/PanneauClavier.qml\" \"\$cible/PanneauClavier.qml\""
+        echo "done"
+    fi
     # Reprise d'un renommage : la nomenclature précédente portait le nom de
     # l'hôte du laptop, on retire les artefacts qu'elle a laissés.
     echo "rm -f /usr/local/bin/wallpaper-greeter /etc/polkit-1/rules.d/50-wallpaper-greeter.rules"

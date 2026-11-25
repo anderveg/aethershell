@@ -365,6 +365,11 @@ QtObject {
     // besoin de savoir où l'on est (météo, horloge, calendrier, widgets).
     // Effet d'accordéon du panneau de réglages : un seul tiroir ouvert par onglet.
     property bool panelAccordion: true
+    // Bascule automatique de la sortie audio sur le casque Bluetooth à la connexion.
+    property bool btAutoSwitchAudio: true
+    // Autorise le volume au-delà de 100 % (jusqu'à 150 %).
+    property bool audioAllowBoost: false
+    readonly property int maxVolumePct: audioAllowBoost ? 150 : 100
 
     property string userLocationVille: ""
     property real userLocationLat: 0
@@ -526,11 +531,11 @@ QtObject {
     // est toujours floutée. Contrairement à la capsule de repos du lanceur, il
     // n'y a ici ni état de veille ni réveil au clic.
     readonly property real barOpacity: shellOpacity
-    // La barre ne pose pas sa couleur de thème sur le fond : un noir neutre
-    // assombrit sans décaler la teinte, donc les couleurs restent celles du
-    // fond quel qu'il soit. La teinte `surface` reste pour les panneaux, où
-    // l'opacité est bien plus élevée.
-    readonly property color barBg: Qt.alpha("#000000", barOpacity)
+    // La barre ne pose pas sa couleur de thème sur le fond : un noir neutre en
+    // mode sombre (et un blanc neutre en mode clair) préserve le contraste du
+    // texte `fg` sans décaler la teinte du fond.
+    readonly property bool isLight: (0.299 * bg.r + 0.587 * bg.g + 0.114 * bg.b) > 0.5
+    readonly property color barBg: Qt.alpha(isLight ? "#ffffff" : "#000000", barOpacity)
 
     // ── Lanceur au repos ──────────────────────────────────────────────────────
     // La pilule reste posée en bas au centre, en veille à 0.2 (donc sans flou :
@@ -623,6 +628,8 @@ QtObject {
         if (typeof data.bar_border === "boolean") root.barBorder = data.bar_border
         if (typeof data.bar_style === "string") root.barStyle = data.bar_style
         if (typeof data.theme_apply_icons === "boolean") root.applyIcons = data.theme_apply_icons
+        if (typeof data.bt_auto_switch_audio === "boolean") root.btAutoSwitchAudio = data.bt_auto_switch_audio
+        if (typeof data.audio_allow_boost === "boolean") root.audioAllowBoost = data.audio_allow_boost
         if (typeof data.theme_apply_cursor === "boolean") root.applyCursor = data.theme_apply_cursor
         if (typeof data.theme_mode === "string") root.themeMode = data.theme_mode
         if (typeof data.bar_gaps_transparent === "boolean") root.barGapsTransparent = data.bar_gaps_transparent

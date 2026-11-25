@@ -246,15 +246,9 @@ QtObject {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // CONTEXTES DE TRAVAIL (manuels : îlot, commande `as contexte`, IPC)
+    // CONTEXTES DE TRAVAIL (unifiés sur presets.json via EnvPresets)
     // ──────────────────────────────────────────────────────────────────────────
-    property string activeContext: "normal"
-    readonly property var workContexts: [
-        { id: "normal",  label: "Normal",       desc: "DND off · Équilibré · Widgets visibles",           icon: "widgets",       dnd: false, caffeine: false, power: "balanced",    night: false, nightTemp: 4500, widgets: true },
-        { id: "focus",   label: "Focus / Code", desc: "DND on · Caffeine · Performance · Widgets masqués", icon: "cog",           dnd: true,  caffeine: true,  power: "performance", night: false, nightTemp: 4500, widgets: false },
-        { id: "reunion", label: "Réunion",      desc: "DND on · Caffeine · Équilibré · Widgets masqués",   icon: "bell-off",      dnd: true,  caffeine: true,  power: "balanced",    night: false, nightTemp: 4500, widgets: false },
-        { id: "detente", label: "Détente",      desc: "DND off · Nuit 3800K · Éco · Widgets visibles",     icon: "weather-night", dnd: false, caffeine: false, power: "power-saver", night: true,  nightTemp: 3800, widgets: true }
-    ]
+    readonly property string activeContext: EnvPresets.dernierApplique || "Normal"
 
     // Visibilité des widgets du bureau : persistée dans style_vars.json pour
     // qu'un profil d'environnement puisse l'enregistrer et la restaurer (même
@@ -267,31 +261,9 @@ QtObject {
     }
 
     function applyContext(ctxId) {
-        const q = String(ctxId || "").trim().toLowerCase()
-        const aliasMap = { "code": "focus", "travail": "focus", "meeting": "reunion", "relax": "detente" }
-        const key = aliasMap[q] || q
-        let found = null
-        for (let i = 0; i < root.workContexts.length; i++) {
-            if (root.workContexts[i].id === key) {
-                found = root.workContexts[i]
-                break
-            }
-        }
-        if (!found) return false
-        root.activeContext = found.id
-        root.doNotDisturb = found.dnd
-        SystemServices.caffeineActif = found.caffeine
-        root.setWidgetsBureauVisibles(found.widgets)
-        Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "config", "style", "do_not_disturb", found.dnd ? "true" : "false"])
-        Quickshell.execDetached(["busctl", "set-property", "net.hadess.PowerProfiles",
-                                 "/net/hadess/PowerProfiles", "net.hadess.PowerProfiles",
-                                 "ActiveProfile", "s", found.power])
-        if (found.night) {
-            Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "nuit", "temperature", String(found.nightTemp)])
-            Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "nuit", "activer"])
-        } else {
-            Quickshell.execDetached([Quickshell.shellPath("core/as-core"), "nuit", "desactiver"])
-        }
+        const name = EnvPresets.resolveName(ctxId)
+        if (!name) return false
+        EnvPresets.apply(name)
         return true
     }
 
@@ -324,6 +296,9 @@ QtObject {
         }
         function themeProfilApplique(nom: string) {
             ThemeProfiles.apply(nom)
+        }
+        function themeProfilAppliqueIndex(idx: int) {
+            ThemeProfiles.applyIndex(idx)
         }
         function themeProfilEnregistre(nom: string, modes: string) {
             ThemeProfiles.save(nom, modes)

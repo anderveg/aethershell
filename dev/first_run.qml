@@ -14,6 +14,8 @@ Item {
     property string clavier: "fr"
     property var dossiers: []          // [{ nom, xdg, chemin, existe }]
     property var programmes: []        // [{ alias, commande, present, candidats }]
+    property var dossiersSaisis: ({})  // { xdg: chemin } sans recréer le Repeater à la frappe
+    property var programmesSaisis: ({}) // { alias: commande } sans recréer le Repeater à la frappe
     property var widgets: []           // [{ type, label, pose }]
     property bool pret: false
     property bool applicationEnCours: false
@@ -57,7 +59,11 @@ Item {
 
     // ── mutations : la liste est un tableau JS, une mutation en place ne
     //    réveillerait aucune liaison (même raison que dans le tiroir d'historique).
-    function majDossier(xdg, chemin) {
+    function majDossier(xdg, chemin, depuisClavier) {
+        const m = Object.assign({}, dossiersSaisis)
+        m[xdg] = chemin
+        dossiersSaisis = m
+        if (depuisClavier) return
         const copie = []
         for (let i = 0; i < dossiers.length; i++) {
             const d = dossiers[i]
@@ -66,7 +72,11 @@ Item {
         dossiers = copie
     }
 
-    function majProgramme(alias, commande) {
+    function majProgramme(alias, commande, depuisClavier) {
+        const m = Object.assign({}, programmesSaisis)
+        m[alias] = commande
+        programmesSaisis = m
+        if (depuisClavier) return
         const copie = []
         for (let i = 0; i < programmes.length; i++) {
             const p = programmes[i]
@@ -180,14 +190,17 @@ Item {
 
     function terminer() {
         const chemins = ({})
-        for (let i = 0; i < dossiers.length; i++)
-            chemins[dossiers[i].xdg] = dossiers[i].chemin
+        for (let i = 0; i < dossiers.length; i++) {
+            const x = dossiers[i].xdg
+            chemins[x] = (dossiersSaisis[x] !== undefined) ? dossiersSaisis[x] : dossiers[i].chemin
+        }
 
         const alias = ({})
         for (let i = 0; i < programmes.length; i++) {
             const p = programmes[i]
-            if (String(p.commande || "").trim() !== "")
-                alias[p.alias] = p.commande
+            const cmd = String((programmesSaisis[p.alias] !== undefined) ? programmesSaisis[p.alias] : (p.commande || "")).trim()
+            if (cmd !== "")
+                alias[p.alias] = cmd
         }
 
         const ajouter = []
@@ -239,10 +252,9 @@ Item {
         aboveWindows: true
         visible: Theme.showKeyboardOnboarding
         WlrLayershell.layer: WlrLayer.Overlay
-        // Aucun clavier : tout se fait à la souris. Le champ du panneau reste
-        // inerte par construction, et rien ne peut avaler une frappe destinée à
-        // une fenêtre en dessous.
-        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+        // OnDemand : les TextInput (dossiers, programmes) reçoivent le clavier
+        // uniquement quand l'utilisateur clique dedans.
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
         WlrLayershell.namespace: "shell-onboarding"
 
         Rectangle {
@@ -459,7 +471,7 @@ Item {
                                     color: Theme.info
                                     font.pixelSize: Theme.textSm
                                     selectByMouse: true
-                                    onTextEdited: root.majDossier(ligneDossier.modelData.xdg, text)
+                                    onTextEdited: root.majDossier(ligneDossier.modelData.xdg, text, true)
                                 }
                             }
                         }
@@ -521,7 +533,7 @@ Item {
                                         color: Theme.info
                                         font.pixelSize: Theme.textSm
                                         selectByMouse: true
-                                        onTextEdited: root.majProgramme(blocProgramme.modelData.alias, text)
+                                        onTextEdited: root.majProgramme(blocProgramme.modelData.alias, text, true)
                                     }
                                 }
 

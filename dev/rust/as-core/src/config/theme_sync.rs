@@ -15,7 +15,7 @@ use crate::common::io::{read_json_value, write_json_atomic};
 use crate::common::paths::{home_dir, style_vars_path};
 use serde_json::{json, Map, Value};
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn style_path_depuis(args: &[String]) -> PathBuf {
     let mut i = 0;
@@ -32,7 +32,7 @@ fn style_path_depuis(args: &[String]) -> PathBuf {
     style_vars_path()
 }
 
-fn read_map(path: &PathBuf) -> Map<String, Value> {
+fn read_map(path: &Path) -> Map<String, Value> {
     match read_json_value(path) {
         Value::Object(m) => m,
         _ => Map::new(),
@@ -342,11 +342,9 @@ pub fn run_matugen(args: &[String]) -> i32 {
             brut = v.clone();
         }
     }
-    if brut.is_empty() {
-        if std::io::stdin().read_to_string(&mut brut).is_err() {
-            eprintln!("colors-matugen : entrée illisible");
-            return 1;
-        }
+    if brut.is_empty() && std::io::stdin().read_to_string(&mut brut).is_err() {
+        eprintln!("colors-matugen : entrée illisible");
+        return 1;
     }
     let matugen: Value = match serde_json::from_str(&brut) {
         Ok(v) => v,

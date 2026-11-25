@@ -50,8 +50,26 @@ QtObject {
     }
 
     // ── API ─────────────────────────────────────────────────────────────────
+    Component.onCompleted: refresh()
+
     function refresh() {
         _pousser(["preset_list"])
+    }
+
+    function resolveName(query) {
+        const raw = String(query || "").trim()
+        if (!raw) return ""
+        const q = raw.toLowerCase()
+        const list = presets || []
+        for (let i = 0; i < list.length; i++) {
+            const p = list[i]
+            if (p.name === raw || String(p.name || "").toLowerCase() === q) return p.name
+            const aliases = p.aliases || []
+            for (let j = 0; j < aliases.length; j++) {
+                if (String(aliases[j] || "").toLowerCase() === q) return p.name
+            }
+        }
+        return ""
     }
 
     function save(nom) {

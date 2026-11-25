@@ -46,16 +46,23 @@ fn interface_active() -> (String, String, String) {
 }
 
 fn wifi_info(dev: &str, out: &mut Map<String, Value>) {
+    use std::sync::OnceLock;
+    static RE_SSID: OnceLock<Regex> = OnceLock::new();
+    static RE_FREQ: OnceLock<Regex> = OnceLock::new();
+    static RE_SIG: OnceLock<Regex> = OnceLock::new();
+    static RE_RX: OnceLock<Regex> = OnceLock::new();
+    static RE_TX: OnceLock<Regex> = OnceLock::new();
+
     let Some(link) = run_cmd_stdout("iw", &["dev", dev, "link"]) else {
         return;
     };
     if link.contains("Not connected") || link.trim().is_empty() {
         return;
     }
-    if let Some(cap) = Regex::new(r"SSID:\s*(.+)").ok().and_then(|r| r.captures(&link)) {
+    if let Some(cap) = RE_SSID.get_or_init(|| Regex::new(r"SSID:\s*(.+)").unwrap()).captures(&link) {
         out.insert("ssid".into(), json!(cap[1].trim()));
     }
-    if let Some(cap) = Regex::new(r"freq:\s*([\d.]+)").ok().and_then(|r| r.captures(&link)) {
+    if let Some(cap) = RE_FREQ.get_or_init(|| Regex::new(r"freq:\s*([\d.]+)").unwrap()).captures(&link) {
         if let Ok(freq) = cap[1].parse::<f64>() {
             out.insert("frequence".into(), json!(freq.round() as i64));
             let (bande, canal) = if freq < 3000.0 {
@@ -69,19 +76,19 @@ fn wifi_info(dev: &str, out: &mut Map<String, Value>) {
             out.insert("canal".into(), json!(canal));
         }
     }
-    if let Some(cap) = Regex::new(r"signal:\s*(-?\d+)").ok().and_then(|r| r.captures(&link)) {
+    if let Some(cap) = RE_SIG.get_or_init(|| Regex::new(r"signal:\s*(-?\d+)").unwrap()).captures(&link) {
         if let Ok(dbm) = cap[1].parse::<i64>() {
             out.insert("dbm".into(), json!(dbm));
             let sig = (2 * (dbm + 100)).clamp(0, 100);
             out.insert("signal".into(), json!(sig));
         }
     }
-    if let Some(cap) = Regex::new(r"rx bitrate:\s*([\d.]+)").ok().and_then(|r| r.captures(&link)) {
+    if let Some(cap) = RE_RX.get_or_init(|| Regex::new(r"rx bitrate:\s*([\d.]+)").unwrap()).captures(&link) {
         if let Ok(v) = cap[1].parse::<f64>() {
             out.insert("rx_mbps".into(), json!((v * 10.0).round() / 10.0));
         }
     }
-    if let Some(cap) = Regex::new(r"tx bitrate:\s*([\d.]+)").ok().and_then(|r| r.captures(&link)) {
+    if let Some(cap) = RE_TX.get_or_init(|| Regex::new(r"tx bitrate:\s*([\d.]+)").unwrap()).captures(&link) {
         if let Ok(v) = cap[1].parse::<f64>() {
             out.insert("tx_mbps".into(), json!((v * 10.0).round() / 10.0));
         }
@@ -89,8 +96,12 @@ fn wifi_info(dev: &str, out: &mut Map<String, Value>) {
 }
 
 fn adresse_info(dev: &str, out: &mut Map<String, Value>) {
+    use std::sync::OnceLock;
+    static RE_INET: OnceLock<Regex> = OnceLock::new();
+    static RE_VIA: OnceLock<Regex> = OnceLock::new();
+
     if let Some(addr) = run_cmd_stdout("ip", &["-4", "addr", "show", dev]) {
-        if let Some(cap) = Regex::new(r"inet\s+([\d.]+)/(\d+)").ok().and_then(|r| r.captures(&addr)) {
+        if let Some(cap) = RE_INET.get_or_init(|| Regex::new(r"inet\s+([\d.]+)/(\d+)").unwrap()).captures(&addr) {
             out.insert("ip".into(), json!(&cap[1]));
             if let Ok(p) = cap[2].parse::<i64>() {
                 out.insert("prefixe".into(), json!(p));
@@ -98,7 +109,7 @@ fn adresse_info(dev: &str, out: &mut Map<String, Value>) {
         }
     }
     if let Some(route) = run_cmd_stdout("ip", &["route", "show", "default", "dev", dev]) {
-        if let Some(cap) = Regex::new(r"via\s+([\d.]+)").ok().and_then(|r| r.captures(&route)) {
+        if let Some(cap) = RE_VIA.get_or_init(|| Regex::new(r"via\s+([\d.]+)").unwrap()).captures(&route) {
             out.insert("passerelle".into(), json!(&cap[1]));
         }
     }

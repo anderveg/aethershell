@@ -20,7 +20,7 @@ use crate::common::paths::{core_dir, home_dir, quickshell_cache_dir, style_vars_
 use crate::config::presets::PRESET_STYLE_KEYS;
 use serde_json::{json, Map, Value};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const FICHIER: &str = "theme_profiles.json";
 /// Clé réservée : état d'avant le dernier `apply`, pour `undo`.
@@ -297,7 +297,7 @@ fn resoudre_wallpaper(profil: &Value, style: &Map<String, Value>) -> Option<Path
     None
 }
 
-fn ecrire_wallpaper_courant(path: &PathBuf) {
+fn ecrire_wallpaper_courant(path: &Path) {
     let cache = quickshell_cache_dir().join("hyprquickpaper");
     let _ = fs::create_dir_all(&cache);
     let _ = fs::write(cache.join(".current"), format!("{}\n", path.display()));
@@ -714,6 +714,20 @@ fn importer(chemin: &str, ecraser: bool) -> Value {
     }
 }
 
+fn nom_par_index(index: usize) -> Option<String> {
+    if index == 0 {
+        return None;
+    }
+    let profils = lire_profils();
+    let mut noms: Vec<String> = profils
+        .keys()
+        .filter(|k| k.as_str() != CLE_AVANT && k.as_str() != CLE_ACTIF)
+        .cloned()
+        .collect();
+    noms.sort();
+    noms.get(index - 1).cloned()
+}
+
 pub fn run(args: &[String]) -> i32 {
     let action = args.first().map(|s| s.as_str()).unwrap_or("list");
     let drapeau = |f: &str| args.iter().any(|a| a == f);
@@ -724,6 +738,10 @@ pub fn run(args: &[String]) -> i32 {
             enregistrer(&args[1], env_ref)
         }
         "apply" if args.len() > 1 => appliquer(&args[1], drapeau("--dry-run")),
+        "apply-index" if args.len() > 1 => match args[1].parse::<usize>().ok().and_then(nom_par_index) {
+            Some(nom) => appliquer(&nom, drapeau("--dry-run")),
+            None => json!({ "ok": false, "error": format!("Aucun profil n° {}", args[1]) }),
+        },
         "delete" if args.len() > 1 => supprimer(&args[1]),
         "undo" => annuler(),
         "check" if args.len() > 1 => verifier(&args[1]),

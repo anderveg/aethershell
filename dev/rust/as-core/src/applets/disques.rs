@@ -81,7 +81,7 @@ fn smart_info(dev: &str) -> Map<String, Value> {
     };
     let Ok(d) = serde_json::from_str::<Value>(&raw) else { return infos; };
     if let Some(code) = d.get("smartctl").and_then(|s| s.get("exit_status")).and_then(|v| v.as_i64()) {
-        if matches!(code, 1 | 2 | 3) {
+        if matches!(code, 1..=3) {
             return infos;
         }
     }

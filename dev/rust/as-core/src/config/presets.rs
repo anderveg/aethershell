@@ -145,6 +145,121 @@ pub fn apply_preset_into(
     Some(widgets)
 }
 
+pub fn default_presets() -> Map<String, Value> {
+    let mut m = Map::new();
+    m.insert(
+        "Normal".into(),
+        json!({
+            "icon": "widgets",
+            "desc": "DND off · Équilibré · Widgets visibles",
+            "aliases": ["normal"],
+            "style": {},
+            "env": {
+                "do_not_disturb": false,
+                "caffeine_actif": false,
+                "power_profile": "balanced",
+                "night_mode": false,
+                "widgets_bureau_visibles": true
+            },
+            "created_at": 0
+        }),
+    );
+    m.insert(
+        "Focus / Code".into(),
+        json!({
+            "icon": "cog",
+            "desc": "DND on · Caffeine · Performance · Widgets masqués",
+            "aliases": ["focus", "code", "travail"],
+            "style": {},
+            "env": {
+                "do_not_disturb": true,
+                "caffeine_actif": true,
+                "power_profile": "performance",
+                "night_mode": false,
+                "widgets_bureau_visibles": false
+            },
+            "created_at": 0
+        }),
+    );
+    m.insert(
+        "Réunion".into(),
+        json!({
+            "icon": "bell-off",
+            "desc": "DND on · Caffeine · Équilibré · Widgets masqués",
+            "aliases": ["reunion", "meeting"],
+            "style": {},
+            "env": {
+                "do_not_disturb": true,
+                "caffeine_actif": true,
+                "power_profile": "balanced",
+                "night_mode": false,
+                "widgets_bureau_visibles": false
+            },
+            "created_at": 0
+        }),
+    );
+    m.insert(
+        "Détente".into(),
+        json!({
+            "icon": "weather-night",
+            "desc": "DND off · Nuit 3800K · Éco · Widgets visibles",
+            "aliases": ["detente", "relax"],
+            "style": {},
+            "env": {
+                "do_not_disturb": false,
+                "caffeine_actif": false,
+                "power_profile": "power-saver",
+                "night_mode": true,
+                "night_temp": 3800,
+                "widgets_bureau_visibles": true
+            },
+            "created_at": 0
+        }),
+    );
+    m
+}
+
+fn describe_env(entry: &Value) -> String {
+    if let Some(d) = entry.get("desc").and_then(|v| v.as_str()) {
+        if !d.trim().is_empty() {
+            return d.to_string();
+        }
+    }
+    let Some(env) = entry.get("env").and_then(|v| v.as_object()) else {
+        return "Style seul".to_string();
+    };
+    let mut parts = Vec::new();
+    if env.get("do_not_disturb").and_then(|v| v.as_bool()) == Some(true) {
+        parts.push("DND on".to_string());
+    }
+    if env.get("caffeine_actif").and_then(|v| v.as_bool()) == Some(true) {
+        parts.push("Caffeine".to_string());
+    }
+    if env.get("night_mode").and_then(|v| v.as_bool()) == Some(true) {
+        let t = env.get("night_temp").and_then(|v| v.as_i64()).unwrap_or(4000);
+        parts.push(format!("Nuit {t}K"));
+    }
+    if let Some(p) = env.get("power_profile").and_then(|v| v.as_str()) {
+        let label = match p {
+            "performance" => "Performance",
+            "power-saver" => "Éco",
+            "balanced" => "Équilibré",
+            other => other,
+        };
+        if !label.is_empty() {
+            parts.push(label.to_string());
+        }
+    }
+    if env.get("widgets_bureau_visibles").and_then(|v| v.as_bool()) == Some(false) {
+        parts.push("Widgets masqués".to_string());
+    }
+    if parts.is_empty() {
+        "Profil d'environnement".to_string()
+    } else {
+        parts.join(" · ")
+    }
+}
+
 pub fn summarize_presets(presets: &Map<String, Value>) -> Vec<Value> {
     let mut keys: Vec<&String> = presets.keys().collect();
     keys.sort();
@@ -165,8 +280,20 @@ pub fn summarize_presets(presets: &Map<String, Value>) -> Vec<Value> {
                 .and_then(|v| v.as_array())
                 .map(|a| a.len())
                 .unwrap_or(0);
+            let icon = entry
+                .get("icon")
+                .and_then(|v| v.as_str())
+                .unwrap_or("widgets");
+            let aliases = entry
+                .get("aliases")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default();
             json!({
                 "name": name,
+                "icon": icon,
+                "desc": describe_env(entry),
+                "aliases": aliases,
                 "theme": theme,
                 "bar_style": bar_style,
                 "widgets_count": widgets_count,
@@ -245,5 +372,34 @@ mod tests {
         assert_eq!(list[0]["name"], "Minimal");
         assert_eq!(list[1]["name"], "Travail");
         assert_eq!(list[1]["widgets_count"], 2);
+    }
+
+    #[test]
+    fn capture_omits_absent_style_keys() {
+        // Clés absentes de style_vars.json (ex. ilot_show_live_activity, ilot_show_workspaces
+        // tant qu'elles gardent leur valeur par défaut) : omises silencieusement, jamais null.
+        let mut style = Map::new();
+        style.insert("active_theme".into(), json!("dynamic"));
+        let preset = capture_preset(&style, &[], &json!({}), 1);
+        let captured = preset["style"].as_object().unwrap();
+        assert_eq!(captured.len(), 1);
+        assert!(captured.get("ilot_show_live_activity").is_none());
+        assert!(captured.get("ilot_show_workspaces").is_none());
+    }
+
+    #[test]
+    fn default_presets_cover_standard_contexts() {
+        let defs = default_presets();
+        assert!(defs.contains_key("Normal"));
+        assert!(defs.contains_key("Focus / Code"));
+        assert!(defs.contains_key("Réunion"));
+        assert!(defs.contains_key("Détente"));
+        // Aucun widget embarqué par défaut : appliquer un contexte ne doit pas effacer le bureau.
+        for v in defs.values() {
+            assert!(v.get("widgets").is_none());
+        }
+        let summary = summarize_presets(&defs);
+        assert_eq!(summary.len(), 4);
+        assert!(summary.iter().all(|s| s["env_v2"] == json!(true)));
     }
 }

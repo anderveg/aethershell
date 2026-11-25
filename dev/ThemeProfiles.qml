@@ -81,6 +81,18 @@ QtObject {
         _pousser({ cmd: ["theme_profile", "apply", n], tag: "apply", nom: n })
     }
 
+    function applyIndex(idx) {
+        const i = Number(idx)
+        if (!isFinite(i) || i < 1) return
+        const liste = profils || []
+        if (i <= liste.length && liste[i - 1] && liste[i - 1].name) {
+            apply(liste[i - 1].name)
+            return
+        }
+        annoncer("Application du profil n° " + i + "…")
+        _pousser({ cmd: ["theme_profile", "apply-index", String(i)], tag: "apply", nom: "" })
+    }
+
     function remove(nom) {
         _pousser({ cmd: ["theme_profile", "delete", String(nom)], tag: "delete" })
     }

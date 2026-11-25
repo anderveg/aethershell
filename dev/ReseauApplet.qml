@@ -556,6 +556,34 @@ Item {
                         }
                     }
 
+                    // Bouton de scan des périphériques Bluetooth à portée
+                    Rectangle {
+                        visible: root.btPresent && root.btAllume
+                        width: 68
+                        height: 22
+                        anchors.right: btSwitch.left
+                        anchors.rightMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        radius: Theme.globalRadius
+                        color: btScanMa.containsMouse ? Theme.accent : Theme.surfaceVariant
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: root.btScanning ? "Scan..." : "↻ Scan"
+                            color: btScanMa.containsMouse ? Theme.bg : Theme.fg
+                            font.pixelSize: Theme.textXs
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            id: btScanMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: SystemServices.scanBluetooth()
+                        }
+                    }
+
                     // Interrupteur de l'adaptateur : même vocabulaire visuel que
                     // les autres bascules du panneau (pilule pleine quand actif).
                     Rectangle {
@@ -587,8 +615,8 @@ Item {
 
                 Text {
                     width: parent.width
-                    visible: root.btPresent && root.btAllume && root.btAppareils.length === 0
-                    text: "Aucun appareil appairé."
+                    visible: root.btPresent && root.btAllume && root.btAppareils.length === 0 && root.btAPortee.length === 0
+                    text: root.btScanning ? "Recherche en cours…" : "Aucun appareil appairé."
                     color: Qt.alpha(Theme.fg, 0.45)
                     font.pixelSize: Theme.textXs
                     font.italic: true
@@ -597,7 +625,7 @@ Item {
                 Column {
                     width: parent.width
                     spacing: 4
-                    visible: root.btPresent && root.btAllume
+                    visible: root.btPresent && root.btAllume && root.btAppareils.length > 0
                     height: Math.min(implicitHeight, 96)
                     clip: true
 
@@ -648,6 +676,76 @@ Item {
                         }
                     }
                 }
+
+                Text {
+                    width: parent.width
+                    visible: root.btPresent && root.btAllume && root.btAPortee.length > 0
+                    text: "À portée (" + root.btAPortee.length + ")"
+                    color: Qt.alpha(Theme.fg, 0.55)
+                    font.pixelSize: Theme.text2xs
+                    font.bold: true
+                }
+
+                Flickable {
+                    width: parent.width
+                    visible: root.btPresent && root.btAllume && root.btAPortee.length > 0
+                    height: Math.min(contentHeight, 96)
+                    contentWidth: width
+                    contentHeight: btNearbyCol.implicitHeight
+                    clip: true
+
+                    Column {
+                        id: btNearbyCol
+                        width: parent.width
+                        spacing: 4
+
+                        Repeater {
+                            model: root.btAPortee
+
+                            Item {
+                                required property var modelData
+                                width: parent.width
+                                height: 26
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 6
+                                    color: btNearMa.containsMouse ? Qt.alpha(Theme.accent, 0.14) : "transparent"
+                                }
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 6
+                                    anchors.right: pairBt.left
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: String(modelData.nom || modelData.mac || "")
+                                    color: Qt.alpha(Theme.fg, 0.78)
+                                    font.pixelSize: Theme.textXs
+                                    elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    id: pairBt
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "appairer"
+                                    color: Theme.accent
+                                    font.pixelSize: Theme.textXs
+                                }
+
+                                MouseArea {
+                                    id: btNearMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.btCommande(["appairer", String(modelData.mac || "")])
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -657,7 +755,9 @@ Item {
     // Bluetooth : centralisé dans SystemServices.qml (as-core bluetooth)
     readonly property bool btPresent: SystemServices.btPresent
     readonly property bool btAllume: SystemServices.btPowered
+    readonly property bool btScanning: SystemServices.btScanning
     readonly property var btAppareils: SystemServices.btDevices
+    readonly property var btAPortee: SystemServices.btNearby
 
     function lireBluetooth() { SystemServices.refreshBluetooth() }
     function btCommande(args) { SystemServices.btCommand(args) }

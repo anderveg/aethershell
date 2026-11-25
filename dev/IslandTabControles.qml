@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
+import Quickshell.Hyprland
 import Quickshell.Services.Mpris
 import "."
 
@@ -53,7 +54,7 @@ Item {
     property int volumePct: {
         let v = (sysInfo.volume && (sysInfo.volume.level !== undefined ? sysInfo.volume.level : sysInfo.volume.percent) !== undefined)
             ? Number(sysInfo.volume.level !== undefined ? sysInfo.volume.level : sysInfo.volume.percent) : 50
-        return Math.max(0, Math.min(100, Math.round(v)))
+        return Math.max(0, Math.min(Theme.maxVolumePct, Math.round(v)))
     }
     property bool volumeMuted: Boolean(sysInfo.volume && sysInfo.volume.muted)
 
@@ -241,10 +242,17 @@ Item {
                         for (let i = 0; i < all.length; i++) {
                             const c = all[i]
                             if (c && c.workspace && String(c.workspace.name || "") === "special:scratchpad") {
+                                const rawKlass = String(c["class"] || c.initialClass || "App")
+                                const rawTitle = String(c.title || "").trim()
+                                const shortKlass = rawKlass.replace(/^org\.quickshell\./, "").replace(/^com\.[^.]+\./, "")
+                                const label = (rawTitle !== "" && rawTitle !== rawKlass)
+                                    ? rawTitle
+                                    : (shortKlass !== "" ? shortKlass : rawKlass)
                                 res.push({
                                     address: String(c.address || ""),
-                                    klass: String(c["class"] || c.initialClass || "App"),
-                                    title: String(c.title || c["class"] || "Fenêtre")
+                                    klass: rawKlass,
+                                    title: rawTitle || rawKlass,
+                                    label: label
                                 })
                             }
                         }
@@ -620,16 +628,18 @@ Item {
             color: Qt.alpha(Theme.fg, 0.1)
         }
 
-        // Sélecteur rapide de contexte de travail (Normal / Focus / Réunion / Détente)
-        RowLayout {
+        // Sélecteur rapide de profils d'environnement (presets.json)
+        GridLayout {
             Layout.fillWidth: true
-            spacing: 6
+            columns: 4
+            columnSpacing: 6
+            rowSpacing: 6
 
             Repeater {
-                model: ShellState.workContexts || []
+                model: EnvPresets.presets || []
                 delegate: Rectangle {
                     required property var modelData
-                    readonly property bool isActive: ShellState.activeContext === modelData.id
+                    readonly property bool isActive: EnvPresets.dernierApplique === modelData.name
                     Layout.fillWidth: true
                     height: TabletMode.active ? 40 : 28
                     radius: Math.max(8, Math.round(Theme.globalRadius * 0.5))
@@ -652,7 +662,7 @@ Item {
 
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            text: modelData.label
+                            text: modelData.name
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.text2xs
                             font.bold: isActive
@@ -665,7 +675,7 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: ShellState.applyContext(modelData.id)
+                        onClicked: EnvPresets.apply(modelData.name)
                     }
                 }
             }
@@ -933,7 +943,7 @@ Item {
                     color: Qt.alpha(Theme.fg, 0.14)
 
                     Rectangle {
-                        width: parent.width * (root.volumePct / 100)
+                        width: parent.width * Math.min(1, root.volumePct / Theme.maxVolumePct)
                         height: parent.height
                         radius: parent.radius
                         color: root.volumeMuted ? Qt.alpha(Theme.fg, 0.35) : Theme.accent
@@ -941,7 +951,7 @@ Item {
                 }
 
                 Rectangle {
-                    x: Math.max(0, Math.min(parent.width - width, (parent.width - width) * (root.volumePct / 100)))
+                    x: Math.max(0, Math.min(parent.width - width, (parent.width - width) * (root.volumePct / Theme.maxVolumePct)))
                     anchors.verticalCenter: parent.verticalCenter
                     width: TabletMode.active ? 22 : 14
                     height: width
@@ -955,9 +965,9 @@ Item {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     function applyVol(mx) {
-                        let pct = Math.max(0, Math.min(100, Math.round((mx / width) * 100)))
+                        let pct = Math.max(0, Math.min(Theme.maxVolumePct, Math.round((mx / width) * Theme.maxVolumePct)))
                         root.volumePct = pct
-                        volProc.command = ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", (pct / 100).toFixed(2)]
+                        volProc.command = ["wpctl", "set-volume", "-l", (Theme.maxVolumePct / 100).toFixed(1), "@DEFAULT_AUDIO_SINK@", (pct / 100).toFixed(2)]
                         volProc.running = true
                     }
                     onPressed: mouse => applyVol(mouse.x)
@@ -1109,61 +1119,155 @@ Item {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
                         root.audioDrawerOpen = !root.audioDrawerOpen
-                        if (root.audioDrawerOpen && !audioSinksProc.running) {
-                            audioSinksProc.running = true
+                        if (root.audioDrawerOpen) {
+                            if (!audioSinksProc.running) audioSinksProc.running = true
+                            SystemServices.refreshBtAudio()
                         }
                     }
                 }
             }
         }
 
-        // Sous-tiroir sélecteur de sortie audio instantané
+        // Sous-tiroir sélecteur de sortie audio, profil Bluetooth & micro
         Rectangle {
             visible: root.audioDrawerOpen
             Layout.fillWidth: true
-            Layout.preferredHeight: sinkFlow.implicitHeight + 12
+            Layout.preferredHeight: audioDrawerCol.implicitHeight + 12
             radius: Math.max(8, Math.round(Theme.globalRadius * 0.6))
             color: Qt.alpha(Theme.surfaceVariant, 0.35)
             border.width: 1
             border.color: Qt.alpha(Theme.accent, 0.3)
 
-            Flow {
-                id: sinkFlow
+            ColumnLayout {
+                id: audioDrawerCol
                 anchors.fill: parent
                 anchors.margins: 6
                 spacing: 6
 
+                Flow {
+                    id: sinkFlow
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    Repeater {
+                        model: root.audioSinks
+                        delegate: Rectangle {
+                            required property var modelData
+                            readonly property bool current: modelData.name === root.defaultSinkName
+                            width: sinkLbl.implicitWidth + 16
+                            height: 24
+                            radius: 6
+                            color: current ? Theme.accent : (sinkMa.containsMouse ? Qt.alpha(Theme.fg, 0.14) : Qt.alpha(Theme.fg, 0.06))
+
+                            Text {
+                                id: sinkLbl
+                                anchors.centerIn: parent
+                                text: modelData.label
+                                font.family: Theme.fontUi
+                                font.pixelSize: Theme.text2xs
+                                font.bold: current
+                                color: current ? Theme.bg : Theme.fg
+                            }
+
+                            MouseArea {
+                                id: sinkMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (audioSwitchProc.running) return
+                                    root.defaultSinkName = modelData.name
+                                    audioSwitchProc.command = ["pactl", "set-default-sink", modelData.name]
+                                    audioSwitchProc.running = true
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Profils Bluetooth (A2DP ↔ HFP)
                 Repeater {
-                    model: root.audioSinks
-                    delegate: Rectangle {
+                    model: SystemServices.btAudioCards
+                    delegate: ColumnLayout {
                         required property var modelData
-                        readonly property bool current: modelData.name === root.defaultSinkName
-                        width: sinkLbl.implicitWidth + 16
-                        height: 24
-                        radius: 6
-                        color: current ? Theme.accent : (sinkMa.containsMouse ? Qt.alpha(Theme.fg, 0.14) : Qt.alpha(Theme.fg, 0.06))
+                        Layout.fillWidth: true
+                        spacing: 4
 
                         Text {
-                            id: sinkLbl
-                            anchors.centerIn: parent
-                            text: modelData.label
+                            text: "Bluetooth · " + modelData.label
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.text2xs
-                            font.bold: current
-                            color: current ? Theme.bg : Theme.fg
+                            color: Qt.alpha(Theme.fg, 0.65)
+                        }
+
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: 6
+
+                            Repeater {
+                                model: modelData.profiles
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    readonly property bool actif: modelData.id === parent.parent.modelData.activeProfile
+                                    width: profLbl.implicitWidth + 14
+                                    height: 22
+                                    radius: 6
+                                    color: actif ? Theme.accent : (profMa.containsMouse ? Qt.alpha(Theme.fg, 0.14) : Qt.alpha(Theme.fg, 0.06))
+
+                                    Text {
+                                        id: profLbl
+                                        anchors.centerIn: parent
+                                        text: modelData.label
+                                        font.family: Theme.fontUi
+                                        font.pixelSize: Theme.text2xs
+                                        font.bold: actif
+                                        color: actif ? Theme.bg : Theme.fg
+                                    }
+
+                                    MouseArea {
+                                        id: profMa
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            SystemServices.setBtCardProfile(parent.parent.parent.modelData.name, modelData.id)
+                                            if (!audioSinksProc.running) audioSinksProc.running = true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Bascule micro par défaut
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    Rectangle {
+                        width: micLbl.implicitWidth + 16
+                        height: 22
+                        radius: 6
+                        color: SystemServices.micMuted
+                            ? Qt.alpha(Theme.error, 0.22)
+                            : (micMa.containsMouse ? Qt.alpha(Theme.fg, 0.14) : Qt.alpha(Theme.fg, 0.06))
+
+                        Text {
+                            id: micLbl
+                            anchors.centerIn: parent
+                            text: SystemServices.micMuted ? "Micro coupé (cliquer pour réactiver)" : "Micro actif (cliquer pour couper)"
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.text2xs
+                            color: SystemServices.micMuted ? Theme.error : Theme.fg
                         }
 
                         MouseArea {
-                            id: sinkMa
+                            id: micMa
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                if (audioSwitchProc.running) return
-                                root.defaultSinkName = modelData.name
-                                audioSwitchProc.command = ["pactl", "set-default-sink", modelData.name]
-                                audioSwitchProc.running = true
-                            }
+                            onClicked: SystemServices.toggleDefaultMic()
                         }
                     }
                 }
@@ -1294,7 +1398,7 @@ Item {
                         model: root.scratchpadWindows.slice(0, 4)
                         delegate: Rectangle {
                             required property var modelData
-                            width: Math.min(115, spLbl.implicitWidth + 14)
+                            width: Math.min(140, spLbl.implicitWidth + 14)
                             height: 20
                             radius: 6
                             color: spMa.containsMouse ? Qt.alpha(Theme.accent, 0.25) : Qt.alpha(Theme.fg, 0.08)
@@ -1304,7 +1408,7 @@ Item {
                                 anchors.centerIn: parent
                                 width: parent.width - 10
                                 horizontalAlignment: Text.AlignHCenter
-                                text: modelData.klass
+                                text: modelData.label || modelData.title || modelData.klass
                                 font.family: Theme.fontUi
                                 font.pixelSize: Theme.text2xs
                                 color: spMa.containsMouse ? Theme.accent : Theme.fg
@@ -1317,12 +1421,19 @@ Item {
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
+                                    const mon = Hyprland.focusedMonitor
+                                    const spOpen = mon && mon.lastIpcObject && mon.lastIpcObject.specialWorkspace
+                                        && String(mon.lastIpcObject.specialWorkspace.name || "") === "special:scratchpad"
+                                    if (Hyprland.usingLua) {
+                                        if (!spOpen) Hyprland.dispatch('hl.dsp.workspace.toggle_special("scratchpad")')
+                                        Hyprland.dispatch('hl.dsp.focus({ window = "address:' + modelData.address + '" })')
+                                        Hyprland.dispatch('hl.dsp.window.bring_to_top()')
+                                    } else {
+                                        if (!spOpen) Hyprland.dispatch("togglespecialworkspace scratchpad")
+                                        Hyprland.dispatch("focuswindow address:" + modelData.address)
+                                        Hyprland.dispatch("alterzorder top,address:" + modelData.address)
+                                    }
                                     Theme.islandPanelOpen = false
-                                    scratchpadActionProc.command = [
-                                        "sh", "-c",
-                                        "hyprctl dispatch togglespecialworkspace scratchpad && hyprctl dispatch focuswindow address:" + modelData.address
-                                    ]
-                                    scratchpadActionProc.running = true
                                 }
                             }
                         }

@@ -7,6 +7,7 @@
 #   - `apply <id>`              choisit un thème déjà présent dans le thème
 #   - `set-palette <conf> <bg>` remplace la palette générée et le fond
 #   - `set-keymap <layout>`     aligne clavier et locale de SDDM sur la session
+#   - `set-cursor <thème> <sz>` aligne le curseur du greeter (thème système)
 #   - `uninstall <id…>`         désinstalle un ou plusieurs thèmes qylock
 #
 # Toute autre invocation sort en erreur.
@@ -59,6 +60,16 @@ read_current_layout() {
     printf '%s\n' "$lay"
 }
 
+# Lit le curseur courant (CursorTheme / CursorSize) dans SDDM_CONF.
+read_current_cursor() {
+    local ct="" cs=""
+    if [ -f "$SDDM_CONF" ]; then
+        ct="$(awk -F= '/^CursorTheme=/{gsub(/[[:space:]]/, "", $2); print $2; exit}' "$SDDM_CONF" 2>/dev/null || true)"
+        cs="$(awk -F= '/^CursorSize=/{gsub(/[[:space:]]/, "", $2); print $2; exit}' "$SDDM_CONF" 2>/dev/null || true)"
+    fi
+    printf '%s %s\n' "$ct" "$cs"
+}
+
 # Associe une disposition clavier XKB à sa locale UTF-8 et sa keymap console.
 resolve_locale_and_vc() {
     local layout="$1"
@@ -103,15 +114,26 @@ resolve_locale_and_vc() {
 write_sddm_config() {
     local current_theme="$1"
     local layout="$2"
+    local cursor_theme="${3:-}"
+    local cursor_size="${4:-}"
     local loc vc_map
     read -r loc vc_map < <(resolve_locale_and_vc "$layout")
+    if [ -z "$cursor_theme" ]; then
+        read -r cursor_theme cursor_size < <(read_current_cursor)
+    fi
+
+    local cursor_env=""
+    if [ -n "$cursor_theme" ]; then
+        cursor_env=",XCURSOR_THEME=$cursor_theme"
+        [ -n "$cursor_size" ] && cursor_env="$cursor_env,XCURSOR_SIZE=$cursor_size"
+    fi
 
     mkdir -p "$(dirname "$SDDM_CONF")"
     if [ -x /usr/bin/kwin_wayland ]; then
         cat > "$SDDM_CONF" <<EOF
 [General]
-InputMethod=
-GreeterEnvironment=QT_WAYLAND_SHELL_INTEGRATION=layer-shell,LANG=$loc,LC_ALL=$loc,XKB_DEFAULT_LAYOUT=$layout,QT_LOGGING_RULES=$QT_LOG_FILTER
+InputMethod=qtvirtualkeyboard
+GreeterEnvironment=QT_WAYLAND_SHELL_INTEGRATION=layer-shell,LANG=$loc,LC_ALL=$loc,XKB_DEFAULT_LAYOUT=$layout,QT_IM_MODULE=qtvirtualkeyboard${cursor_env},QT_LOGGING_RULES=$QT_LOG_FILTER
 
 [Wayland]
 CompositorCommand=kwin_wayland --no-global-shortcuts --no-lockscreen --no-kactivities --locale1
@@ -122,12 +144,16 @@ EOF
     else
         cat > "$SDDM_CONF" <<EOF
 [General]
-InputMethod=
-GreeterEnvironment=LANG=$loc,LC_ALL=$loc,XKB_DEFAULT_LAYOUT=$layout,QT_LOGGING_RULES=$QT_LOG_FILTER
+InputMethod=qtvirtualkeyboard
+GreeterEnvironment=LANG=$loc,LC_ALL=$loc,XKB_DEFAULT_LAYOUT=$layout,QT_IM_MODULE=qtvirtualkeyboard${cursor_env},QT_LOGGING_RULES=$QT_LOG_FILTER
 
 [Theme]
 Current=$current_theme
 EOF
+    fi
+    if [ -n "$cursor_theme" ]; then
+        printf 'CursorTheme=%s\n' "$cursor_theme" >> "$SDDM_CONF"
+        [ -n "$cursor_size" ] && printf 'CursorSize=%s\n' "$cursor_size" >> "$SDDM_CONF"
     fi
 
     # Sur Fedora, sddm.service ne charge pas /etc/locale.conf : sddm-helper
@@ -212,6 +238,26 @@ set-palette)
 set-keymap)
     layout="${2:-}"
     [[ "$layout" =~ ^[a-z]{2}(-[a-z0-9_]+)?$ ]] || die "disposition clavier invalide : ${layout:-<vide>}"
+    # Génère la locale cible si elle est encore commentée dans /etc/locale.gen (Arch neuf).
+    if [ -f /etc/locale.gen ] && command -v locale-gen >/dev/null 2>&1; then
+        local_want=""
+        case "$layout" in
+            fr) local_want="fr_FR.UTF-8" ;;
+            be) local_want="fr_BE.UTF-8" ;;
+            ch) local_want="fr_CH.UTF-8" ;;
+            ca) local_want="fr_CA.UTF-8" ;;
+            de) local_want="de_DE.UTF-8" ;;
+            es) local_want="es_ES.UTF-8" ;;
+            it) local_want="it_IT.UTF-8" ;;
+            pt) local_want="pt_PT.UTF-8" ;;
+        esac
+        if [ -n "$local_want" ] && ! locale -a 2>/dev/null | grep -qiE "^${local_want%%.*}\.(utf-?8)$"; then
+            if grep -qE "^#\s*${local_want}\s+UTF-8" /etc/locale.gen; then
+                sed -i -E "s|^#\s*(${local_want}\s+UTF-8)|\1|" /etc/locale.gen
+                locale-gen >/dev/null 2>&1 || true
+            fi
+        fi
+    fi
     read -r loc vc_map < <(resolve_locale_and_vc "$layout")
 
     # Synchronise systemd-localed (X11/Wayland + console + locale système) pour
@@ -220,6 +266,18 @@ set-keymap)
         localectl set-x11-keymap "$layout" 2>/dev/null || true
         localectl set-keymap "$vc_map" 2>/dev/null || true
         localectl set-locale "LANG=$loc" 2>/dev/null || true
+    fi
+
+    # Garantit /etc/X11/xorg.conf.d/00-keyboard.conf pour SDDM sous X11 si localectl n'a pas écrit.
+    if ! grep -qs "\"XkbLayout\" \"$layout\"" /etc/X11/xorg.conf.d/00-keyboard.conf 2>/dev/null; then
+        mkdir -p /etc/X11/xorg.conf.d
+        cat > /etc/X11/xorg.conf.d/00-keyboard.conf <<EOF
+Section "InputClass"
+        Identifier "system-keyboard"
+        MatchIsKeyboard "on"
+        Option "XkbLayout" "$layout"
+EndSection
+EOF
     fi
 
     # Garantit /etc/locale.conf et /etc/vconsole.conf même si systemd-localed
@@ -252,6 +310,21 @@ set-keymap)
     current="$(read_current_theme)"
     write_sddm_config "$current" "$layout"
     echo "clavier SDDM : $layout (locale $loc)"
+    ;;
+
+set-cursor)
+    ct="${2:-}"
+    cs="${3:-24}"
+    [[ "$ct" =~ ^[A-Za-z0-9_.-]+$ ]] && [[ "$ct" != "." && "$ct" != ".." ]] \
+        || die "thème de curseur invalide : ${ct:-<vide>}"
+    [[ "$cs" =~ ^[0-9]+$ ]] && [ "$cs" -ge 16 ] && [ "$cs" -le 64 ] \
+        || die "taille de curseur invalide : $cs"
+    [ -d "/usr/share/icons/$ct/cursors" ] \
+        || die "thème absent de /usr/share/icons : $ct"
+    current="$(read_current_theme)"
+    lay="$(read_current_layout)"
+    write_sddm_config "$current" "$lay" "$ct" "$cs"
+    echo "curseur SDDM : $ct ($cs)"
     ;;
 
 uninstall)

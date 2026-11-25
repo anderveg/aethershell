@@ -390,6 +390,69 @@ fn appliquer(theme: &str, taille_demandee: Option<u32>) -> Value {
     ]);
     noter!("environment.d", true, Some("relu à la connexion".to_string()));
 
+    // 5. Flatpak : les apps sandboxées ignorent environment.d sans override.
+    if run_cmd("flatpak", &["--version"]).is_some() {
+        let env_theme = format!("--env=XCURSOR_THEME={id}");
+        let env_size = format!("--env=XCURSOR_SIZE={taille_s}");
+        let fp = run_cmd(
+            "flatpak",
+            &[
+                "override",
+                "--user",
+                &env_theme,
+                &env_size,
+                "--filesystem=xdg-data/icons:ro",
+                "--filesystem=~/.icons:ro",
+            ],
+        );
+        let fp_ok = fp.as_ref().map(|o| o.status.success()).unwrap_or(false);
+        noter!(
+            "flatpak",
+            fp_ok,
+            Some(if fp_ok {
+                "flatpak override --user".to_string()
+            } else {
+                "flatpak override a échoué".to_string()
+            }),
+        );
+    } else {
+        noter!("flatpak", true, Some("flatpak absent".to_string()));
+    }
+
+    // 6. Greeter SDDM : uniquement si greeter-palette est installé et le thème
+    //    est système (/usr/share/icons, SDDM ne lit pas ~/.local/share/icons).
+    let greeter_helper = Path::new("/usr/local/bin/greeter-palette");
+    let sys_cursor = Path::new("/usr/share/icons").join(id).join("cursors").is_dir();
+    if greeter_helper.is_file() && sys_cursor && run_cmd("pkexec", &["--version"]).is_some() {
+        let gp = run_cmd(
+            "pkexec",
+            &[
+                "/usr/local/bin/greeter-palette",
+                "set-cursor",
+                id,
+                &taille_s,
+            ],
+        );
+        let gp_ok = gp.as_ref().map(|o| o.status.success()).unwrap_or(false);
+        noter!(
+            "sddm",
+            gp_ok,
+            Some(if gp_ok {
+                "10-sddm-theme.conf".to_string()
+            } else {
+                "échec greeter-palette set-cursor".to_string()
+            }),
+        );
+    } else if !sys_cursor {
+        noter!(
+            "sddm",
+            true,
+            Some("thème utilisateur : SDDM requiert /usr/share/icons".to_string()),
+        );
+    } else {
+        noter!("sddm", true, Some("greeter-palette non installé".to_string()));
+    }
+
     let style_ok = match ecrire_style(id, taille) {
         Ok(()) => true,
         Err(e) => {

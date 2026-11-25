@@ -522,7 +522,37 @@ uninstall_env() {
         dire "   Archive de l'état précédent : ${dest:-$BACKUP_DIR}"
         dire "   Restauration manuelle : tar -xzf <archive> -C ~/.config"
     fi
-    dire "   Reste à votre charge : les paquets système (dependencies.txt) et le dépôt des sources."
+    if [ "$systeme" = "1" ]; then
+        dire "⚠️  Attention : retour à la configuration SDDM par défaut."
+    fi
+    if [ -f "$DEPS_FILE" ]; then
+        local -a dep_bins=() rm_pkgs=()
+        local -A rm_seen=()
+        local b p
+        mapfile -t dep_bins < <(deps_pour_cible "$DISTRO" "$FORM_FACTOR")
+        for b in "${dep_bins[@]}"; do
+            [ -n "$b" ] || continue
+            p="$(pkg_for_bin "$b")"
+            case "$p" in
+                git|curl|gcc|g++|gcc-c++|make|pkg-config|hyprland|sddm|kitty|wayland|xorg-xwayland|wayland-devel|xorg-x11-server-Xwayland|libwayland-bin|xwayland) continue ;;
+            esac
+            if [ -z "${rm_seen[$p]:-}" ]; then
+                rm_seen["$p"]=1
+                rm_pkgs+=("$p")
+            fi
+        done
+        if [ "${#rm_pkgs[@]}" -gt 0 ]; then
+            dire ""
+            dire "   Pour désinstaller les dépendances d'AetherShell (à ta discrétion) :"
+            case "$PKG_MGR" in
+                dnf) dire "     sudo dnf remove ${rm_pkgs[*]}" ;;
+                apt) dire "     sudo apt remove ${rm_pkgs[*]}" ;;
+                *)   dire "     sudo pacman -Rns ${rm_pkgs[*]}" ;;
+            esac
+            dire "   (hyprland, sddm et kitty sont conservés dans cette commande.)"
+        fi
+    fi
+    dire "   Reste à votre charge : le dépôt des sources ($CIBLE)."
     return 0
 }
 
@@ -698,7 +728,7 @@ synchroniser_sources() {
     fi
 
     DEV_DIR="$CIBLE/dev"
-    [ "$LOCAL_REPO" -eq 0 ] && AUTO_DEPLOY=1
+    [ ! -t 0 ] && AUTO_DEPLOY=1
     return 0
 }
 
@@ -963,7 +993,10 @@ pkg_for_bin() {
                 udisksctl) echo "udisks2" ;;
                 zbarcam) echo "zbar" ;;
                 cc) echo "gcc" ;;
+                c++) echo "gcc-c++" ;;
                 cargo) echo "cargo" ;;
+                wayland-scanner) echo "wayland-devel" ;;
+                Xwayland) echo "xorg-x11-server-Xwayland" ;;
                 *) echo "$bin" ;;
             esac
             ;;
@@ -983,6 +1016,9 @@ pkg_for_bin() {
                 zbarcam) echo "zbar-tools" ;;
                 cc) echo "gcc" ;;
                 cargo) echo "cargo" ;;
+                c++) echo "g++" ;;
+                wayland-scanner) echo "libwayland-bin" ;;
+                Xwayland) echo "xwayland" ;;
                 *) echo "$bin" ;;
             esac
             ;;
@@ -1003,6 +1039,9 @@ pkg_for_bin() {
                 cc) echo "gcc" ;;
                 cargo) echo "rust" ;;
                 matugen) echo "matugen-bin" ;;
+                c++) echo "gcc" ;;
+                wayland-scanner) echo "wayland" ;;
+                Xwayland) echo "xorg-xwayland" ;;
                 unimatrix) echo "unimatrix-git" ;;
                 *) echo "$bin" ;;
             esac
@@ -1039,6 +1078,21 @@ compiler_as_core() {
         return 0
     fi
     echo "▶ Compilation du backend as-core (Rust)"
+    # Le lien échoue avec un message illisible si la chaîne C++ ou SQLite
+    # manque — Fedora sépare gcc-c++ et sqlite-devel, Arch et Debian les
+    # incluent dans gcc/sqlite. Cas réel : portable Fedora, « cannot find
+    # -lstdc++ / -lsqlite3 » alors qu'une compilation avait déjà réussi.
+    if command -v cc >/dev/null 2>&1 && \
+       ! printf 'int main(void){return 0;}\n' | cc -x c++ -lstdc++ -lsqlite3 -o /dev/null - >/dev/null 2>&1; then
+        echo "⚠️  chaîne de compilation incomplète : libstdc++ ou libsqlite3 absents." >&2
+        case "$DISTRO" in
+            fedora) echo "    sudo dnf install gcc-c++ sqlite-devel" >&2 ;;
+            debian) echo "    sudo apt install g++ libsqlite3-dev" >&2 ;;
+            *)      echo "    sudo pacman -S gcc sqlite" >&2 ;;
+        esac
+        echo "    as-core n'est pas recompilé : le binaire du dépôt (peut-être périmé) sera déployé." >&2
+        return 0
+    fi
     bash "$build" || { echo "⚠️  compilation de as-core échouée" >&2; return 0; }
 }
 
@@ -1306,6 +1360,57 @@ check_dependencies() {
         fi
     fi
 
+    # Police japonaise / CJK pour les kanjis des bureaux (一, 二, 三…)
+    if ! fc-list :lang=ja family 2>/dev/null | grep . >/dev/null; then
+        missing+=("noto-fonts-cjk")
+        case "$PKG_MGR" in
+            dnf) missing_pkgs+=("google-noto-sans-cjk-ttc-fonts") ;;
+            apt) missing_pkgs+=("fonts-noto-cjk") ;;
+            *)   missing_pkgs+=("noto-fonts-cjk") ;;
+        esac
+    fi
+
+    # Prérequis QML/police du thème SDDM (astronaut + clavier virtuel)
+    case "$(fc-match -f '%{family}' Inter 2>/dev/null || true)" in
+        Inter*) : ;;
+        *)
+            missing+=("inter-font")
+            case "$PKG_MGR" in
+                dnf) missing_pkgs+=("rsms-inter-fonts") ;;
+                apt) missing_pkgs+=("fonts-inter") ;;
+                *)   missing_pkgs+=("inter-font") ;;
+            esac
+            ;;
+    esac
+    local qml_dir="" d
+    for d in /usr/lib64/qt6/qml /usr/lib/qt6/qml /usr/lib/x86_64-linux-gnu/qt6/qml; do
+        [ -d "$d" ] && { qml_dir="$d"; break; }
+    done
+    if [ -z "$qml_dir" ] || [ ! -d "$qml_dir/QtQuick/VirtualKeyboard" ]; then
+        missing+=("qt6-virtualkeyboard")
+        case "$PKG_MGR" in
+            dnf) missing_pkgs+=("qt6-qtvirtualkeyboard") ;;
+            apt) missing_pkgs+=("qml6-module-qtquick-virtualkeyboard") ;;
+            *)   missing_pkgs+=("qt6-virtualkeyboard") ;;
+        esac
+    fi
+    if [ -z "$qml_dir" ] || [ ! -d "$qml_dir/Qt5Compat/GraphicalEffects" ]; then
+        missing+=("qt6-5compat")
+        case "$PKG_MGR" in
+            dnf) missing_pkgs+=("qt6-qt5compat") ;;
+            apt) missing_pkgs+=("qml6-module-qt5compat-graphicaleffects") ;;
+            *)   missing_pkgs+=("qt6-5compat") ;;
+        esac
+    fi
+    if [ -z "$qml_dir" ] || [ ! -d "$qml_dir/QtMultimedia" ]; then
+        missing+=("qt6-multimedia")
+        case "$PKG_MGR" in
+            dnf) missing_pkgs+=("qt6-qtmultimedia") ;;
+            apt) missing_pkgs+=("qml6-module-qtmultimedia") ;;
+            *)   missing_pkgs+=("qt6-multimedia-ffmpeg") ;;
+        esac
+    fi
+
     if [ ${#missing[@]} -eq 0 ]; then
         echo "✅ All dependencies installed."
         build_pwscope_if_ready
@@ -1321,13 +1426,14 @@ check_dependencies() {
             build_pwscope_if_ready
             return 0
         fi
-        if [ "${INSTALL_DEPS_ONLY:-0}" != "1" ] && { [ "${DRY_RUN:-0}" = "1" ] || [ ! -t 0 ] || [ "${AUTO_DEPLOY:-0}" = "1" ]; }; then
-            echo "ℹ️ Déploiement non interactif : continuation malgré les binaires signalés."
+        if [ "${INSTALL_DEPS_ONLY:-0}" != "1" ] && [ "${DRY_RUN:-0}" = "1" ]; then
+            echo "ℹ️ Mode Dry-Run : continuation malgré les binaires signalés."
             return 0
         fi
         local choice="n"
-        if [ "${INSTALL_DEPS_ONLY:-0}" = "1" ] && [ "${YES_MODE:-0}" = "1" ]; then
+        if [ "${AUTO_DEPLOY:-0}" = "1" ] || [ ! -t 0 ] || { [ "${INSTALL_DEPS_ONLY:-0}" = "1" ] && [ "${YES_MODE:-0}" = "1" ]; }; then
             choice="y"
+            [ ! -t 0 ] && YES_MODE=1
         elif [ -t 0 ]; then
             read -p "Voulez-vous installer les dépendances manquantes maintenant ($PKG_MGR) ? (o/n) : " choice
         fi
@@ -1889,30 +1995,46 @@ BACKUP_OK=0
 backup_env() {
     BACKUP_OK=0
     local stamp archive contenu
+    local -a targets=()
+    [ -d "$HOME/.config/hypr" ] && targets+=("hypr")
+    [ -d "$HOME/.config/quickshell" ] && targets+=("quickshell")
+    if [ "${#targets[@]}" -eq 0 ]; then
+        echo "ℹ️  Aucune configuration existante (~/.config/hypr ou quickshell), sauvegarde ignorée."
+        BACKUP_OK=1
+        return 0
+    fi
+    mkdir -p "$BACKUP_DIR"
     stamp=$(date +%Y%m%d_%H%M%S)
     archive="$BACKUP_DIR/backup_${DISTRO}_hq_$stamp.tar.gz"
     # `tar` sort en 1 quand un fichier change pendant la lecture (« file changed
     # as we read it ») : c'est le cas normal d'une sauvegarde prise pendant que
     # quickshell redémarre et réécrit ses caches. Ce n'est pas un échec — la
     # vérification du sommaire plus bas tranche. Tout autre code, si.
-    local tar_code=0
-    tar -czf "$archive" --warning=no-file-changed -C "$HOME/.config" hypr quickshell 2>/dev/null \
+    local tar_code=0 tar_err
+    tar_err="$(mktemp)"
+    tar -czf "$archive" --warning=no-file-changed -C "$HOME/.config" "${targets[@]}" 2>"$tar_err" \
         || tar_code=$?
     if [ "$tar_code" -ne 0 ] && { [ "$tar_code" -ne 1 ] || ! tar -tzf "$archive" >/dev/null 2>&1; }; then
         rm -f "$archive"
         echo "⚠️ Backup failed, nothing written."
+        [ -s "$tar_err" ] && sed 's/^/   /' "$tar_err" >&2
+        rm -f "$tar_err"
         return 1
     fi
-    # Une sauvegarde doit contenir les DEUX arbres : un « HQ » reduit a Hyprland
-    # restaurerait une moitie de configuration, et l'alias pointerait dessus.
+    rm -f "$tar_err"
+    # Une sauvegarde doit contenir chaque arbre qui existait : un « HQ » réduit
+    # à la moitié des fichiers existants ne serait pas fiable.
     # Listing dans une variable : sous `set -o pipefail`, un `tar | grep -q`
-    # renvoie 141 des que grep sort, donc un faux negatif.
+    # renvoie 141 dès que grep sort, donc un faux négatif.
     contenu=$(tar -tzf "$archive" 2>/dev/null || true)
-    if ! grep -q '^hypr/' <<<"$contenu" || ! grep -q '^quickshell/' <<<"$contenu"; then
-        rm -f "$archive"
-        echo "⚠️ Backup incomplete (hypr ou quickshell manquant), archive retiree."
-        return 1
-    fi
+    local t
+    for t in "${targets[@]}"; do
+        if ! grep -q "^${t}/" <<<"$contenu"; then
+            rm -f "$archive"
+            echo "⚠️ Backup incomplete ($t manquant), archive retirée."
+            return 1
+        fi
+    done
     # Manifeste a côté de l'archive : liste des fichiers et leur empreinte, pour
     # pouvoir comparer sans extraire ni restaurer. Le tar reste la source de
     # vérité ; le manifeste n'est qu'un index lisible.
@@ -2215,6 +2337,50 @@ installer_charge_limit() {
     fi
 }
 
+# Détecte la disposition clavier active sur la machine (sans imposer `fr` à un
+# utilisateur US/UK/DE lors d'une première installation).
+detect_system_kb_layout() {
+    local lay=""
+    if command -v localectl >/dev/null 2>&1; then
+        lay="$(localectl status 2>/dev/null | awk -F: '/X11 Layout/{gsub(/[[:space:]]/, "", $2); split($2, a, ","); print a[1]; exit}' || true)"
+        if [ -z "$lay" ]; then
+            lay="$(localectl status 2>/dev/null | awk -F: '/VC Keymap/{gsub(/[[:space:]]/, "", $2); print $2; exit}' || true)"
+        fi
+    fi
+    if [ -z "$lay" ] && [ -f /etc/vconsole.conf ]; then
+        lay="$(awk -F= '/^XKBLAYOUT=/{gsub(/["[:space:]]/, "", $2); split($2, a, ","); print a[1]; exit}' /etc/vconsole.conf 2>/dev/null || true)"
+        [ -n "$lay" ] || lay="$(awk -F= '/^KEYMAP=/{gsub(/["[:space:]]/, "", $2); print $2; exit}' /etc/vconsole.conf 2>/dev/null || true)"
+    fi
+    if [ -z "$lay" ] && [ -f /etc/X11/xorg.conf.d/00-keyboard.conf ]; then
+        lay="$(awk -F'"' '/XkbLayout/{split($4, a, ","); print a[1]; exit}' /etc/X11/xorg.conf.d/00-keyboard.conf 2>/dev/null || true)"
+    fi
+    # Normalise les noms console courants (fr-latin9 -> fr, uk -> gb, be-latin1 -> be).
+    case "$lay" in
+        uk) lay="gb" ;;
+        *-*) lay="${lay%%-*}" ;;
+    esac
+    if [[ ! "$lay" =~ ^[a-z]{2}(-[a-z0-9_]+)?$ ]]; then
+        local loc="${LANG:-}"
+        if [ -z "$loc" ] && [ -f /etc/locale.conf ]; then
+            loc="$(awk -F= '/^LANG=/{gsub(/["[:space:]]/, "", $2); print $2; exit}' /etc/locale.conf 2>/dev/null || true)"
+        fi
+        case "$loc" in
+            fr_BE*) lay="be" ;;
+            fr_CH*) lay="ch" ;;
+            fr_CA*) lay="ca" ;;
+            fr_*)   lay="fr" ;;
+            en_GB*) lay="gb" ;;
+            en_*)   lay="us" ;;
+            de_*)   lay="de" ;;
+            es_*)   lay="es" ;;
+            it_*)   lay="it" ;;
+            pt_*)   lay="pt" ;;
+            *)      lay="" ;;
+        esac
+    fi
+    printf '%s\n' "$lay"
+}
+
 # Helper root + règle polkit du greeter SDDM (dev/sddm/greeter-palette).
 #
 # Posé dès le déploiement si SDDM est présent sur la machine : ainsi, le
@@ -2224,6 +2390,71 @@ installer_charge_limit() {
 installer_greeter_helper() {
     command -v sddm >/dev/null 2>&1 || [ -d /etc/sddm.conf.d ] || return 0
     local dir="$DEV_DIR/sddm"
+    if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files sddm.service >/dev/null 2>&1; then
+        if ! systemctl is-enabled sddm.service >/dev/null 2>&1; then
+            local current_dm=""
+            if [ -L /etc/systemd/system/display-manager.service ]; then
+                current_dm="$(basename "$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)" .service)"
+            fi
+            if [ -z "$current_dm" ]; then
+                local dm
+                for dm in lightdm gdm lxdm greetd ly; do
+                    if systemctl is-enabled "${dm}.service" >/dev/null 2>&1 || systemctl is-active --quiet "${dm}.service" 2>/dev/null; then
+                        current_dm="$dm"
+                        break
+                    fi
+                done
+            fi
+            if [ -z "$current_dm" ] || [ "$current_dm" = "sddm" ]; then
+                sudo systemctl enable sddm.service >/dev/null 2>&1 \
+                    && echo "  ↪ service sddm activé (prendra effet au prochain redémarrage)" \
+                    || echo "  ⚠️  pense à activer SDDM : sudo systemctl enable sddm.service"
+            else
+                local do_switch="n"
+                if [ "${YES_MODE:-0}" = "1" ]; then
+                    do_switch="o"
+                elif [ -t 0 ]; then
+                    read -p "Gestionnaire de connexion actuel : $current_dm. Le remplacer par SDDM ? (o/n) [o] : " do_switch
+                    do_switch="${do_switch:-o}"
+                fi
+                case "$do_switch" in
+                    o|O|y|Y)
+                        sudo systemctl disable "${current_dm}.service" >/dev/null 2>&1 || true
+                        if sudo systemctl enable --force sddm.service; then
+                            echo "  ↪ SDDM activé à la place de $current_dm (prendra effet au prochain redémarrage)"
+                        else
+                            echo "  ⚠️  échec de l'activation de SDDM : sudo systemctl enable --force sddm.service"
+                        fi
+                        ;;
+                    *)
+                        echo "  ⚠️  Gestionnaire actuel conservé ($current_dm) — pour basculer sur SDDM : sudo systemctl enable --force sddm.service"
+                        ;;
+                esac
+            fi
+        fi
+        # Session Hyprland par défaut dans SDDM (/var/lib/sddm/state.conf) :
+        # uniquement à la première installation (le fichier appartient à sddm,
+        # illisible sans root, donc on ne déclenche pas sudo à chaque mise à jour).
+        if [ ! -f "$MARKER" ] && [ -f /usr/share/wayland-sessions/hyprland.desktop ] && \
+           ! sudo -n grep -qs "hyprland" /var/lib/sddm/state.conf 2>/dev/null; then
+            if [ -t 0 ] || sudo -n true 2>/dev/null; then
+                sudo mkdir -p /var/lib/sddm 2>/dev/null || true
+                sudo tee /var/lib/sddm/state.conf >/dev/null <<'SDDM_STATE' || true
+[Last]
+Session=/usr/share/wayland-sessions/hyprland.desktop
+SDDM_STATE
+                echo "  ↪ session SDDM par défaut : hyprland"
+            fi
+        fi
+        # Thème sddm-astronaut-theme : si absent, le cloner puis appliquer la config AetherShell.
+        if [ ! -d /usr/share/sddm/themes/sddm-astronaut-theme ] && [ "${DRY_RUN:-0}" != "1" ] && command -v git >/dev/null 2>&1; then
+            echo "▶ Installation du thème SDDM (sddm-astronaut-theme)..."
+            sudo git clone --depth 1 https://github.com/Keyitdev/sddm-astronaut-theme.git /usr/share/sddm/themes/sddm-astronaut-theme 2>/dev/null || true
+        fi
+        if [ -d /usr/share/sddm/themes/sddm-astronaut-theme ] && [ ! -f /etc/sddm.conf.d/10-sddm-theme.conf ] && [ -x "$dir/install.sh" ]; then
+            ASK_SUDO=1 bash "$dir/install.sh" || true
+        fi
+    fi
     [ -f "$dir/greeter-palette" ] && [ -f "$dir/50-greeter-palette.rules" ] || return 0
 
     local stamp="$HOME/.cache/quickshell/greeter-helper.stamp" courant
@@ -2322,6 +2553,21 @@ deploy_new_env() {
             cp -f "$f" "$QS_DIR/sddm/"
         done
         chmod +x "$QS_DIR/sddm/install.sh" "$QS_DIR/sddm/greeter-palette" 2>/dev/null || true
+        local sddm_manifest
+        sddm_manifest=$(mktemp)
+        (cd "$DEV_DIR/sddm" && find . -maxdepth 1 -type f -printf '%f\n') > "$sddm_manifest"
+        prune_target "$QS_DIR/sddm" "$sddm_manifest"
+        rm -f "$sddm_manifest"
+
+        if [ -d "$DEV_DIR/sddm/clavier" ]; then
+            mkdir -p "$QS_DIR/sddm/clavier"
+            cp -f "$DEV_DIR/sddm/clavier/"*.qml "$QS_DIR/sddm/clavier/" 2>/dev/null || true
+            local clavier_manifest
+            clavier_manifest=$(mktemp)
+            (cd "$DEV_DIR/sddm/clavier" && ls -1 *.qml 2>/dev/null || true) > "$clavier_manifest"
+            prune_target "$QS_DIR/sddm/clavier" "$clavier_manifest"
+            rm -f "$clavier_manifest"
+        fi
     fi
     # La liste des dépendances part avec le shell : le panneau (« Installer les
     # paquets manquants », onglet Apps & Alertes) la lit à l'exécution dans
@@ -2369,6 +2615,11 @@ deploy_new_env() {
     if [ -d "$DEV_DIR/assets/tray" ]; then
         mkdir -p "$QS_DIR/assets/tray"
         cp -f "$DEV_DIR/assets/tray/"* "$QS_DIR/assets/tray/" 2>/dev/null || true
+        local tray_manifest
+        tray_manifest=$(mktemp)
+        (cd "$DEV_DIR/assets/tray" && find . -maxdepth 1 -type f -printf '%f\n') > "$tray_manifest"
+        prune_target "$QS_DIR/assets/tray" "$tray_manifest"
+        rm -f "$tray_manifest"
     fi
 
     # Widgets de bureau : un composant par type, chargés par URL depuis
@@ -2462,6 +2713,7 @@ deploy_new_env() {
     # doivent survivre à un redémarrage de session, et se relancer seuls en cas
     # de plantage. Versionnées ici, installées par le déploiement.
     if [ -d "$DEV_DIR/systemd" ]; then
+        mkdir -p "$HOME/.config/systemd/user"
         local unite
         for unite in "$DEV_DIR/systemd/"*.service "$DEV_DIR/systemd/"*.timer; do
             [ -f "$unite" ] || continue
@@ -2478,6 +2730,22 @@ deploy_new_env() {
             systemctl --user enable --now polkit-agent.service 2>/dev/null \
                 || echo "  ⚠ agent polkit non démarré (systemctl --user enable --now polkit-agent)"
         fi
+    fi
+
+    # Première installation : aligner `kb_layout` sur l'environnement actif
+    # (sinon un utilisateur US/DE hériterait du `fr` par défaut du dépôt),
+    # et poser un fond par défaut pour éviter le wallpaper intégré d'Hyprland.
+    if [ ! -f "$MARKER" ] && [ -x "$CORE_DIR/as-core" ]; then
+        local sys_kb
+        sys_kb="$(detect_system_kb_layout)"
+        if [[ "$sys_kb" =~ ^[a-z]{2}(-[a-z0-9_]+)?$ ]]; then
+            "$CORE_DIR/as-core" config kb_layout_only "$sys_kb" >/dev/null 2>&1 || true
+            echo "  ↪ clavier détecté : $sys_kb"
+        fi
+    fi
+    if [ ! -f "$MARKER" ] && [ ! -f "$HOME/.cache/quickshell/hyprquickpaper/.current" ] && [ -f "$QS_DIR/wallpapers/sanctuaire.jpg" ]; then
+        mkdir -p "$HOME/.cache/quickshell/hyprquickpaper"
+        printf '%s\n' "$QS_DIR/wallpapers/sanctuaire.jpg" > "$HOME/.cache/quickshell/hyprquickpaper/.current"
     fi
 
     installer_charge_limit

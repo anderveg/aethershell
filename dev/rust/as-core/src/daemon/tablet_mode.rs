@@ -247,13 +247,9 @@ fn sync_window_ergonomics(clean_mode: &str) {
         if let Ok(aw) = serde_json::from_slice::<Value>(&out.stdout) {
             let fs = aw.get("fullscreen").and_then(|v| v.as_i64()).unwrap_or(0);
             let floating = aw.get("floating").and_then(|v| v.as_bool()).unwrap_or(false);
-            if clean_mode == "tablet" && fs == 0 && !floating {
-                let _ = Command::new("hyprctl")
-                    .args(["dispatch", "fullscreen", "1"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .status();
-            } else if clean_mode == "laptop" && fs == 1 {
+            if (clean_mode == "tablet" && fs == 0 && !floating)
+                || (clean_mode == "laptop" && fs == 1)
+            {
                 let _ = Command::new("hyprctl")
                     .args(["dispatch", "fullscreen", "1"])
                     .stdout(Stdio::null())

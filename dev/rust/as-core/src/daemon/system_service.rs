@@ -50,6 +50,24 @@ fn get_charge_limit_info() -> (bool, i64, &'static str) {
     (false, SEUIL_CIBLE_PCT, "")
 }
 
+/// Signal (%) du réseau wifi actif, demandé à NetworkManager.
+///
+/// Repli indispensable quand `/proc/net/wireless` est absent : les noyaux
+/// Fedora récents (et les pilotes mac80211 modernes) ne l'exposent plus, ce qui
+/// renvoyait `0` et faisait afficher l'icône « déconnecté » alors que la
+/// session était bien liée au réseau.
+fn read_nmcli_wifi_signal() -> Option<i64> {
+    let out = run_cmd_stdout("nmcli", &["-t", "-f", "IN-USE,SIGNAL", "dev", "wifi"])?;
+    for line in out.lines() {
+        let Some((drapeau, sig)) = line.split_once(':') else { continue };
+        // IN-USE vaut « * » pour le réseau courant, quel que soit la locale.
+        if drapeau.trim() == "*" {
+            return sig.trim().parse::<i64>().ok().map(|s| s.clamp(0, 100));
+        }
+    }
+    None
+}
+
 fn read_proc_wifi_signal(iface: &str) -> i64 {
     let Ok(txt) = fs::read_to_string("/proc/net/wireless") else {
         return 0;
@@ -101,11 +119,14 @@ fn active_wifi_ssid(iface: &str, fallback: &str) -> String {
 }
 
 fn get_volume_info() -> (i64, bool) {
+    use std::sync::OnceLock;
+    static RE_WP: OnceLock<Regex> = OnceLock::new();
+    static RE_AM: OnceLock<Regex> = OnceLock::new();
     if let Some(wp) = run_cmd_stdout("wpctl", &["get-volume", "@DEFAULT_AUDIO_SINK@"]) {
         let muted = wp.contains("[MUTED]");
-        let lvl = Regex::new(r"([0-9]+(?:\.[0-9]+)?)")
-            .ok()
-            .and_then(|re| re.captures(&wp))
+        let lvl = RE_WP
+            .get_or_init(|| Regex::new(r"([0-9]+(?:\.[0-9]+)?)").unwrap())
+            .captures(&wp)
             .and_then(|c| c[1].parse::<f64>().ok())
             .map(|v| (v * 100.0).round() as i64)
             .unwrap_or(0);
@@ -113,9 +134,9 @@ fn get_volume_info() -> (i64, bool) {
     }
     if let Some(am) = run_cmd_stdout("amixer", &["sget", "Master"]) {
         let muted = am.contains("[off]");
-        let lvl = Regex::new(r"\[(\d+)%\]")
-            .ok()
-            .and_then(|re| re.captures(&am))
+        let lvl = RE_AM
+            .get_or_init(|| Regex::new(r"\[(\d+)%\]").unwrap())
+            .captures(&am)
             .and_then(|c| c[1].parse::<i64>().ok())
             .unwrap_or(0);
         return (lvl, muted);
@@ -183,16 +204,49 @@ fn get_system_info() -> Value {
     if let Some(dev_status) = run_cmd_stdout("nmcli", &["-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "dev", "status"]) {
         for line in dev_status.lines() {
             let parts = split_nmcli_escaped(line);
-            if parts.len() >= 4 && parts[2] == "connected" {
+            if parts.len() >= 4 && (parts[2] == "connected" || parts[2].starts_with("connected ")) {
                 let (dev_name, dev_type, conn_name) = (&parts[0], &parts[1], &parts[3]);
                 if dev_type == "wifi" {
                     wifi_connected = true;
                     wifi_ssid = active_wifi_ssid(dev_name, conn_name);
                     wifi_signal = read_proc_wifi_signal(dev_name);
+                    if wifi_signal <= 0 {
+                        // /proc/net/wireless absent (noyau Fedora) : on demande
+                        // la force du signal à NetworkManager. Reste à 0 si nmcli
+                        // ne répond pas — l'icône affiche alors « wifi » simple.
+                        wifi_signal = read_nmcli_wifi_signal().unwrap_or(0);
+                    }
                     net_type = "wifi".to_string();
                     break;
                 } else if dev_type == "ethernet" && eth_fallback.is_none() {
                     eth_fallback = Some(if conn_name.is_empty() { "Ethernet".to_string() } else { conn_name.clone() });
+                }
+            }
+        }
+    }
+    if !wifi_connected && eth_fallback.is_none() {
+        // Repli noyau (/sys/class/net) si NetworkManager ne gère pas l'interface
+        // (ex. systemd-networkd, dhcpcd ou VM sans profil NM).
+        if let Ok(entries) = fs::read_dir("/sys/class/net") {
+            for ent in entries.flatten() {
+                let name = ent.file_name().to_string_lossy().to_string();
+                if name == "lo"
+                    || name.starts_with("tun")
+                    || name.starts_with("tap")
+                    || name.starts_with("wg")
+                    || name.starts_with("veth")
+                    || name.starts_with("docker")
+                    || name.starts_with("br-")
+                    || name.starts_with("virbr")
+                {
+                    continue;
+                }
+                let p = ent.path();
+                if !p.join("wireless").exists()
+                    && read_trim(&p.join("operstate")).as_deref() == Some("up")
+                {
+                    eth_fallback = Some("Ethernet".to_string());
+                    break;
                 }
             }
         }

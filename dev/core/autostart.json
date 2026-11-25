@@ -16,7 +16,7 @@
     },
     {
         "name": "awww-daemon (wallpaper, si Noctalia absent)",
-        "cmd": "sh -c '/usr/bin/pgrep -x awww-daemon >/dev/null || exec awww-daemon' &",
+        "cmd": "sh -c '(/usr/bin/pgrep -x awww-daemon >/dev/null || (awww-daemon &)) && sleep 0.4 && f=$(cat \"$HOME/.cache/quickshell/hyprquickpaper/.current\" 2>/dev/null || true); [ -f \"$f\" ] || f=\"$HOME/.config/quickshell/wallpapers/sanctuaire.jpg\"; [ -f \"$f\" ] && awww img \"$f\" --transition-type fade --transition-duration 0.5' &",
         "enabled": true
     },
     {
