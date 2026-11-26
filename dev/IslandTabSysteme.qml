@@ -362,7 +362,7 @@ Item {
 
             Text {
                 Layout.fillWidth: true
-                text: "SYSTÈME"
+                text: I18n.t("island.tab.sys")
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.textMd
                 font.weight: Font.Bold
@@ -389,7 +389,7 @@ Item {
                     }
 
                     Text {
-                        text: "Configuration"
+                        text: I18n.t("island.tab.config")
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.textXs
                         font.weight: Font.Medium
@@ -410,7 +410,7 @@ Item {
             }
 
             Text {
-                text: "↻ Actualiser"
+                text: I18n.t("island.tab.refresh")
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.textXs
                 color: refMa.containsMouse ? Theme.accent : Qt.alpha(Theme.fg, 0.7)
@@ -477,7 +477,7 @@ Item {
 
         Text {
             id: reseauHeader
-            text: "RÉSEAU"
+            text: I18n.t("island.tab.network")
             font.family: Theme.fontUi
             font.pixelSize: Theme.textXs
             font.weight: Font.Bold
@@ -968,7 +968,7 @@ Item {
         }
 
         Text {
-            text: "AFFICHAGE & SON"
+            text: I18n.t("island.tab.display_sound")
             font.family: Theme.fontUi
             font.pixelSize: Theme.textXs
             font.weight: Font.Bold
@@ -989,7 +989,7 @@ Item {
         }
 
         Text {
-            text: "BATTERIE & ALIMENTATION"
+            text: I18n.t("island.tab.battery_power")
             font.family: Theme.fontUi
             font.pixelSize: Theme.textXs
             font.weight: Font.Bold

@@ -1057,11 +1057,47 @@ pkg_for_bin() {
 # `dev/core/as-core` est ignoré par Git : un clone frais n'en contient aucun, et
 # le shell ne peut rien afficher sans lui (plus un seul script Python ne reste).
 # On compile donc dès que le binaire manque ou qu'une source est plus récente.
+as_core_src_hash() {
+    {
+        find "$DEV_DIR/rust/as-core/src" -type f -name '*.rs' 2>/dev/null | sort
+        [ -f "$DEV_DIR/rust/as-core/Cargo.toml" ] && echo "$DEV_DIR/rust/as-core/Cargo.toml"
+        [ -f "$DEV_DIR/rust/as-core/Cargo.lock" ] && echo "$DEV_DIR/rust/as-core/Cargo.lock"
+    } | xargs -r sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1
+}
+
+qml_src_hash() {
+    find "$DEV_DIR" -maxdepth 2 \( -name '*.qml' -o -name 'qmldir' \) 2>/dev/null \
+        | sort | xargs -r sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1
+}
+
 compiler_as_core() {
     local bin="$DEV_DIR/core/as-core" build="$DEV_DIR/rust/build.sh"
+    local stamp="$HOME/.cache/quickshell/as-core-src.stamp"
+    local qml_stamp="$HOME/.cache/quickshell/qml-src.stamp"
     [ -f "$build" ] || return 0
-    if [ -x "$bin" ] && [ -z "$(find "$DEV_DIR/rust/as-core/src" "$DEV_DIR/rust/as-core/Cargo.toml" \
+
+    local src_hash qml_hash
+    src_hash="$(as_core_src_hash)"
+    qml_hash="$(qml_src_hash)"
+    if [ -n "$qml_hash" ]; then
+        if [ -f "$qml_stamp" ] && [ "$(cat "$qml_stamp" 2>/dev/null)" = "$qml_hash" ]; then
+            echo "  ✓ QML : inchangés"
+        else
+            echo "  ↻ QML : modifiés (mise à jour des fichiers QML)"
+            mkdir -p "$(dirname "$qml_stamp")" && printf '%s\n' "$qml_hash" > "$qml_stamp"
+        fi
+    fi
+
+    if [ -n "$src_hash" ] && [ -f "$stamp" ] && [ "$(cat "$stamp" 2>/dev/null)" = "$src_hash" ]; then
+        if [ -x "$bin" ] || [ -x "$CORE_DIR/as-core" ]; then
+            [ -x "$bin" ] || cp -f "$CORE_DIR/as-core" "$bin"
+            echo "  ✓ as-core : sources inchangées (recompilation ignorée)"
+            return 0
+        fi
+    fi
+    if [ -x "$bin" ] && [ ! -f "$stamp" ] && [ -z "$(find "$DEV_DIR/rust/as-core/src" "$DEV_DIR/rust/as-core/Cargo.toml" \
             -newer "$bin" -print -quit 2>/dev/null)" ]; then
+        mkdir -p "$(dirname "$stamp")" && [ -n "$src_hash" ] && printf '%s\n' "$src_hash" > "$stamp"
         return 0
     fi
     if ! command -v cargo >/dev/null 2>&1; then
@@ -1097,7 +1133,12 @@ compiler_as_core() {
         echo "    as-core n'est pas recompilé : le binaire du dépôt (peut-être périmé) sera déployé." >&2
         return 0
     fi
-    bash "$build" || { echo "⚠️  compilation de as-core échouée" >&2; return 0; }
+    if bash "$build"; then
+        [ -n "$src_hash" ] && mkdir -p "$(dirname "$stamp")" && printf '%s\n' "$src_hash" > "$stamp"
+    else
+        echo "⚠️  compilation de as-core échouée" >&2
+        return 0
+    fi
 }
 
 build_pwscope_if_ready() {
@@ -2559,6 +2600,15 @@ deploy_new_env() {
     (cd "$DEV_DIR/core" && ls -1) > "$core_manifest"
     prune_target "$CORE_DIR" "$core_manifest" "$PRESERVE_CORE"
     rm -f "$core_manifest"
+    if [ -d "$DEV_DIR/core/i18n" ]; then
+        mkdir -p "$CORE_DIR/i18n"
+        copy_dir_files "$DEV_DIR/core/i18n" "$CORE_DIR/i18n" ""
+        local i18n_manifest
+        i18n_manifest=$(mktemp)
+        (cd "$DEV_DIR/core/i18n" && ls -1) > "$i18n_manifest"
+        prune_target "$CORE_DIR/i18n" "$i18n_manifest" ""
+        rm -f "$i18n_manifest"
+    fi
 
     # Le greeter part avec le shell (`~/.config/quickshell/sddm`) : le module le
     # cherchait dans le clone et, à défaut, parcourait tout le home. Sur une

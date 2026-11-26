@@ -42,7 +42,7 @@ spacing: 12
 CollapsibleSection {
     id: secApiKeys
     objectName: "secApiKeys"
-    title: "Quotas IA"
+    title: I18n.t("cfg.sec.ai_quotas")
     summary: Object.keys(root.apiKeys).length + " clés"
     icon: "lock"
     expanded: root.sectionOpen("widgets_api", false)
@@ -182,7 +182,7 @@ CollapsibleSection {
 CollapsibleSection {
     id: secLocalisation
     objectName: "secLocalisation"
-    title: "Localisation"
+    title: I18n.t("cfg.sec.location")
     summary: root.timezoneStr
     icon: "cloud"
     expanded: root.sectionOpen("donnees_localisation", false)
@@ -426,7 +426,7 @@ CollapsibleSection {
 CollapsibleSection {
     id: secCalendrier
     objectName: "secCalendrier"
-    title: "Calendrier Nextcloud"
+    title: I18n.t("cfg.sec.nextcloud")
     summary: root.ncStatut !== "" ? root.ncStatut : "non configuré"
     icon: "calendar"
     expanded: root.sectionOpen("quickshell_calendrier", false)
@@ -569,7 +569,7 @@ CollapsibleSection {
 CollapsibleSection {
     id: secHomelab
     objectName: "secHomelab"
-    title: "Homelab Proxmox"
+    title: I18n.t("cfg.sec.proxmox")
     summary: root.homelabUrl !== "" ? root.resumeChemin(root.homelabUrl) : "non configuré"
     icon: "cloud-check"
     expanded: root.sectionOpen("widgets_homelab", false)
@@ -800,7 +800,7 @@ CollapsibleSection {
 CollapsibleSection {
     id: secTaches
     objectName: "secTaches"
-    title: "Tâches suivies"
+    title: I18n.t("cfg.sec.todo")
     summary: root.todoFichiers.length + " fichiers"
     icon: "check"
     expanded: root.sectionOpen("taches_fichiers", false)
@@ -1114,7 +1114,7 @@ CollapsibleSection {
 CollapsibleSection {
     id: secPlanka
     objectName: "secPlanka"
-    title: "Serveur Kanban (Planka)"
+    title: I18n.t("cfg.sec.planka")
     summary: {
         const u = root.apiKeys && root.apiKeys["planka.url"] && root.apiKeys["planka.url"].present
         const k = root.apiKeys && root.apiKeys["planka.api_key"] && root.apiKeys["planka.api_key"].present

@@ -1,4 +1,5 @@
 import QtQuick
+import "."
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -976,7 +977,7 @@ Item {
 
                         Text {
                             anchors.centerIn: parent
-                            text: root.applicationEnCours ? "…" : "Passer"
+                            text: root.applicationEnCours ? "…" : I18n.t("onboard.skip")
                             color: passerSouris.containsMouse ? Theme.accent : Qt.alpha(Theme.fg, 0.65)
                             font.pixelSize: Theme.textXs
                         }
@@ -1002,7 +1003,7 @@ Item {
 
                         Text {
                             anchors.centerIn: parent
-                            text: "Précédent"
+                            text: I18n.t("onboard.prev")
                             color: Theme.fg
                             font.pixelSize: Theme.textSm
                         }
@@ -1026,9 +1027,9 @@ Item {
 
                         Text {
                             anchors.centerIn: parent
-                            text: root.applicationEnCours ? "Application…"
-                                  : (root.etape === root.etapeFinale ? "Terminé !"
-                                  : (root.etape === 0 ? "Choisir mes dossiers" : "Suivant"))
+                            text: root.applicationEnCours ? I18n.t("onboard.applying")
+                                  : (root.etape === root.etapeFinale ? I18n.t("onboard.done")
+                                  : (root.etape === 0 ? I18n.t("onboard.choose_dirs") : I18n.t("onboard.next")))
                             color: Theme.bg
                             font.pixelSize: Theme.textMd
                             font.bold: true

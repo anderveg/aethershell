@@ -201,7 +201,7 @@ Item {
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Volume"
+                        text: I18n.t("volume.title")
                         color: Theme.fg
                         font.pixelSize: Theme.textSm
                         font.bold: true
@@ -209,7 +209,7 @@ Item {
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: root.pret ? (root.muet ? "muet" : root.pourcent + " %") : "—"
+                        text: root.pret ? (root.muet ? I18n.t("volume.muted_short") : root.pourcent + " %") : "—"
                         color: root.muet ? Theme.warn : Qt.alpha(Theme.fg, 0.7)
                         font.pixelSize: Theme.textXs
                         font.features: { "tnum": 1 }
@@ -255,7 +255,7 @@ Item {
 
                         Text {
                             anchors.centerIn: parent
-                            text: root.muet ? "Rétablir" : "Muet"
+                            text: root.muet ? I18n.t("volume.unmute") : I18n.t("volume.mute")
                             color: Theme.fg
                             font.pixelSize: Theme.textXs
                         }

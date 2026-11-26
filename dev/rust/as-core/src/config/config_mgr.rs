@@ -395,6 +395,9 @@ fn update_style_var(key: &str, value: &str) {
             let v = value.trim().to_ascii_lowercase();
             data.insert(key.into(), json!(if matches!(v.as_str(), "dark" | "light") { v } else { "auto".to_string() }));
         }
+        "langue" => {
+            data.insert(key.into(), json!(crate::common::i18n::normalize_lang(value)));
+        }
         "matugen_contrast" => { data.insert(key.into(), json!(fval.clamp(-1.0, 1.0))); }
         "blur_size" => { data.insert(key.into(), json!((fval as i64).clamp(1, 20))); }
         "blur_passes" => { data.insert(key.into(), json!((fval as i64).clamp(1, 8))); }
@@ -814,6 +817,7 @@ pub fn get_full_config_state() -> Value {
         "lock_bg_image": get_s("lock_bg_image", ""),
         "matugen_scheme": get_s("matugen_scheme", "scheme-tonal-spot"),
         "theme_mode": get_s("theme_mode", "auto"),
+        "langue": style.get("langue").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(crate::common::i18n::normalize_lang).unwrap_or_else(crate::common::i18n::default_lang),
         "matugen_contrast": get_f("matugen_contrast", 0.0),
         "blur_enabled": get_b("blur_enabled", true),
         "blur_size": get_i("blur_size", 3),

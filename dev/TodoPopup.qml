@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "."
 
 // POPUP « TÂCHES » — les cases à cocher des fichiers Markdown de l'utilisateur.
 //
@@ -118,7 +119,7 @@ Item {
             // suivant — un seul fichier à la fois, mais pas un fichier imposé.
             Text {
                 width: parent.width - Math.round(90 * echelle)
-                text: "Tâches · " + String(root.etat.focus || "")
+                text: I18n.t("todo.tasks_prefix") + String(root.etat.focus || "")
                 color: survolTitre.containsMouse ? Theme.accent : Qt.alpha(Theme.fg, 0.6)
                 font.pixelSize: Math.round(Theme.widgetLabel * 0.8 * echelle)
                 elide: Text.ElideRight
@@ -143,7 +144,7 @@ Item {
                 width: Math.round(90 * echelle)
                 horizontalAlignment: Text.AlignRight
                 text: root.etat.ouverts !== undefined
-                      ? root.etat.ouverts + (root.etat.ouverts > 1 ? " ouvertes" : " ouverte")
+                      ? root.etat.ouverts + (root.etat.ouverts > 1 ? I18n.t("todo.open_many") : I18n.t("todo.open_one"))
                       : ""
                 color: Qt.alpha(Theme.fg, 0.5)
                 font.pixelSize: Math.round(root.corps * 0.8 * echelle)
@@ -221,8 +222,8 @@ Item {
             width: parent.width
             visible: root.items.length === 0
             text: root.etat.fichiers && root.etat.fichiers.length > 0
-                  ? "Aucune case à cocher dans les fichiers surveillés."
-                  : "Aucun fichier surveillé."
+                  ? I18n.t("todo.no_checkboxes")
+                  : I18n.t("todo.no_files")
             color: Qt.alpha(Theme.fg, 0.45)
             font.pixelSize: Math.round(root.corps * 0.9 * echelle)
             wrapMode: Text.WordWrap
@@ -373,8 +374,8 @@ Item {
             width: parent.width
             visible: root.demandes.length > 0
             text: root.demandes.length === 1
-                  ? "1 demande attend l'agent"
-                  : root.demandes.length + " demandes attendent l'agent"
+                  ? I18n.t("todo.demand_one")
+                  : I18n.t("todo.demand_many").replace("{count}", root.demandes.length)
             color: Qt.alpha(Theme.accent, 0.9)
             font.pixelSize: Math.round(root.corps * 0.82 * echelle)
             wrapMode: Text.WordWrap

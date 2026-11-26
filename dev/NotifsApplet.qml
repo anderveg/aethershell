@@ -218,7 +218,7 @@ Item {
                         }
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "Notifications"
+                            text: I18n.t("notifs.title")
                             color: Theme.fg
                             font.pixelSize: Theme.textLg
                             font.bold: true
@@ -326,7 +326,7 @@ Item {
                             Text {
                                 id: clearText
                                 anchors.centerIn: parent
-                                text: "Tout effacer"
+                                text: I18n.t("notifs.clear_all")
                                 color: clearMa.containsMouse ? Theme.error : Qt.alpha(Theme.fg, 0.55)
                                 font.pixelSize: Theme.textXs
 
@@ -394,7 +394,7 @@ Item {
                                 }
                                 Text {
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                    text: "Aucune notification"
+                                    text: I18n.t("notifs.empty")
                                     color: Qt.alpha(Theme.fg, 0.55)
                                     font.pixelSize: Theme.textSm
                                 }

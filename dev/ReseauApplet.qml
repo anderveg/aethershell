@@ -153,7 +153,7 @@ Item {
                 visible: !root.verticale
                 text: root.wifiConnected
                     ? (root.wifiSsid !== "" ? root.wifiSsid : "WiFi")
-                    : "Déconnecté"
+                    : I18n.t("network.disconnected")
                 color: root.ouvert ? Theme.bg : Theme.fg
                 font.pixelSize: Math.round(Theme.textSm * echelle)
                 font.bold: root.wifiConnected
@@ -214,7 +214,7 @@ Item {
                         }
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "Réseaux disponibles"
+                            text: I18n.t("network.available")
                             color: Theme.fg
                             font.pixelSize: Theme.textLg
                             font.bold: true
@@ -231,7 +231,7 @@ Item {
 
                         Text {
                             anchors.centerIn: parent
-                            text: root.wifiScanning ? "Scan..." : "↻ Scan"
+                            text: root.wifiScanning ? I18n.t("network.scanning") : I18n.t("network.scan")
                             color: rescanMa.containsMouse ? Theme.bg : Theme.fg
                             font.pixelSize: Theme.textXs
                             font.bold: true
@@ -289,7 +289,7 @@ Item {
 
                         Text {
                             visible: !root.wifiScanning && root.wifiNetworks.length === 0
-                            text: "Aucun réseau WiFi détecté."
+                            text: I18n.t("network.none")
                             color: Qt.alpha(Theme.fg, 0.7)
                             font.pixelSize: Theme.textSm
                             font.italic: true
@@ -550,7 +550,7 @@ Item {
 
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "Bluetooth"
+                            text: I18n.t("network.bluetooth")
                             color: root.btAllume ? Theme.fg : Qt.alpha(Theme.fg, 0.55)
                             font.pixelSize: Theme.textSm
                             font.bold: true
@@ -570,7 +570,7 @@ Item {
 
                         Text {
                             anchors.centerIn: parent
-                            text: root.btScanning ? "Scan..." : "↻ Scan"
+                            text: root.btScanning ? I18n.t("network.scanning") : I18n.t("network.scan")
                             color: btScanMa.containsMouse ? Theme.bg : Theme.fg
                             font.pixelSize: Theme.textXs
                             font.bold: true
@@ -617,7 +617,7 @@ Item {
                 Text {
                     width: parent.width
                     visible: root.btPresent && root.btAllume && root.btAppareils.length === 0 && root.btAPortee.length === 0
-                    text: root.btScanning ? "Recherche en cours…" : "Aucun appareil appairé."
+                    text: root.btScanning ? I18n.t("network.searching") : I18n.t("network.bt_none")
                     color: Qt.alpha(Theme.fg, 0.45)
                     font.pixelSize: Theme.textXs
                     font.italic: true
@@ -661,7 +661,7 @@ Item {
                                 anchors.right: parent.right
                                 anchors.rightMargin: 6
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: modelData.connecte ? "connecté" : "connecter"
+                                text: modelData.connecte ? I18n.t("network.connected") : I18n.t("network.connect")
                                 color: modelData.connecte ? Theme.accent : Qt.alpha(Theme.fg, 0.45)
                                 font.pixelSize: Theme.textXs
                             }
@@ -681,7 +681,7 @@ Item {
                 Text {
                     width: parent.width
                     visible: root.btPresent && root.btAllume && root.btAPortee.length > 0
-                    text: "À portée (" + root.btAPortee.length + ")"
+                    text: I18n.t("network.nearby").replace("{count}", root.btAPortee.length)
                     color: Qt.alpha(Theme.fg, 0.55)
                     font.pixelSize: Theme.text2xs
                     font.bold: true

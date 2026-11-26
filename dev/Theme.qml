@@ -76,6 +76,7 @@ QtObject {
     property bool applyCursor: true
     // Axe clair/sombre (lot B8) : « auto » suit le fond, sinon forcé.
     property string themeMode: "auto"
+    property string langue: "fr"
     // État du panneau étendu de l'Îlot dynamique (Phase 3)
     property bool islandPanelOpen: false
     property bool wallpaperPickerOpen: false
@@ -682,6 +683,7 @@ QtObject {
         if (typeof data.audio_allow_boost === "boolean") root.audioAllowBoost = data.audio_allow_boost
         if (typeof data.theme_apply_cursor === "boolean") root.applyCursor = data.theme_apply_cursor
         if (typeof data.theme_mode === "string") root.themeMode = data.theme_mode
+        if (typeof data.langue === "string" && data.langue !== "") root.langue = data.langue
         if (typeof data.bar_gaps_transparent === "boolean") root.barGapsTransparent = data.bar_gaps_transparent
         if (typeof data.widgets_locked === "boolean") root.widgetsLocked = data.widgets_locked
         if (typeof data.viz_fps === "number") root.vizFps = Math.max(10, Math.min(60, Math.round(data.viz_fps)))

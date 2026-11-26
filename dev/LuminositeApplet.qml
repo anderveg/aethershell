@@ -142,7 +142,7 @@ Item {
                     Text {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Luminosité"
+                        text: I18n.t("brightness.title")
                         color: Theme.fg
                         font.pixelSize: Theme.textMd
                         font.bold: true
@@ -169,7 +169,7 @@ Item {
                 Text {
                     width: parent.width
                     visible: !root.briPresente
-                    text: "Aucun rétroéclairage matériel détecté sur cette machine."
+                    text: I18n.t("brightness.none")
                     color: Qt.alpha(Theme.fg, 0.6)
                     font.pixelSize: Theme.textXs
                     wrapMode: Text.WordWrap

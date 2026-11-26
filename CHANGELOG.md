@@ -9,6 +9,17 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **`x.yy.x.x`** : ajout de fonctionnalités décisives (ex. : ajout de l'Îlot dynamique).
 - **Version majeure (`y.x.x.x`)** : conservation du schéma déjà en place (proposée lorsque l'ampleur des changements le justifie ; décision finale validée par l'utilisateur).
 
+## [0.4.8.0] — 2026-11-26
+
+### Ajouté
+- **Internationalisation complète (FR / EN / ES / DE)** (`I18n.qml`, `dev/core/i18n/{fr,en,es,de}.json`, `Theme.qml`, `config_mgr.rs`, `common/i18n.rs`, `OngletClavier.qml`) : 162 clés de traduction avec changement de langue à chaud depuis **Clavier & Binds → Langue de l'interface**, câblées sur l'îlot, les applets, les popups (`Cheatsheet`, `notif_history`, `TodoPopup`, `UsbPopup`, `spotlight`, `first_run`, `CalendrierPanneau`, `presse_papiers`), le panneau de configuration (`config_panel.qml`, `Onglet*.qml`, `IslandTab*.qml`) et les messages backend Rust (`system_service.rs`, `theme_profiles.rs`).
+- **Documentation multilingue** : traductions complètes `README.{en,es,de}.md` et `docs/README.{en,es,de}.md` avec sélecteur de langue et suivi dans `.gitignore`.
+- **Menu Alimentation / Session dans l'Îlot dynamique** (`IslandTabControles.qml`) : menu à 5 tuiles (Verrouiller, Veille, Redémarrer, Éteindre, Déconnexion) pilotable à la souris et au clavier via la submap `aether-nav`.
+
+### Modifié
+- **Navigation clavier `aether-nav`** (`IslandPanel.qml`, `ShellState.qml`) : navigation 2D spatiale (`↑`/`↓` par ligne, `←`/`→` par élément), collecte hors viewport, défilement automatique du `Flickable` et suivi de la surbrillance lors du scroll souris (`onContentYChanged`) ; correction `Hyprland.usingLua !== false` dans `setSubmap`.
+- **Déploiement `install.sh`** : vérification séparée des empreintes SHA-256 des sources Rust (`as-core-src.stamp`) et QML (`qml-src.stamp`) pour éviter toute recompilation Rust inutile quand seul le QML change ; déploiement de `dev/core/i18n/`.
+
 ## [0.4.7.2] — 2026-11-26
 
 ### Corrigé

@@ -1,4 +1,5 @@
 import QtQuick
+import "."
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
@@ -653,7 +654,7 @@ Item {
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: panneau.addingEvent ? "Annuler" : "+ Ajouter"
+                                    text: panneau.addingEvent ? I18n.t("calendar.cancel") : I18n.t("calendar.add")
                                     color: (panneau.addingEvent || addEvToggleMa.containsMouse) ? Theme.bg : Theme.fg
                                     font.pixelSize: Theme.textXs
                                     font.bold: true
@@ -761,7 +762,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                     anchors.left: parent.left
                                     anchors.leftMargin: 8
-                                    text: "Titre de l'événement..."
+                                    text: I18n.t("calendar.title_hint")
                                     color: Qt.alpha(Theme.fg, 0.45)
                                     font.pixelSize: Theme.textXs
                                 }
@@ -807,7 +808,7 @@ Item {
                                         anchors.verticalCenter: parent.verticalCenter
                                         anchors.left: parent.left
                                         anchors.leftMargin: 8
-                                        text: "Début (ex: 14:00)"
+                                        text: I18n.t("calendar.start_hint")
                                         color: Qt.alpha(Theme.fg, 0.45)
                                         font.pixelSize: Theme.textXs
                                     }
@@ -847,7 +848,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                     anchors.left: parent.left
                                     anchors.leftMargin: 8
-                                    text: "Fin (ex: 15:00)"
+                                    text: I18n.t("calendar.end_hint")
                                     color: Qt.alpha(Theme.fg, 0.45)
                                     font.pixelSize: Theme.textXs
                                 }
@@ -893,7 +894,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                     anchors.left: parent.left
                                     anchors.leftMargin: 8
-                                    text: "Lieu (optionnel)..."
+                                    text: I18n.t("calendar.location_hint")
                                     color: Qt.alpha(Theme.fg, 0.45)
                                     font.pixelSize: Theme.textXs
                                 }
@@ -930,7 +931,7 @@ Item {
 
                                 Text {
                                     anchors.centerIn: parent
-                                    text: panneau.addEventBusy ? "..." : "Créer"
+                                    text: panneau.addEventBusy ? "..." : I18n.t("calendar.create")
                                     color: panneau.addEventBusy ? Theme.fg : Theme.bg
                                     font.pixelSize: Theme.textXs
                                     font.bold: true
@@ -1003,7 +1004,7 @@ Item {
 
                             Text {
                                 width: parent.width
-                                text: modelData.summary || "Événement"
+                                text: modelData.summary || I18n.t("calendar.event_default")
                                 color: Theme.fg
                                 font.pixelSize: Theme.textSm
                                 font.bold: true

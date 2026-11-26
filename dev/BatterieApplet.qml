@@ -26,7 +26,7 @@ Item {
     readonly property bool ouvert: Theme.activePopup === "applet:batterie"
 
     readonly property string batEtatAffiche:
-        (batLimite && batPourcent >= batPlafond - 1) ? "limite atteinte" : batEtat
+        (batLimite && batPourcent >= batPlafond - 1) ? I18n.t("battery.limit_reached") : batEtat
 
     readonly property string glypheBatterie: {
         if (!batPresente) return "battery-outline"
@@ -160,7 +160,7 @@ Item {
                     Text {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Batterie"
+                        text: I18n.t("battery.title")
                         color: Theme.fg
                         font.pixelSize: Theme.textMd
                         font.bold: true
@@ -224,7 +224,7 @@ Item {
                     Text {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Limiter la charge à " + root.batPlafond + " % (santé)"
+                        text: I18n.t("battery.limit_label").replace("{pct}", root.batPlafond)
                         color: Qt.alpha(Theme.fg, 0.9)
                         font.pixelSize: Theme.textXs
                     }

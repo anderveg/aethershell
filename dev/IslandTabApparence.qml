@@ -79,14 +79,14 @@ Item {
             spacing: 2
 
             Text {
-                text: "APPARENCE & DISPOSITION"
+                text: I18n.t("island.tab.appearance_layout")
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.textMd
                 font.weight: Font.Bold
                 color: Theme.fg
             }
             Text {
-                text: "Réglages visuels immédiats du shell."
+                text: I18n.t("island.tab.appearance_summary")
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.textXs
                 color: Qt.alpha(Theme.fg, 0.6)
@@ -101,7 +101,7 @@ Item {
 
         // Thème & fond d'écran
         Text {
-            text: "PROFILS & COULEURS"
+            text: I18n.t("island.tab.profiles_colors")
             font.family: Theme.fontUi
             font.pixelSize: Theme.textXs
             font.weight: Font.Bold
@@ -255,7 +255,7 @@ Item {
         // Mode clair/sombre (lot B8) : un axe à part, transversal aux profils.
         // `auto` suit la luminance du fond, `dark`/`light` imposent le mode.
         Text {
-            text: "MODE CLAIR / SOMBRE"
+            text: I18n.t("island.tab.light_dark")
             font.family: Theme.fontUi
             font.pixelSize: Theme.textXs
             font.weight: Font.Bold
@@ -321,7 +321,7 @@ Item {
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "Changer de fond d'écran (SUPER+W)"
+                    text: I18n.t("island.tab.change_wallpaper")
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.textXs
                     font.weight: Font.DemiBold
@@ -343,7 +343,7 @@ Item {
 
         // Disposition de la barre
         Text {
-            text: "DISPOSITION DE LA BARRE"
+            text: I18n.t("island.tab.bar_layout")
             font.family: Theme.fontUi
             font.pixelSize: Theme.textXs
             font.weight: Font.Bold
@@ -392,7 +392,7 @@ Item {
 
         // Surfaces & verre
         Text {
-            text: "SURFACES & VERRE"
+            text: I18n.t("island.tab.surfaces_glass")
             font.family: Theme.fontUi
             font.pixelSize: Theme.textXs
             font.weight: Font.Bold
@@ -405,7 +405,7 @@ Item {
             spacing: 10
             Text {
                 Layout.preferredWidth: 72
-                text: "Opacité"
+                text: I18n.t("island.tab.opacity")
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.textXs
                 color: Theme.fg
@@ -455,7 +455,7 @@ Item {
             spacing: 10
             Text {
                 Layout.preferredWidth: 72
-                text: "Flou (Blur)"
+                text: I18n.t("island.tab.blur")
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.textXs
                 color: Theme.fg
@@ -504,7 +504,7 @@ Item {
             spacing: 6
 
             Text {
-                text: "PROFILS D'ENVIRONNEMENT"
+                text: I18n.t("island.tab.env_presets")
                 font.family: Theme.fontUi
                 font.pixelSize: 10
                 font.weight: Font.Bold

@@ -101,3 +101,4 @@ OngletEcrans 1.0 OngletEcrans.qml
 OngletIlot 1.0 OngletIlot.qml
 IlotZoneColumn 1.0 IlotZoneColumn.qml
 singleton Backend 1.0 Backend.qml
+singleton I18n 1.0 I18n.qml

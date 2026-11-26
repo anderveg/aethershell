@@ -128,7 +128,7 @@ spacing: 11
 CollapsibleSection {
     id: secWidgets
     objectName: "secWidgets"
-    title: "Widgets du bureau"
+    title: I18n.t("cfg.sec.desktop_widgets")
     summary: root.widgetsList.length + " widgets"
     icon: "widgets"
     // État persisté comme les autres tiroirs ; ouvert par défaut,
@@ -1262,7 +1262,7 @@ CollapsibleSection {
 CollapsibleSection {
     id: secPilule
     objectName: "secPilule"
-    title: "Lanceur Spotlight"
+    title: I18n.t("cfg.sec.spotlight")
     summary: root.launcherPosition
     icon: "rocket"
     expanded: root.sectionOpen("widgets_pilule", false)

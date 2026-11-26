@@ -1,6 +1,6 @@
 # AetherShell
 
-[Read in English](docs/README.md)
+[FR](README.md) · [EN](README.en.md) · [ES](README.es.md) · [DE](README.de.md)
 
 Un environnement de bureau pour [Hyprland](https://hyprland.org), composé d'une barre en îlots, de panneaux modulaires, de widgets de bureau et d'outils du quotidien, écrit en QML/Qt et animé par [Quickshell](https://quickshell.org).
 

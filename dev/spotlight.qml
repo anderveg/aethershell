@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import "."
 import Quickshell
 import Quickshell.Io
 
@@ -605,7 +606,7 @@ Item {
                 visible: searchInput.text === ""
                 anchors.left: searchInput.left
                 anchors.verticalCenter: parent.verticalCenter
-                text: "Rechercher une application…   (? pour de l'aide)"
+                text: I18n.t("spotlight.placeholder")
                 color: Qt.alpha(Theme.fg, 0.42)
                 font.pixelSize: Theme.textLg
             }
@@ -625,7 +626,7 @@ Item {
                 Text {
                     id: escLabel
                     anchors.centerIn: parent
-                    text: "Échap"
+                    text: I18n.t("spotlight.esc")
                     color: Qt.alpha(Theme.fg, 0.45)
                     font.pixelSize: Theme.textXs
                 }
@@ -909,14 +910,14 @@ Item {
                     spacing: 6
                     anchors.verticalCenter: parent.verticalCenter
                     Text { text: "↑ ↓"; color: Qt.alpha(Theme.fg, 0.55); font.pixelSize: Theme.textXs }
-                    Text { text: "naviguer"; color: Qt.alpha(Theme.fg, 0.40); font.pixelSize: Theme.textXs }
+                    Text { text: I18n.t("spotlight.navigate"); color: Qt.alpha(Theme.fg, 0.40); font.pixelSize: Theme.textXs }
                 }
                 Row {
                     spacing: 6
                     anchors.verticalCenter: parent.verticalCenter
-                    Text { text: "Entrée"; color: Qt.alpha(Theme.fg, 0.55); font.pixelSize: Theme.textXs }
+                    Text { text: I18n.t("spotlight.enter"); color: Qt.alpha(Theme.fg, 0.55); font.pixelSize: Theme.textXs }
                     Text {
-                        text: root.cmdMode ? "exécuter" : "lancer"
+                        text: root.cmdMode ? I18n.t("spotlight.exec") : I18n.t("spotlight.launch")
                         color: Qt.alpha(Theme.fg, 0.40)
                         font.pixelSize: Theme.textXs
                     }
@@ -926,7 +927,7 @@ Item {
                     spacing: 6
                     anchors.verticalCenter: parent.verticalCenter
                     Text { text: "Tab"; color: Qt.alpha(Theme.fg, 0.55); font.pixelSize: Theme.textXs }
-                    Text { text: "compléter"; color: Qt.alpha(Theme.fg, 0.40); font.pixelSize: Theme.textXs }
+                    Text { text: I18n.t("spotlight.complete"); color: Qt.alpha(Theme.fg, 0.40); font.pixelSize: Theme.textXs }
                 }
             }
 

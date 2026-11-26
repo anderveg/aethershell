@@ -1,4 +1,5 @@
 import QtQuick
+import "."
 
 // ────────────────────────────────────────────────────────────────────────────
 // ÉCRAN DES RACCOURCIS (SUPER + K)
@@ -138,7 +139,7 @@ Item {
                 Icon { anchors.verticalCenter: parent.verticalCenter; glyph: "keyboard"; size: Theme.iconSm; color: Theme.accent }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "AetherShell — raccourcis"
+                    text: I18n.t("cheatsheet.title")
                     color: Theme.fg
                     font.pixelSize: Theme.textMd
                     font.bold: true
@@ -158,7 +159,7 @@ Item {
                     Text {
                         id: basculeTexte
                         anchors.centerIn: parent
-                        text: root.etendu ? "Essentiel" : "Tout afficher"
+                        text: root.etendu ? I18n.t("cheatsheet.essential") : I18n.t("cheatsheet.all")
                         color: Theme.accent
                         font.pixelSize: Theme.text2xs
                         font.bold: true
@@ -175,7 +176,7 @@ Item {
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "SUPER + K pour fermer"
+                    text: I18n.t("cheatsheet.close_hint")
                     color: Qt.alpha(Theme.fg, 0.45)
                     font.pixelSize: Theme.textXs
                 }

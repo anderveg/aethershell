@@ -254,7 +254,7 @@ spacing: 12
 CollapsibleSection {
     id: secEcrans
     objectName: "secEcrans"
-    title: "Moniteurs & affichage"
+    title: I18n.t("cfg.sec.monitors")
     summary: root.selectedMonitorName + " · " + root.monitorsList.length + " écran(s)"
     icon: "monitor"
     expanded: root.sectionOpen("ecrans_moniteurs", false)
@@ -651,7 +651,7 @@ Column {
 CollapsibleSection {
     id: secHorloge
     objectName: "secHorloge"
-    title: "Énergie & horloge"
+    title: I18n.t("cfg.sec.power_clock")
     summary: "Veille : " + root.idleSuspendLabel + " · " + (root.ntpSynced ? "NTP synchronisé" : "NTP manuel")
     icon: "power"
     expanded: root.sectionOpen("systeme_horloge", false)
@@ -826,7 +826,7 @@ Column {
 CollapsibleSection {
     id: secAudio
     objectName: "secAudio"
-    title: "Audio"
+    title: I18n.t("cfg.sec.audio")
     summary: Theme.btAutoSwitchAudio ? "Bascule auto casque" : "Bascule manuelle"
     icon: "volume-high"
     expanded: root.sectionOpen("systeme_audio", false)
@@ -1126,7 +1126,7 @@ CollapsibleSection {
 CollapsibleSection {
     id: secVeille
     objectName: "secVeille"
-    title: "Écran de veille"
+    title: I18n.t("cfg.sec.screensaver")
     summary: root.screensaverTimeout > 0
         ? (root.screensaverLabel + " · " + root.screensaverApp)
         : "Désactivé"
@@ -1421,7 +1421,7 @@ CollapsibleSection {
 CollapsibleSection {
     id: secNuit
     objectName: "secNuit"
-    title: "Mode nuit"
+    title: I18n.t("cfg.sec.night")
     summary: root.nuitAllumee ? ("allumé · " + root.nuitTemp + " K") : "éteint"
     icon: "weather-night"
     expanded: root.sectionOpen("systeme_nuit", false)
@@ -1620,7 +1620,7 @@ CollapsibleSection {
 CollapsibleSection {
     id: secCaptures
     objectName: "secCaptures"
-    title: "Captures d'écran"
+    title: I18n.t("cfg.sec.screenshots")
     summary: root.resumeChemin(root.screenshotsDir)
     icon: "screen-shot"
     expanded: root.sectionOpen("ecrans_captures", false)
@@ -1743,7 +1743,7 @@ onClicked: {
 CollapsibleSection {
     id: secMaj
     objectName: "secMaj"
-    title: "Mises à jour"
+    title: I18n.t("cfg.sec.updates")
     summary: bloc.majResume
     icon: "download"
     expanded: root.sectionOpen("systeme_maj", false)
@@ -2120,7 +2120,7 @@ CollapsibleSection {
     id: secDiagnostic
     objectName: "secDiagnostic"
     width: parent.width
-    title: "Diagnostic & sauvegardes"
+    title: I18n.t("cfg.sec.diag")
     summary: (bloc.diagServices.length > 0
         ? (bloc.diagServices.filter(s => s.active).length + "/" + bloc.diagServices.length + " services actifs")
         : "Services · Journaux · Backups HQ")

@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
+import "."
 
 // ════════════════════════════════════════════════════════════════════════════
 // SYSTEM CONFIGURATION PANEL (config_panel.qml)
@@ -261,7 +262,7 @@ Rectangle {
 
     // Index d'ancres : une entrée par réglage notable. Le champ redirige vers
     // l'onglet et la section, puis fait défiler jusqu'à la ligne ciblée.
-    readonly property var tabLabels: ["Apparence", "Barre & Îlot", "Bureau", "Système", "Services"]
+    readonly property var tabLabels: [I18n.t("config.tab.appearance"), I18n.t("config.tab.bar_island"), I18n.t("config.tab.desktop"), I18n.t("config.tab.system"), I18n.t("config.tab.services")]
 
     readonly property var searchIndex: [
         { label: "Thème de l'écran de connexion", words: "connexion greeter sddm ecran login theme de connexion",
@@ -1602,7 +1603,7 @@ Rectangle {
         height: 30
 
         Text {
-            text: "AetherShell · Réglages · " + root.hostName + ""
+            text: I18n.t("config.title") + " · " + root.hostName + ""
             color: Theme.fg
             font.pixelSize: Theme.textLg
             font.bold: true
@@ -1719,7 +1720,7 @@ Rectangle {
             visible: searchInput.text === ""
             anchors.left: searchInput.left
             anchors.verticalCenter: parent.verticalCenter
-            text: "Rechercher un réglage…"
+            text: I18n.t("config.search_placeholder")
             color: Qt.alpha(Theme.fg, 0.4)
             font.pixelSize: Theme.textSm
         }

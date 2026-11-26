@@ -44,7 +44,7 @@ Item {
     // « Not charging » à 57 % n'est pas une panne quand le plafond est 60 % :
     // c'est la limite atteinte. Le noyau ne fait pas la différence, l'applet si.
     readonly property string batEtatAffiche:
-        (batLimite && batPourcent >= batPlafond - 1) ? "limite atteinte" : batEtat
+        (batLimite && batPourcent >= batPlafond - 1) ? I18n.t("battery.limit_reached") : batEtat
 
     // Icône du bouton : la batterie quand elle existe (et son état), sinon le
     // rétroéclairage, sinon le contour de batterie — une tour garde ainsi une
@@ -198,7 +198,7 @@ Item {
                     Text {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Énergie"
+                        text: I18n.t("energy.title")
                         color: Theme.fg
                         font.pixelSize: Theme.textMd
                         font.bold: true
@@ -225,7 +225,7 @@ Item {
                 Text {
                     width: parent.width
                     visible: root.vide
-                    text: "Cette machine n'a ni batterie ni rétroéclairage : rien à régler ici."
+                    text: I18n.t("energy.none")
                     color: Qt.alpha(Theme.fg, 0.6)
                     font.pixelSize: Theme.textXs
                     wrapMode: Text.WordWrap
@@ -270,7 +270,7 @@ Item {
                     Text {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Limiter la charge à " + root.batPlafond + " % (santé)"
+                        text: I18n.t("battery.limit_label").replace("{pct}", root.batPlafond)
                         color: Qt.alpha(Theme.fg, 0.9)
                         font.pixelSize: Theme.textXs
                     }

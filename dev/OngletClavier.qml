@@ -21,15 +21,79 @@ Column {
     width: mainFlickable ? mainFlickable.width : 0
 
     readonly property var sections: ({
+        "clavier_langue": secLangue,
         "clavier_disposition": secClavier,
         "clavier_binds": secBinds
     })
 
     readonly property var cibles: ({
+        "langRow": langRow,
         "kbdRow": kbdRow,
         "bindsCol": bindsCol
     })
 spacing: 10
+
+// Tiroir : langue de l'interface (FR / EN / ES / DE).
+CollapsibleSection {
+    id: secLangue
+    objectName: "secLangue"
+    title: I18n.t("lang.title")
+    summary: I18n.t("lang.summary")
+    icon: "globe"
+    expanded: root.sectionOpen("clavier_langue", false)
+    onToggled: expanded => {
+        root.setPanelSection("clavier_langue", expanded)
+        if (root.panelAccordion && expanded) root.collapseOthers(secLangue)
+    }
+
+    Text {
+        width: parent.width
+        text: I18n.t("lang.description")
+        color: Qt.alpha(Theme.fg, 0.72)
+        font.pixelSize: Theme.textXs
+        wrapMode: Text.WordWrap
+    }
+
+    Row {
+        id: langRow
+        width: parent.width
+        spacing: 8
+
+        Repeater {
+            model: I18n.languesDisponibles
+
+            Rectangle {
+                required property var modelData
+                readonly property bool sel: I18n.langueActive === modelData.code
+                width: Math.floor((langRow.width - 24) / 4)
+                height: 36
+                radius: Theme.globalRadius
+                color: sel ? Theme.accent : (langMa.containsMouse ? Qt.alpha(Theme.accent, 0.16) : Qt.alpha(Theme.surfaceVariant, 0.45))
+                border.color: sel ? Theme.accent : Qt.alpha(Theme.fg, 0.12)
+                border.width: 1
+
+                Text {
+                    anchors.centerIn: parent
+                    text: parent.modelData.label
+                    color: parent.sel ? Theme.bg : Theme.fg
+                    font.pixelSize: Theme.textSm
+                    font.bold: parent.sel
+                }
+
+                MouseArea {
+                    id: langMa
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        Theme.langue = parent.modelData.code
+                        root.runConfigCmd(["style", "langue", parent.modelData.code])
+                    }
+                }
+            }
+        }
+    }
+}
 
 // Top bar: Current Keyboard Layout + Button to reopen First-Run Keyboard Selector
 // Tiroir : disposition active et changement de clavier.

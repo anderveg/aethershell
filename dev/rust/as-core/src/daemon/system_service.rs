@@ -360,8 +360,13 @@ fn connect_wifi(ssid: &str, password: &str) -> Value {
             run_cmd("nmcli", &["dev", "wifi", "connect", ssid])
         }
     };
+    let lang = crate::common::i18n::active_lang();
     match res {
-        Some(o) if o.status.success() => json!({ "success": true, "ssid": ssid, "message": "Connecté" }),
+        Some(o) if o.status.success() => json!({
+            "success": true,
+            "ssid": ssid,
+            "message": crate::common::i18n::tr(lang, "Connecté", "Connected", "Conectado", "Verbunden")
+        }),
         Some(o) => {
             let msg = String::from_utf8_lossy(&o.stderr).trim().to_string();
             let err = if msg.is_empty() {
@@ -369,9 +374,14 @@ fn connect_wifi(ssid: &str, password: &str) -> Value {
             } else {
                 msg
             };
-            json!({ "success": false, "ssid": ssid, "message": if err.is_empty() { "Échec de connexion".to_string() } else { err } })
+            let fallback = crate::common::i18n::tr(lang, "Échec de connexion", "Connection failed", "Error de conexión", "Verbindung fehlgeschlagen");
+            json!({ "success": false, "ssid": ssid, "message": if err.is_empty() { fallback.to_string() } else { err } })
         }
-        None => json!({ "success": false, "ssid": ssid, "message": "nmcli introuvable" }),
+        None => json!({
+            "success": false,
+            "ssid": ssid,
+            "message": crate::common::i18n::tr(lang, "nmcli introuvable", "nmcli not found", "nmcli no encontrado", "nmcli nicht gefunden")
+        }),
     }
 }
 

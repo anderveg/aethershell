@@ -239,7 +239,7 @@ spacing: 11
 CollapsibleSection {
     id: secBarres
     objectName: "secBarres"
-    title: "Barres du shell"
+    title: I18n.t("cfg.sec.shell_bars")
     summary: "Hauteur " + Theme.barHeight + " · gaps " + Theme.gutterH + "/" + Theme.gutterV + " · " + (root.barGapsTransparent ? "îlots transparents" : "capsule continue")
     icon: "monitor"
     expanded: root.sectionOpen("quickshell_barres", false)
@@ -636,7 +636,7 @@ CollapsibleSection {
 CollapsibleSection {
     id: secApplets
     objectName: "secApplets"
-    title: "Applets de la barre"
+    title: I18n.t("cfg.sec.bar_applets")
     summary: root.appletRows.length + " applets"
     icon: "widgets"
     expanded: root.sectionOpen("quickshell_applets", false)
@@ -1468,7 +1468,7 @@ CollapsibleSection {
     CollapsibleSection {
         id: secVisualiseur
         objectName: "secVisualiseur"
-        title: "Visualiseur audio"
+        title: I18n.t("cfg.sec.visualizer")
         summary: (root.vizActif ? "actif" : "coupé") + " · " + (root.vizStyle === "barres" ? "barres" : "onde")
         icon: "music"
         expanded: root.sectionOpen("quickshell_visualiseur", false)

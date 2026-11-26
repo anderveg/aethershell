@@ -27,13 +27,13 @@ Item {
 
     readonly property var tabsModel: {
         let base = [
-            { idx: 0, glyph: "widgets", label: "Contrôles",    src: "IslandTabControles.qml" },
-            { idx: 1, glyph: "bell",    label: "Productivité", src: "IslandTabAlertes.qml" },
-            { idx: 2, glyph: "cog",     label: "Système",      src: "IslandTabSysteme.qml" },
-            { idx: 3, glyph: "palette", label: "Apparence", src: "IslandTabApparence.qml" }
+            { idx: 0, glyph: "widgets", label: I18n.t("island.tab.controls"),    src: "IslandTabControles.qml" },
+            { idx: 1, glyph: "bell",    label: I18n.t("island.tab.productivity"), src: "IslandTabAlertes.qml" },
+            { idx: 2, glyph: "cog",     label: I18n.t("island.tab.system"),      src: "IslandTabSysteme.qml" },
+            { idx: 3, glyph: "palette", label: I18n.t("island.tab.appearance"), src: "IslandTabApparence.qml" }
         ]
         if (Theme.ilotProjetsActif) {
-            base.push({ idx: 4, glyph: "columns-3", label: "Projets", src: "IlotProjets.qml" })
+            base.push({ idx: 4, glyph: "columns-3", label: I18n.t("island.tab.projects"), src: "IlotProjets.qml" })
         }
         return base
     }
@@ -42,6 +42,17 @@ Item {
     property string navZone: "rail" // "rail" | "contenu"
     property int navIndex: 0
     property var navFocusRect: ({ x: 0, y: 0, w: 0, h: 0, visible: false })
+
+    function findFlickableAncestor(item) {
+        let p = item ? item.parent : null
+        while (p && p !== contentArea) {
+            if (p.hasOwnProperty("contentY") && p.hasOwnProperty("contentHeight") && p.hasOwnProperty("contentItem")) {
+                return p
+            }
+            p = p.parent
+        }
+        return null
+    }
 
     function collectFocusables(item, out) {
         if (!item || !item.visible) return
@@ -53,8 +64,8 @@ Item {
             let isMouseArea = (typeof c.clicked === "function") && c.hasOwnProperty("containsMouse")
             if (isMouseArea && c.enabled && c.width > 6 && c.height > 6) {
                 let p = c.mapToItem(contentArea, 0, 0)
-                if (p.x >= -4 && p.y >= -4 && p.x < contentArea.width && p.y < contentArea.height) {
-                    out.push({ item: c, x: p.x, y: p.y, w: c.width, h: c.height })
+                if (p.x >= -4 && p.x < contentArea.width) {
+                    out.push({ item: c, flick: findFlickableAncestor(c), x: p.x, y: p.y, w: c.width, h: c.height })
                 }
             }
             collectFocusables(c, out)
@@ -71,23 +82,102 @@ Item {
         return out
     }
 
+    function findVerticalNeighbor(list, curIdx, dir) {
+        if (list.length === 0) return -1
+        let cur = list[Math.max(0, Math.min(list.length - 1, curIdx))]
+        let curCx = cur.x + cur.w / 2
+        let curCy = cur.y + cur.h / 2
+        let bestRowDy = 1e9
+        let candidates = []
+        for (let i = 0; i < list.length; i++) {
+            let it = list[i]
+            let cy = it.y + it.h / 2
+            let dy = (cy - curCy) * dir
+            if (dy <= 16) continue
+            if (dy < bestRowDy) bestRowDy = dy
+            candidates.push({ idx: i, dy: dy, cx: it.x + it.w / 2 })
+        }
+        if (candidates.length === 0) return -1
+        let bestIdx = -1
+        let bestDx = 1e9
+        for (let j = 0; j < candidates.length; j++) {
+            let c = candidates[j]
+            if (c.dy <= bestRowDy + 20) {
+                let dx = Math.abs(c.cx - curCx)
+                if (dx < bestDx) {
+                    bestDx = dx
+                    bestIdx = c.idx
+                }
+            }
+        }
+        return bestIdx
+    }
+
+    function ensureVisibleInFlick(f) {
+        if (!f || !f.flick || !f.item) return
+        let fl = f.flick
+        let pos = f.item.mapToItem(fl.contentItem, 0, 0)
+        let top = pos.y
+        let bottom = pos.y + f.h
+        let maxY = Math.max(0, fl.contentHeight - fl.height)
+        if (top < fl.contentY + 8) {
+            fl.contentY = Math.max(0, top - 8)
+        } else if (bottom > fl.contentY + fl.height - 8) {
+            fl.contentY = Math.min(maxY, bottom - fl.height + 8)
+        }
+    }
+
+    property var activeFlick: null
+    property var activeFocusItem: null
+    property real activeFocusW: 0
+    property real activeFocusH: 0
+
+    function updateOverlayFromActiveItem() {
+        if (!Theme.islandNavActive || root.navZone !== "contenu" || !root.activeFocusItem) {
+            root.navFocusRect = { x: 0, y: 0, w: 0, h: 0, visible: false }
+            return
+        }
+        let p = root.activeFocusItem.mapToItem(contentArea, 0, 0)
+        let vis = (p.y + root.activeFocusH > 0) && (p.y < contentArea.height)
+        root.navFocusRect = { x: p.x, y: p.y, w: root.activeFocusW, h: root.activeFocusH, visible: vis }
+    }
+
+    Connections {
+        target: root.activeFlick
+        function onContentYChanged() {
+            root.updateOverlayFromActiveItem()
+        }
+    }
+
     function syncFocusRect() {
         if (!Theme.islandNavActive || root.navZone !== "contenu") {
+            root.activeFlick = null
+            root.activeFocusItem = null
             root.navFocusRect = { x: 0, y: 0, w: 0, h: 0, visible: false }
             return
         }
         let list = getFocusables()
         if (list.length === 0) {
+            root.activeFlick = null
+            root.activeFocusItem = null
             root.navFocusRect = { x: 0, y: 0, w: 0, h: 0, visible: false }
             return
         }
         let idx = Math.max(0, Math.min(list.length - 1, root.navIndex))
         root.navIndex = idx
         let f = list[idx]
-        root.navFocusRect = { x: f.x, y: f.y, w: f.w, h: f.h, visible: true }
+        ensureVisibleInFlick(f)
+        root.activeFlick = f.flick
+        root.activeFocusItem = f.item
+        root.activeFocusW = f.w
+        root.activeFocusH = f.h
+        updateOverlayFromActiveItem()
     }
 
     function handleNav(action) {
+        if (Theme.islandPanelTab === 0 && tabLoader.item && tabLoader.item.sessionMenuOpen) {
+            return
+        }
         let list = getFocusables()
         if (action === "gauche" || action === "left") {
             if (root.navZone === "rail") {
@@ -106,15 +196,18 @@ Item {
                 root.navZone = "contenu"
                 root.navIndex = 0
             } else if (root.navZone === "contenu" && list.length > 0) {
-                root.navIndex = (root.navIndex - 1 + list.length) % list.length
+                let nxtUp = findVerticalNeighbor(list, root.navIndex, -1)
+                if (nxtUp >= 0) root.navIndex = nxtUp
+                else root.navZone = "rail"
             }
         } else if (action === "bas" || action === "down") {
-            if (root.navZone === "contenu") {
-                if (list.length > 0 && root.navIndex < list.length - 1) {
-                    root.navIndex += 1
-                } else {
-                    root.navZone = "rail"
-                }
+            if (root.navZone === "rail" && list.length > 0) {
+                root.navZone = "contenu"
+                root.navIndex = 0
+            } else if (root.navZone === "contenu") {
+                let nxtDown = findVerticalNeighbor(list, root.navIndex, 1)
+                if (nxtDown >= 0) root.navIndex = nxtDown
+                else root.navZone = "rail"
             }
         } else if (action === "valider" || action === "enter") {
             if (root.navZone === "rail" && list.length > 0) {
@@ -220,7 +313,7 @@ Item {
                 }
 
                 Text {
-                    text: ShellState.notifCount + " alerte" + (ShellState.notifCount > 1 ? "s" : "") + (ShellState.doNotDisturb ? " · N.P.D." : "")
+                    text: ShellState.notifCount + " " + (ShellState.notifCount > 1 ? I18n.t("island.alert_many") : I18n.t("island.alert_one")) + (ShellState.doNotDisturb ? " · N.P.D." : "")
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.textXs
                     color: Qt.alpha(Theme.fg, 0.65)
@@ -236,7 +329,7 @@ Item {
                     Text {
                         id: notesBtnLbl
                         anchors.centerIn: parent
-                        text: "Notes"
+                        text: I18n.t("island.notes")
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.text2xs
                         font.weight: Font.DemiBold

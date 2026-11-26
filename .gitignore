@@ -53,6 +53,8 @@ dev/core/*_cache.json
 *.md
 !README.md
 !**/README.md
+!README.*.md
+!**/README.*.md
 !CHANGELOG.md
 !CHANGELOG.en.md
 

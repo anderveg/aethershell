@@ -561,7 +561,11 @@ fn appliquer(nom: &str, seche: bool) -> Value {
 
     json!({
         "ok": true,
-        "message": format!("Profil « {nom} » appliqué"),
+        "message": format!(
+            "{} « {nom} » {}",
+            crate::common::i18n::tr(crate::common::i18n::active_lang(), "Profil", "Profile", "Perfil", "Profil"),
+            crate::common::i18n::tr(crate::common::i18n::active_lang(), "appliqué", "applied", "aplicado", "angewendet")
+        ),
         "profil": resume(nom, &profil),
         "canaux": canaux,
     })
@@ -570,7 +574,14 @@ fn appliquer(nom: &str, seche: bool) -> Value {
 fn supprimer(nom: &str) -> Value {
     let mut profils = lire_profils();
     if profils.remove(nom).is_none() {
-        return json!({ "ok": false, "error": format!("Profil « {nom} » introuvable") });
+        return json!({
+            "ok": false,
+            "error": format!(
+                "{} « {nom} » {}",
+                crate::common::i18n::tr(crate::common::i18n::active_lang(), "Profil", "Profile", "Perfil", "Profil"),
+                crate::common::i18n::tr(crate::common::i18n::active_lang(), "introuvable", "not found", "no encontrado", "nicht gefunden")
+            )
+        });
     }
     if profils.get(CLE_ACTIF).and_then(|v| v.as_str()) == Some(nom) {
         profils.remove(CLE_ACTIF);
@@ -578,13 +589,29 @@ fn supprimer(nom: &str) -> Value {
     if let Err(e) = ecrire_profils(&profils) {
         return json!({ "ok": false, "error": e });
     }
-    json!({ "ok": true, "message": format!("Profil « {nom} » supprimé") })
+    json!({
+        "ok": true,
+        "message": format!(
+            "{} « {nom} » {}",
+            crate::common::i18n::tr(crate::common::i18n::active_lang(), "Profil", "Profile", "Perfil", "Profil"),
+            crate::common::i18n::tr(crate::common::i18n::active_lang(), "supprimé", "deleted", "eliminado", "gelöscht")
+        )
+    })
 }
 
 fn annuler() -> Value {
     let profils = lire_profils();
     let Some(avant) = profils.get(CLE_AVANT).cloned() else {
-        return json!({ "ok": false, "error": "Aucun état d'avant enregistré" });
+        return json!({
+            "ok": false,
+            "error": crate::common::i18n::tr(
+                crate::common::i18n::active_lang(),
+                "Aucun état d'avant enregistré",
+                "No previous state saved",
+                "No hay estado anterior guardado",
+                "Kein vorheriger Zustand gespeichert"
+            )
+        });
     };
     let style = style_actuel();
     match ecrire_style_du_profil(&avant, &style) {

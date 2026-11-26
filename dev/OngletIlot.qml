@@ -56,7 +56,7 @@ Column {
     CollapsibleSection {
         id: secIlotConfig
         width: parent.width
-        title: "Comportement de l'îlot"
+        title: I18n.t("cfg.sec.island_behavior")
         summary: (Theme.barStyle === "island" ? "Mode actif" : "Mode barre classique")
             + " · hauteur " + Theme.barHeight + " px · anim " + Theme.panelAnimDuration + " ms"
         expanded: root ? root.sectionOpen("ilot_config", true) : true
@@ -306,7 +306,7 @@ Column {
     CollapsibleSection {
         id: secIlotIndicateurs
         width: parent.width
-        title: "Indicateurs de la pilule"
+        title: I18n.t("cfg.sec.island_indicators")
         summary: "Masqué · Repos · Étendu · Les deux"
         expanded: root ? root.sectionOpen("ilot_indicateurs", true) : true
         onToggled: {
@@ -376,7 +376,7 @@ Column {
     CollapsibleSection {
         id: secIlotApplets
         width: parent.width
-        title: "Applets de l'îlot"
+        title: I18n.t("cfg.sec.island_applets")
         summary: "Glisser-déposer · Îlot & Coins"
         expanded: root ? root.sectionOpen("ilot_applets", false) : false
         onToggled: expanded => {

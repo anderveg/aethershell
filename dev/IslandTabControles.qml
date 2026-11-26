@@ -70,6 +70,65 @@ Item {
     property var audioSinks: []
     property string defaultSinkName: ""
 
+    property bool sessionMenuOpen: false
+    property int sessionMenuIndex: 0
+    readonly property var sessionActions: [
+        { glyph: "lock",          label: I18n.t("power.lock"),     cmd: ["sh", "-c", "hyprlock || loginctl lock-session"], danger: false },
+        { glyph: "weather-night", label: I18n.t("power.sleep"),    cmd: ["systemctl", "suspend"], danger: false },
+        { glyph: "restart",       label: I18n.t("power.restart"),  cmd: ["systemctl", "reboot"], danger: true },
+        { glyph: "power",         label: I18n.t("power.shutdown"), cmd: ["systemctl", "poweroff"], danger: true },
+        { glyph: "logout",        label: I18n.t("power.logout"),   cmd: ["sh", "-c", "hyprctl dispatch 'hl.dsp.exit()' || hyprctl dispatch exit"], danger: false }
+    ]
+
+    function ouvrirMenuSession() {
+        sessionMenuIndex = 0
+        sessionMenuOpen = true
+        Theme.islandNavActive = true
+        ShellState.setSubmap("aether-nav")
+    }
+
+    function fermerMenuSession() {
+        if (!sessionMenuOpen) return
+        sessionMenuOpen = false
+        Theme.islandNavActive = false
+        ShellState.setSubmap("reset")
+    }
+
+    Connections {
+        target: Theme
+        function onIslandPanelOpenChanged() {
+            if (!Theme.islandPanelOpen) root.fermerMenuSession()
+        }
+        function onIslandPanelTabChanged() {
+            if (Theme.islandPanelTab !== 0) root.fermerMenuSession()
+        }
+    }
+
+    Connections {
+        target: ShellState
+        function onIslandNavRequested(action) {
+            if (!root.sessionMenuOpen) return
+            const n = root.sessionActions.length
+            if (action === "gauche" || action === "left" || action === "haut" || action === "up") {
+                root.sessionMenuIndex = (root.sessionMenuIndex - 1 + n) % n
+            } else if (action === "droite" || action === "right" || action === "bas" || action === "down") {
+                root.sessionMenuIndex = (root.sessionMenuIndex + 1) % n
+            } else if (action === "valider" || action === "enter") {
+                const act = root.sessionActions[root.sessionMenuIndex]
+                root.fermerMenuSession()
+                Theme.islandPanelOpen = false
+                if (act) {
+                    actionProc.command = act.cmd
+                    actionProc.running = true
+                }
+            } else if (action === "quitter" || action === "fermer" || action === "close") {
+                root.fermerMenuSession()
+            }
+        }
+    }
+
+    Component.onDestruction: root.fermerMenuSession()
+
     property var scratchpadWindows: []
 
     function labelProfil(p) {
@@ -765,64 +824,142 @@ Item {
                 }
             }
 
-            // Tuile 6 : Session & Énergie (mini-boutons directs)
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Math.max(42, Theme.touchTargetMin)
-                radius: Math.max(10, Math.round(Theme.pillRadius * 0.65))
-                color: Qt.alpha(Theme.surfaceVariant, 0.34)
-                border.width: 1
-                border.color: Qt.alpha(Theme.fg, 0.08)
+            // Tuile 6 : Alimentation / Session (ouvre le menu complet avec navigation flèches)
+            QuickTile {
+                glyphName: "power"
+                title: I18n.t("power.session")
+                subtitle: root.sessionMenuOpen ? I18n.t("power.menu_hint") : I18n.t("power.menu_open")
+                active: root.sessionMenuOpen
+                hasChevron: true
+                onToggled: {
+                    if (root.sessionMenuOpen) root.fermerMenuSession()
+                    else root.ouvrirMenuSession()
+                }
+                onChevronClicked: {
+                    if (root.sessionMenuOpen) root.fermerMenuSession()
+                    else root.ouvrirMenuSession()
+                }
+            }
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 10
+            // Menu Session / Alimentation (souris + submap flèches aether-nav)
+            Rectangle {
+                id: sessionMenuBox
+                Layout.columnSpan: 2
+                Layout.fillWidth: true
+                visible: root.sessionMenuOpen
+                Layout.preferredHeight: visible ? (sessionMenuCol.implicitHeight + 16) : 0
+                clip: true
+                radius: Math.max(12, Math.round(Theme.pillRadius * 0.72))
+                color: Qt.alpha(Theme.surfaceVariant, 0.42)
+                border.width: 1
+                border.color: Qt.alpha(Theme.accent, 0.45)
+
+                ColumnLayout {
+                    id: sessionMenuCol
+                    anchors {
+                        left: parent.left; right: parent.right; top: parent.top
+                        margins: 8
+                    }
                     spacing: 6
 
-                    Text {
+                    RowLayout {
                         Layout.fillWidth: true
-                        text: "Session"
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.textSm
-                        font.weight: Font.DemiBold
-                        color: Theme.fg
-                    }
+                        spacing: 6
 
-                    Repeater {
-                        model: [
-                            { glyph: "lock", tip: "Verrouiller", cmd: ["loginctl", "lock-session"], danger: false },
-                            { glyph: "weather-night", tip: "Veille", cmd: ["systemctl", "suspend"], danger: false },
-                            { glyph: "restart", tip: "Redémarrer", cmd: ["systemctl", "reboot"], danger: true },
-                            { glyph: "power", tip: "Éteindre", cmd: ["systemctl", "poweroff"], danger: true }
-                        ]
-                        delegate: Rectangle {
-                            required property var modelData
-                            Layout.preferredWidth: TabletMode.active ? 38 : 32
-                            Layout.preferredHeight: TabletMode.active ? 38 : 32
-                            radius: 8
-                            color: sessMa.containsMouse
-                                ? Qt.alpha(modelData.danger ? Theme.error : Theme.accent, 0.25)
-                                : Qt.alpha(Theme.fg, 0.08)
+                        Icon {
+                            glyph: "power"
+                            size: Theme.iconSm
+                            color: Theme.accent
+                        }
 
-                            Icon {
+                        Text {
+                            Layout.fillWidth: true
+                            text: I18n.t("power.session") + "  ·  " + I18n.t("power.menu_hint")
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.textXs
+                            color: Qt.alpha(Theme.fg, 0.72)
+                            elide: Text.ElideRight
+                        }
+
+                        Rectangle {
+                            width: 22; height: 22; radius: 6
+                            color: closeSessMa.containsMouse ? Qt.alpha(Theme.fg, 0.14) : "transparent"
+                            Text {
                                 anchors.centerIn: parent
-                                glyph: parent.modelData.glyph
-                                size: Theme.iconSm
-                                color: sessMa.containsMouse
-                                    ? (parent.modelData.danger ? Theme.error : Theme.accent)
-                                    : Theme.fg
+                                text: "✕"
+                                font.pixelSize: Theme.textXs
+                                color: Qt.alpha(Theme.fg, 0.72)
                             }
-
                             MouseArea {
-                                id: sessMa
+                                id: closeSessMa
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    Theme.islandPanelOpen = false
-                                    actionProc.command = parent.modelData.cmd
-                                    actionProc.running = true
+                                onClicked: root.fermerMenuSession()
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        Repeater {
+                            model: root.sessionActions
+
+                            delegate: Rectangle {
+                                id: sessItem
+                                required property var modelData
+                                required property int index
+                                readonly property bool selected: root.sessionMenuIndex === index
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: TabletMode.active ? 64 : 56
+                                radius: 10
+                                color: selected
+                                    ? Qt.alpha(modelData.danger ? Theme.error : Theme.accent, 0.24)
+                                    : Qt.alpha(Theme.surfaceVariant, 0.35)
+                                border.width: selected ? 1.5 : 1
+                                border.color: selected
+                                    ? (modelData.danger ? Theme.error : Theme.accent)
+                                    : Qt.alpha(Theme.fg, 0.08)
+
+                                ColumnLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 4
+                                    width: parent.width - 8
+
+                                    Icon {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        glyph: sessItem.modelData.glyph
+                                        size: Theme.iconMd
+                                        color: sessItem.selected
+                                            ? (sessItem.modelData.danger ? Theme.error : Theme.accent)
+                                            : Theme.fg
+                                    }
+
+                                    Text {
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        text: sessItem.modelData.label
+                                        font.family: Theme.fontUi
+                                        font.pixelSize: Theme.textXs
+                                        font.weight: sessItem.selected ? Font.DemiBold : Font.Normal
+                                        color: sessItem.selected ? Theme.fg : Qt.alpha(Theme.fg, 0.72)
+                                        elide: Text.ElideRight
+                                    }
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onEntered: root.sessionMenuIndex = sessItem.index
+                                    onClicked: {
+                                        root.fermerMenuSession()
+                                        Theme.islandPanelOpen = false
+                                        actionProc.command = sessItem.modelData.cmd
+                                        actionProc.running = true
+                                    }
                                 }
                             }
                         }

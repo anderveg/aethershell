@@ -75,7 +75,7 @@ Item {
 
             Text {
                 Layout.fillWidth: true
-                text: "PRODUCTIVITÉ"
+                text: I18n.t("island.tab.prod")
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.textMd
                 font.weight: Font.Bold
@@ -106,7 +106,7 @@ Item {
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Presse-papiers"
+                        text: I18n.t("island.tab.clipboard")
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.textXs
                         color: Theme.islandSidePanel === "clipboard" ? Theme.accent : Theme.fg
@@ -173,7 +173,7 @@ Item {
                 Text {
                     id: clearLbl
                     anchors.centerIn: parent
-                    text: "Tout effacer"
+                    text: I18n.t("island.tab.clear_all")
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.textXs
                     color: ShellState.notifCount > 0 ? Theme.error : Theme.fg
@@ -210,7 +210,7 @@ Item {
             }
 
             Text {
-                text: "Historique ↗"
+                text: I18n.t("island.tab.history")
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.textXs
                 color: histMa.containsMouse ? Theme.accent : Qt.alpha(Theme.fg, 0.7)

@@ -1,6 +1,6 @@
 # AetherShell
 
-[Lire en français](../README.md)
+[FR](../README.md) · [EN](README.en.md) · [ES](README.es.md) · [DE](README.de.md)
 
 A desktop environment for [Hyprland](https://hyprland.org), featuring an island-style bar, modular panels, desktop widgets, and everyday tools, written in QML/Qt and powered by [Quickshell](https://quickshell.org).
 

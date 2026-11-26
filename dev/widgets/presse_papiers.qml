@@ -116,7 +116,7 @@ Item {
 
             Text {
                 width: parent.width - Math.round(40 * root.echelle)
-                text: "presse-papiers"
+                text: I18n.t("clipboard.title")
                 color: Qt.alpha(Theme.fg, 0.5)
                 font.pixelSize: Math.round(10 * root.echelle)
             }
@@ -166,7 +166,7 @@ Item {
 
         Text {
             visible: root.charge && root.entrees.length === 0
-            text: "historique vide"
+            text: I18n.t("clipboard.empty")
             color: Qt.alpha(Theme.fg, 0.4)
             font.pixelSize: Math.round(9.5 * root.echelle)
         }
@@ -180,7 +180,7 @@ Item {
 
             Text {
                 anchors.centerIn: parent
-                text: "Vider l'historique"
+                text: I18n.t("clipboard.clear")
                 color: viderSouris.containsMouse ? Theme.bg : Qt.alpha(Theme.fg, 0.7)
                 font.pixelSize: Math.round(Theme.textXs * 0.9 * root.echelle)
                 font.bold: true

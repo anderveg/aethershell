@@ -46,11 +46,11 @@ Item {
     // Ordre de la référence : verrouiller, veiller, redémarrer, éteindre,
     // fermer la session. Les deux gestes destructifs restent en rouge.
     readonly property var gestes: [
-        { icon: "lock",    label: "Verrouiller", cmd: "hyprlock || loginctl lock-session", danger: false },
-        { icon: "sleep",   label: "Veille",      cmd: "systemctl suspend", danger: false },
-        { icon: "restart", label: "Redémarrer",  cmd: "systemctl reboot", danger: true },
-        { icon: "power",   label: "Éteindre",    cmd: "systemctl poweroff", danger: true },
-        { icon: "logout",  label: "Déconnexion", cmd: "hyprctl dispatch 'hl.dsp.exit()' || hyprctl dispatch exit", danger: false }
+        { icon: "lock",    label: I18n.t("power.lock"),     cmd: "hyprlock || loginctl lock-session", danger: false },
+        { icon: "sleep",   label: I18n.t("power.sleep"),    cmd: "systemctl suspend", danger: false },
+        { icon: "restart", label: I18n.t("power.restart"),  cmd: "systemctl reboot", danger: true },
+        { icon: "power",   label: I18n.t("power.shutdown"), cmd: "systemctl poweroff", danger: true },
+        { icon: "logout",  label: I18n.t("power.logout"),   cmd: "hyprctl dispatch 'hl.dsp.exit()' || hyprctl dispatch exit", danger: false }
     ]
 
     // Le nom de l'hôte est lu une fois au chargement : `running: true` est
@@ -155,7 +155,7 @@ Item {
                     Text {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "Session"
+                        text: I18n.t("power.session")
                         color: Theme.fg
                         font.pixelSize: Theme.textMd
                         font.bold: true

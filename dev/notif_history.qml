@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import "."
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -306,7 +307,7 @@ Item {
                         }
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "Historique"
+                            text: I18n.t("notif_history.title")
                             color: Theme.fg
                             font.pixelSize: Theme.textLg
                             font.bold: true
@@ -387,7 +388,7 @@ Item {
                         Text {
                             id: clearLabel
                             anchors.centerIn: parent
-                            text: "Tout effacer"
+                            text: I18n.t("notif_history.clear_all")
                             color: clearMa.containsMouse ? Theme.error : Qt.alpha(Theme.fg, 0.55)
                             font.pixelSize: Theme.textXs
                             Behavior on color { ColorAnimation { duration: 120 } }
@@ -599,7 +600,7 @@ Item {
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "Aucune notification dans l'historique"
+                    text: I18n.t("notif_history.empty")
                     color: Qt.alpha(Theme.fg, 0.55)
                     font.pixelSize: Theme.textSm
                 }

@@ -13,7 +13,7 @@ QtObject {
     property string activeSubmap: ""
 
     function setSubmap(name) {
-        if (Hyprland.usingLua) {
+        if (Hyprland.usingLua !== false) {
             Hyprland.dispatch('hl.dsp.submap("' + name + '")')
         } else {
             Hyprland.dispatch("submap " + name)

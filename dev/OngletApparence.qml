@@ -66,7 +66,7 @@ Column {
 CollapsibleSection {
     id: secProfils
     objectName: "secProfils"
-    title: "Profils"
+    title: I18n.t("cfg.sec.profiles")
     summary: ThemeProfiles.dernierApplique !== ""
         ? ("Appliqué : " + ThemeProfiles.dernierApplique)
         : (ThemeProfiles.profils.length > 0
@@ -595,7 +595,7 @@ CollapsibleSection {
 CollapsibleSection {
     id: secTheme
     objectName: "secTheme"
-    title: "Palette & mode"
+    title: I18n.t("cfg.sec.palette")
     summary: String(Theme.paletteEtiquettes[Theme.activeTheme] || Theme.activeTheme)
     icon: "palette"
     expanded: root.sectionOpen("esthetique_theme", false)
@@ -973,7 +973,7 @@ Row {
 CollapsibleSection {
     id: secFonds
     objectName: "secFonds"
-    title: "Fond d'écran"
+    title: I18n.t("cfg.sec.wallpaper")
     summary: root.resumeChemin(root.wallpaperDir)
     icon: "image"
     expanded: root.sectionOpen("esthetique_fonds", false)
@@ -1505,7 +1505,7 @@ onValueModified: newVal => root.runConfigCmd([
 // 3. Desktop Aspect: Gaps, Borders, Rounding, Opacity, Blur, Bar (catégorie technique)
 CollapsibleSection {
     id: secAspect
-    title: "Fenêtres Hyprland"
+    title: I18n.t("cfg.sec.hypr_windows")
     summary: "Gaps " + root.gapsIn + "/" + root.gapsOut + " · " + (root.blurEnabled ? "flou actif" : "flou coupé")
     icon: "cog"
     expanded: root.sectionOpen("esthetique_aspect", false)
@@ -1842,7 +1842,7 @@ elide: Text.ElideRight
 CollapsibleSection {
     id: secBarre
     objectName: "secBarre"
-    title: "Surfaces du shell"
+    title: I18n.t("cfg.sec.shell_surfaces")
     summary: "Opacité " + Math.round(Theme.shellOpacity * 100) + " % · Rayon " + Theme.globalRadius
     icon: "monitor"
     expanded: root.sectionOpen("quickshell_barre", false)
@@ -2024,7 +2024,7 @@ Text {
 CollapsibleSection {
     id: secIcones
     objectName: "secIcones"
-    title: "Icônes"
+    title: I18n.t("cfg.sec.icons")
     summary: (root && root.iconesEtat && root.iconesEtat.actif)
         ? ("Actif : " + root.iconesEtat.actif)
         : "Sélection et installation de packs d'icônes"
@@ -2153,7 +2153,7 @@ CollapsibleSection {
 CollapsibleSection {
     id: secCurseurs
     objectName: "secCurseurs"
-    title: "Curseurs"
+    title: I18n.t("cfg.sec.cursors")
     summary: (root && root.curseursEtat && root.curseursEtat.actif)
         ? ("Actif : " + root.curseursEtat.actif + " · " + root.curseursEtat.taille + " px")
         : "Thème et taille du pointeur"

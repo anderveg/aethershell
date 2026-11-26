@@ -1,4 +1,5 @@
 import QtQuick
+import "."
 import Quickshell
 import Quickshell.Io
 
@@ -116,7 +117,7 @@ Item {
 
             Text {
                 width: parent.width - Math.round(80 * echelle)
-                text: "Périphériques"
+                text: I18n.t("usb.title")
                 color: Qt.alpha(Theme.fg, 0.6)
                 font.pixelSize: Math.round(Theme.widgetLabel * 0.8 * echelle)
             }
@@ -125,7 +126,7 @@ Item {
                 width: Math.round(80 * echelle)
                 horizontalAlignment: Text.AlignRight
                 text: root.disques.length > 0
-                      ? root.disques.length + (root.disques.length > 1 ? " branchés" : " branché")
+                      ? root.disques.length + (root.disques.length > 1 ? I18n.t("usb.plugged_many") : I18n.t("usb.plugged_one"))
                       : ""
                 color: Qt.alpha(Theme.accent, 0.85)
                 font.pixelSize: Math.round(root.corps * 0.8 * echelle)
@@ -135,7 +136,7 @@ Item {
         Text {
             width: parent.width
             visible: root.disques.length === 0
-            text: "Aucun périphérique amovible branché."
+            text: I18n.t("usb.none")
             color: Qt.alpha(Theme.fg, 0.45)
             font.pixelSize: Math.round(root.corps * 0.9 * echelle)
             wrapMode: Text.WordWrap
