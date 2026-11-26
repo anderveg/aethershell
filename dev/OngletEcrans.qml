@@ -84,7 +84,7 @@ Column {
                         bloc.diagLogs = d.logs || []
                         bloc.diagBackups = d.backups || []
                     }
-                } catch (e) {}
+                } catch (e) { console.warn("OngletEcrans.qml:", e) }
             }
         }
     }
@@ -242,7 +242,7 @@ Column {
                     const d = JSON.parse(text.trim() || "{}")
                     bloc.rmbgInstalle = Boolean(d.rmbg)
                     if (d.ok === false) bloc.rmbgErreur = "Échec du téléchargement"
-                } catch (e) {}
+                } catch (e) { console.warn("OngletEcrans.qml:", e) }
             }
         }
     }

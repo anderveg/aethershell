@@ -128,7 +128,7 @@ Rectangle {
                     } else if (d && d.error) {
                         root.iconesMessage = String(d.error)
                     }
-                } catch (e) {}
+                } catch (e) { console.warn("config_panel.qml:", e) }
             }
         }
     }
@@ -1322,7 +1322,7 @@ Rectangle {
                     ConfigStore.nuitAllumee = d.allume === true
                     ConfigStore.nuitDe = String(d.de || "")
                     ConfigStore.nuitA = String(d.a || "")
-                } catch (e) {}
+                } catch (e) { console.warn("config_panel.qml:", e) }
                 root.refreshConfigState()
             }
         }
@@ -1366,7 +1366,7 @@ Rectangle {
                     ConfigStore.todoFichiers = d.fichiers || []
                     ConfigStore.todoFocus = String(d.focus || "")
                     ConfigStore.todoSurveillance = Boolean(d.surveillance)
-                } catch (e) { }
+                } catch (e) { console.warn("config_panel.qml:", e) }
             }
         }
     }
@@ -1452,7 +1452,7 @@ Rectangle {
         stdout: StdioCollector {
             onStreamFinished: {
                 let r = ({})
-                try { r = JSON.parse(text.trim()) } catch (e) {}
+                try { r = JSON.parse(text.trim()) } catch (e) { console.warn("config_panel.qml:", e) }
                 const provider = root.pendingProvider
                 if (!provider) return
                 if (r.ok) {
@@ -1478,7 +1478,7 @@ Rectangle {
                 const provider = root.pendingProvider
                 if (!provider) return
                 let r = ({})
-                try { r = JSON.parse(text.trim()) } catch (e) {}
+                try { r = JSON.parse(text.trim()) } catch (e) { console.warn("config_panel.qml:", e) }
                 if (r.ok) {
                     const sym = r.currency === "CNY" ? "¥" : (r.currency === "USD" ? "$" : "")
                     let msg = (r.total !== undefined && r.total !== null)

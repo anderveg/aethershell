@@ -9,6 +9,17 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **`x.yy.x.x`** : ajout de fonctionnalités décisives (ex. : ajout de l'Îlot dynamique).
 - **Version majeure (`y.x.x.x`)** : conservation du schéma déjà en place (proposée lorsque l'ampleur des changements le justifie ; décision finale validée par l'utilisateur).
 
+## [0.4.7.2] — 2026-11-26
+
+### Corrigé
+- **Clavier virtuel SDDM (`sddm-astronaut-theme`)** (`greeter_gen.rs`, `dev/sddm/greeter-palette`) : remise de `HideVirtualKeyboard="true"` dans `Themes/palette.conf`, vidage de `InputMethod=` et retrait de `QT_IM_MODULE=qtvirtualkeyboard` dans `GreeterEnvironment=` (`/etc/sddm.conf.d/10-sddm-theme.conf`) pour éviter le rebond continu du clavier intégré (conflit `anchors.bottom` / `y` et ouverture automatique au focus mot de passe).
+- **Démarrage SDDM / DRM** (`dev/sddm/greeter-palette`) : ajout de `After=plymouth-quit-wait.service` dans `/etc/systemd/system/sddm.service.d/locale.conf` pour éviter que `kwin_wayland` ne tente d'ouvrir `/dev/dri/card1` avant que Plymouth ne le libère (`There are no outputs` / `eglSwapBuffers failed`).
+- **Journalisation QML (`JSON.parse`)** (`DynamicIsland.qml`, `ConfigStore.qml`, `SystemServices.qml`, `config_panel.qml`, `OngletEcrans.qml`, `IlotProjets.qml`, `IslandTabSysteme.qml`, `IslandTabMedia.qml`, `IslandTabControles.qml`, `WallpaperFx.qml`) : remplacement des `catch (e) {}` muets autour de `JSON.parse` par `console.warn(...)`.
+
+### Modifié
+- **Îlot dynamique — applets détachés** (`Theme.qml`, `Applet.qml`) : en mode îlot, le clic sur un applet détaché ouvre désormais le panneau étendu de l'Îlot dynamique sur l'onglet correspondant (Contrôles, Productivité/Calendrier/Presse-papiers ou Système/Wi-Fi) avec l'animation de l'îlot plutôt qu'un popup de barre.
+- **Liaison stricte QML** (`Applet.qml`, `CalendrierCompact.qml`, `notif_history.qml`, `spotlight.qml`, `IlotCoinsApplets.qml`, `ReseauApplet.qml`, `SystemePopup.qml`) : ajout de `pragma ComponentBehavior: Bound`.
+
 ## [0.4.7.1] — 2026-11-26
 
 ### Corrigé

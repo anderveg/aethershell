@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import "."
 import Quickshell
@@ -368,10 +369,11 @@ Item {
         enabled: !root.estQml
         cursorShape: Qt.PointingHandCursor
         onClicked: {
+            const wasOpen = root.ouvert
             const cle = root.popupExterne ? root.popupCle : ("applet:" + root.appletId)
-            Theme.activePopup = root.ouvert ? "" : cle
+            Theme.togglePopup(cle)
             // Une ouverture est aussi une occasion de rafraîchir le détail.
-            if (!root.ouvert) root.rafraichir(true)
+            if (!wasOpen) root.rafraichir(true)
         }
     }
 

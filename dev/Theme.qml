@@ -470,7 +470,57 @@ QtObject {
         return l
     }
 
+    function islandTargetForPopup(name) {
+        const cle = String(name || "")
+        switch (cle) {
+        case "applet:volume":
+        case "applet:luminosite":
+        case "applet:nuit":
+        case "applet:alimentation":
+        case "applet:gestion-energie":
+        case "applet:batterie":
+        case "controls":
+            return { tab: 0, sysTarget: "", side: "" }
+        case "notifications":
+        case "applet:todo":
+        case "applet:meteo":
+            return { tab: 1, sysTarget: "", side: "" }
+        case "calendar":
+        case "applet:horloge":
+            return { tab: 1, sysTarget: "", side: "calendar" }
+        case "applet:presse-papiers":
+            return { tab: 1, sysTarget: "", side: "clipboard" }
+        case "applet:reseau":
+            return { tab: 2, sysTarget: "wifi", side: "" }
+        case "applet:systeme":
+        case "applet:maj":
+        case "applet:usb":
+        case "applet:disques":
+            return { tab: 2, sysTarget: "", side: "" }
+        default:
+            return null
+        }
+    }
+
     function togglePopup(name) {
+        if (barStyle === "island") {
+            const cible = islandTargetForPopup(name)
+            if (cible) {
+                activePopup = ""
+                const memeOnglet = islandPanelOpen && islandPanelTab === cible.tab
+                    && (cible.side === "" || islandSidePanel === cible.side)
+                    && (cible.sysTarget === "" || islandSystemeTarget === cible.sysTarget)
+                if (memeOnglet) {
+                    islandPanelOpen = false
+                } else {
+                    if (cible.sysTarget !== "") islandSystemeTarget = cible.sysTarget
+                    islandPanelTab = cible.tab
+                    if (cible.side !== "") islandSidePanel = cible.side
+                    islandPanelOpen = true
+                }
+                return
+            }
+        }
         activePopup = (activePopup === name) ? "" : name
     }
 

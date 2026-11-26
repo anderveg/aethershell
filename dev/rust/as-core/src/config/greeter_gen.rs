@@ -254,7 +254,7 @@ fn construire_conf(p: &Palette, ecran: (u32, u32)) -> String {
             "",
             "#################### Comportement ####################",
             "",
-            "HideVirtualKeyboard=\"false\"",
+            "HideVirtualKeyboard=\"true\"",
             "HideSystemButtons=\"false\"",
             "HideLoginButton=\"false\"",
             "UseRealName=\"false\"",

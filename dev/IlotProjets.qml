@@ -73,7 +73,7 @@ Item {
                     if (root.activeListIndex >= root.lists.length) {
                         root.activeListIndex = 0
                     }
-                } catch (e) {}
+                } catch (e) { console.warn("IlotProjets.qml:", e) }
             }
         }
         onExited: root.loading = false

@@ -63,7 +63,7 @@ Item {
                             root.selectedMonitorName = root.primaryMonitor !== "" ? root.primaryMonitor : list[0].name
                         }
                     }
-                } catch (e) {}
+                } catch (e) { console.warn("IslandTabMedia.qml:", e) }
             }
         }
     }

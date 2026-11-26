@@ -261,7 +261,7 @@ Scope {
             onStreamFinished: {
                 try {
                     root.applyStateJson(JSON.parse(text.trim()))
-                } catch (e) {}
+                } catch (e) { console.warn("ConfigStore state:", e) }
             }
         }
     }

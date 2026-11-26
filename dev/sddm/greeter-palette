@@ -132,8 +132,8 @@ write_sddm_config() {
     if [ -x /usr/bin/kwin_wayland ]; then
         cat > "$SDDM_CONF" <<EOF
 [General]
-InputMethod=qtvirtualkeyboard
-GreeterEnvironment=QT_WAYLAND_SHELL_INTEGRATION=layer-shell,LANG=$loc,LC_ALL=$loc,XKB_DEFAULT_LAYOUT=$layout,QT_IM_MODULE=qtvirtualkeyboard${cursor_env},QT_LOGGING_RULES=$QT_LOG_FILTER
+InputMethod=
+GreeterEnvironment=QT_WAYLAND_SHELL_INTEGRATION=layer-shell,LANG=$loc,LC_ALL=$loc,XKB_DEFAULT_LAYOUT=$layout${cursor_env},QT_LOGGING_RULES=$QT_LOG_FILTER
 
 [Wayland]
 CompositorCommand=kwin_wayland --no-global-shortcuts --no-lockscreen --no-kactivities --locale1
@@ -144,8 +144,8 @@ EOF
     else
         cat > "$SDDM_CONF" <<EOF
 [General]
-InputMethod=qtvirtualkeyboard
-GreeterEnvironment=LANG=$loc,LC_ALL=$loc,XKB_DEFAULT_LAYOUT=$layout,QT_IM_MODULE=qtvirtualkeyboard${cursor_env},QT_LOGGING_RULES=$QT_LOG_FILTER
+InputMethod=
+GreeterEnvironment=LANG=$loc,LC_ALL=$loc,XKB_DEFAULT_LAYOUT=$layout${cursor_env},QT_LOGGING_RULES=$QT_LOG_FILTER
 
 [Theme]
 Current=$current_theme
@@ -161,6 +161,9 @@ EOF
     # injecte /etc/locale.conf, la locale résolue et la disposition XKB.
     mkdir -p "$(dirname "$SDDM_LOCALE_DROPIN")"
     cat > "$SDDM_LOCALE_DROPIN" <<EOF
+[Unit]
+After=plymouth-quit-wait.service
+
 [Service]
 StandardOutput=journal
 StandardError=journal

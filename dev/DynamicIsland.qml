@@ -179,7 +179,7 @@ Item {
                     const d = JSON.parse(text.trim())
                     root.plankaEcheanceProche = Boolean(d && d.echeance_proche)
                     root.plankaUrgence = String((d && d.urgence) || "none")
-                } catch (e) {}
+                } catch (e) { console.warn("DynamicIsland planka statut:", e) }
             }
         }
     }
@@ -202,7 +202,7 @@ Item {
                     const d = JSON.parse(text.trim())
                     if (d && typeof d.vpn === "string") root.vpnState = d.vpn
                     if (d && typeof d.capture === "string") root.captureState = d.capture
-                } catch (e) {}
+                } catch (e) { console.warn("DynamicIsland indicateurs:", e) }
             }
         }
     }
@@ -668,7 +668,7 @@ Item {
                     if (parsed.pkgUpdate) root.liveUpdate = parsed.pkgUpdate
                     else if (parsed.archUpdate) root.liveUpdate = parsed.archUpdate
                     root.liveDownloads = Array.isArray(parsed.downloads) ? parsed.downloads : []
-                } catch (e) {}
+                } catch (e) { console.warn("DynamicIsland live-activity:", e) }
             }
         }
     }

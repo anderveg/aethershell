@@ -196,7 +196,7 @@ Item {
             onStreamFinished: {
                 try {
                     root.appliquerSysteme(JSON.parse(text.trim()))
-                } catch (e) {}
+                } catch (e) { console.warn("IslandTabSysteme.qml:", e) }
             }
         }
     }
@@ -222,7 +222,7 @@ Item {
                         root.diskPct = Math.round(Number(d.compact.barres[0].valeur || 0))
                         root.diskSummary = String(d.compact.barres[0].texte || "--")
                     }
-                } catch (e) {}
+                } catch (e) { console.warn("IslandTabSysteme.qml:", e) }
             }
         }
     }

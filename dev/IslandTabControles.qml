@@ -149,7 +149,7 @@ Item {
                     let d = JSON.parse(text.trim())
                     root.nuitActive = Boolean(d.allume)
                     if (d.temperature) root.nuitTemp = Number(d.temperature)
-                } catch (e) {}
+                } catch (e) { console.warn("IslandTabControles.qml:", e) }
             }
         }
     }
@@ -169,7 +169,7 @@ Item {
             try {
                 const d = JSON.parse(actionProc.sortie)
                 if (d && d.error) motif = String(d.error)
-            } catch (e) {}
+            } catch (e) { console.warn("IslandTabControles.qml:", e) }
             if (code !== 0 && motif !== "") {
                 Quickshell.execDetached(["notify-send", "-a", "AetherShell", "-u", "normal", "Réglage non appliqué", motif])
             }

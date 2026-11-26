@@ -22,7 +22,7 @@ QtObject {
                         root.systemInfo = d
                         root.systemInfoPret = true
                     }
-                } catch (e) {}
+                } catch (e) { console.warn("SystemServices.qml:", e) }
             }
         }
     }
@@ -141,7 +141,7 @@ QtObject {
                         root.reseauData = d.reseau
                         root.reseauCharge = true
                     }
-                } catch (e) {}
+                } catch (e) { console.warn("SystemServices.qml:", e) }
             }
         }
     }
@@ -248,7 +248,7 @@ QtObject {
                     ok = Boolean(d.success)
                     msg = String(d.message || "")
                     if (d.ssid) ssid = String(d.ssid)
-                } catch (e) {}
+                } catch (e) { console.warn("SystemServices.qml:", e) }
                 if (ok) {
                     root.rafraichirSystemInfo()
                     root.scanWifi(false)
@@ -305,7 +305,7 @@ QtObject {
             const conns = Array.isArray(d.connectes) ? d.connectes : []
             root.btConnectedCount = conns.length
             root.btDevice = conns.length > 0 ? String(conns[0].nom || conns[0].name || "") : ""
-        } catch (e) {}
+        } catch (e) { console.warn("SystemServices.qml:", e) }
     }
 
     property Process btStateProc: Process {
@@ -445,7 +445,7 @@ QtObject {
                             cards.push({ name: String(c.name), label: nom, activeProfile: actif, profiles: profs })
                         }
                     }
-                } catch (e) {}
+                } catch (e) { console.warn("SystemServices.qml:", e) }
                 root.btAudioCards = cards
             }
         }
@@ -635,7 +635,7 @@ QtObject {
                 try {
                     const d = JSON.parse(text.trim())
                     if (d && typeof d === "object") root.nuitEtat = d
-                } catch (e) {}
+                } catch (e) { console.warn("SystemServices.qml:", e) }
             }
         }
     }

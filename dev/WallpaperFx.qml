@@ -179,7 +179,7 @@ Scope {
                         root.prepare(root.pendingOld, root.pendingNew, d.kind || "contagio", d.field, d.line)
                         return
                     }
-                } catch (e) {}
+                } catch (e) { console.warn("WallpaperFx.qml:", e) }
                 const n = root.pendingNew
                 root.finish()
                 if (n) {
