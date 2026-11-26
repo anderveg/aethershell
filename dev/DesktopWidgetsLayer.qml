@@ -281,6 +281,8 @@ Item {
 
             screen: root.targetScreen
             visible: Theme.widgetsBureauVisibles && root.widgetVisible(w)
+                && (String(w.type || "") !== "visualiseur" || !VisualiseurAudio.veille
+                    || widgetWindow.resizeActive || widgetWindow.isPlacing)
             anchors { top: true; left: true }
 
             property bool dragging: false

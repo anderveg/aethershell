@@ -54,7 +54,8 @@ Item {
         return String(reseau.ssid || reseau.connexion || "")
     }
 
-    Component.onCompleted: SystemServices.metriquesActif = true
+    Component.onCompleted: SystemServices.acquerirMetriques("widget_reseau")
+    Component.onDestruction: SystemServices.relacherMetriques("widget_reseau")
 
     // Largeur **fixe** : un ping qui passe de 6 à 1200 ms, ou un débit qui passe de
     // « 1 ko/s » à « 12,3 Mo/s », ne doit pas redimensionner la carte sous le

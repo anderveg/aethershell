@@ -22,6 +22,57 @@ Scope {
 
     readonly property var svgIcones: (["cpu", "ram", "gpu", "temp", "disque", "reseau", "load", "swap"])
 
+    function iconeDynamique(applet) {
+        const id = String((applet && applet.id) || "")
+        const d = SystemServices.systemInfo || ({})
+        if (id === "reseau") {
+            const w = d.wifi || null
+            if (!w) return IslandAppletLayout.iconFor(applet)
+            if (String(w.type || "wifi") === "ethernet") return "ethernet"
+            return SystemServices.signalIconFor(Number(w.signal || 0), Boolean(w.connected))
+        }
+        if (id === "batterie") {
+            const b = d.battery || null
+            if (!d.has_battery || !b) return "battery-outline"
+            const st = String(b.status || "")
+            if (st === "Charging" || st === "Full") return "battery-charging"
+            const pct = Number(b.level || 0)
+            if (pct <= 10) return "battery-10"
+            if (pct <= 25) return "battery-25"
+            if (pct <= 50) return "battery-50"
+            if (pct <= 70) return "battery-70"
+            return "battery-full"
+        }
+        if (id === "volume") {
+            if (SystemServices.volumeMuted || SystemServices.volumeLevel === 0) return "volume-mute"
+            if (SystemServices.volumeLevel < 33) return "volume-low"
+            if (SystemServices.volumeLevel < 66) return "volume-medium"
+            return "volume-high"
+        }
+        return IslandAppletLayout.iconFor(applet)
+    }
+
+    function couleurDynamique(applet) {
+        const id = String((applet && applet.id) || "")
+        const d = SystemServices.systemInfo || ({})
+        if (id === "reseau") {
+            const w = d.wifi || null
+            if (!w) return Theme.fg
+            return Boolean(w.connected) ? Theme.accent : Theme.error
+        }
+        if (id === "batterie") {
+            const b = d.battery || null
+            if (!d.has_battery || !b) return Theme.fg
+            const pct = Number(b.level || 0)
+            const st = String(b.status || "")
+            if (pct <= 15) return Theme.warn
+            if (st === "Charging" || st === "Full") return Theme.success
+            return Theme.fg
+        }
+        if (id === "volume" && SystemServices.volumeMuted) return Theme.warn
+        return Theme.fg
+    }
+
     Variants {
         model: [
             { id: "top-left",     top: true,  bottom: false, left: true,  right: false },
@@ -129,7 +180,8 @@ Scope {
                             : index
                         readonly property real ratio: Math.max(0.50, 1.0 - distIdx * 0.25)
                         readonly property int diametre: Math.max(12, Math.round(Theme.barHeight * ratio))
-                        readonly property string icone: IslandAppletLayout.iconFor(modelData)
+                        readonly property string icone: root.iconeDynamique(modelData)
+                        readonly property color iconeCouleur: root.couleurDynamique(modelData)
                         readonly property bool estSvg: root.svgIcones.indexOf(icone) >= 0
                         readonly property bool popupOuvert: Theme.activePopup === ("applet:" + String(modelData.id || ""))
                         readonly property real largeurEtendue: Math.max(Theme.barHeight, itemApplet.implicitWidth + Theme.padH * 2 + 4)
@@ -190,7 +242,7 @@ Scope {
                                 visible: bulle.estSvg
                                 nom: bulle.estSvg ? bulle.icone : ""
                                 size: Math.max(9, Math.round(Theme.iconSm * bulle.ratio))
-                                couleur: Theme.fg
+                                couleur: bulle.iconeCouleur
                             }
 
                             Icon {
@@ -198,7 +250,7 @@ Scope {
                                 visible: !bulle.estSvg
                                 glyph: bulle.icone
                                 size: Math.max(9, Math.round(Theme.iconSm * bulle.ratio))
-                                color: Theme.fg
+                                color: bulle.iconeCouleur
                             }
                         }
 

@@ -825,7 +825,7 @@ est_etat_machine() {
     [ -f "$MARKER" ] || return 1
 
     case "$name" in
-        *.upstream|*.new|*.tmp|*.tmp.*) return 0 ;;
+        *.upstream|*.new|*.tmp|*.tmp.*|*.verrou) return 0 ;;
         secrets.json|*_cache.json) return 0 ;;
     esac
 
@@ -875,7 +875,7 @@ is_preserved() {
 sync_file() {
     local src="$1" dst="$2"
     if [ ! -e "$dst" ]; then
-        cp "$src" "$dst"
+        cp -f "$src" "$dst.tmp.$$" && mv -f "$dst.tmp.$$" "$dst"
         return
     fi
     if cmp -s "$src" "$dst"; then
@@ -912,7 +912,7 @@ copy_dir_files() {
         if [ -e "$dst/$name" ] && [[ " ${NON_ECRASABLES:-} " == *" $name "* ]]; then
             continue
         fi
-        cp -f --remove-destination "$f" "$dst/$name"
+        cp -f "$f" "$dst/$name.tmp.$$" && mv -f "$dst/$name.tmp.$$" "$dst/$name"
     done
 }
 
@@ -920,14 +920,18 @@ copy_dir_files() {
 prune_target() {
     local dst="$1" manifest="$2" preserve_list="${3:-}" f name
     [ -d "$dst" ] || return 0
+    local -A manifest_seen=()
+    while IFS= read -r line; do
+        [ -n "$line" ] && manifest_seen["$line"]=1
+    done < "$manifest"
     for f in "$dst"/*; do
         [ -f "$f" ] || continue
         name="$(basename "$f")"
-        grep -qxF "$name" "$manifest" && continue
+        [ -n "${manifest_seen[$name]:-}" ] && continue
         est_etat_machine "$name" "$(dossier_de "$dst")" && continue
         [ -n "$preserve_list" ] && is_preserved "$name" "$preserve_list" && continue
         case "$name" in
-            *.upstream) continue ;;
+            *.upstream|*.verrou) continue ;;
             hypridle.conf|hyprlock.conf|hyprlock-colors.conf|autostart_cmds.txt|.quickshell_managed) continue ;;
             secrets.json) continue ;;
             # Copié après l'élagage depuis la racine du dépôt : sans cette ligne,
@@ -2451,8 +2455,23 @@ SDDM_STATE
             echo "▶ Installation du thème SDDM (sddm-astronaut-theme)..."
             sudo git clone --depth 1 https://github.com/Keyitdev/sddm-astronaut-theme.git /usr/share/sddm/themes/sddm-astronaut-theme 2>/dev/null || true
         fi
-        if [ -d /usr/share/sddm/themes/sddm-astronaut-theme ] && [ ! -f /etc/sddm.conf.d/10-sddm-theme.conf ] && [ -x "$dir/install.sh" ]; then
-            ASK_SUDO=1 bash "$dir/install.sh" || true
+        if [ -d /usr/share/sddm/themes/sddm-astronaut-theme ] && [ -f "$dir/install.sh" ]; then
+            local sddm_stamp="$HOME/.cache/quickshell/greeter-sddm.stamp" sddm_courant=""
+            sddm_courant=$(cat "$dir/install.sh" "$dir/greeter-palette" \
+                "$dir/clavier/ClavierVirtuel.qml" "$dir/clavier/PanneauClavier.qml" \
+                "$DEV_DIR/rust/as-core/src/config/greeter_gen.rs" 2>/dev/null | sha256sum | cut -d' ' -f1)
+            if [ ! -f /etc/sddm.conf.d/10-sddm-theme.conf ] || [ ! -f "$sddm_stamp" ] || [ "$(cat "$sddm_stamp" 2>/dev/null)" != "$sddm_courant" ]; then
+                if [ "${DRY_RUN:-0}" = "1" ]; then
+                    echo "  ⚙ sddm/install.sh : configuration SDDM et clavier virtuel à appliquer (root)"
+                elif ASK_SUDO=1 bash "$dir/install.sh"; then
+                    mkdir -p "$(dirname "$sddm_stamp")" && printf '%s\n' "$sddm_courant" > "$sddm_stamp"
+                    if [ -f "$dir/greeter-palette" ] && [ -f "$dir/50-greeter-palette.rules" ]; then
+                        cat "$dir/greeter-palette" "$dir/50-greeter-palette.rules" | sha256sum | cut -d' ' -f1 > "$HOME/.cache/quickshell/greeter-helper.stamp"
+                    fi
+                else
+                    echo "  ⚠ sddm/install.sh non appliqué — à lancer à la main : bash $dir/install.sh"
+                fi
+            fi
         fi
     fi
     [ -f "$dir/greeter-palette" ] && [ -f "$dir/50-greeter-palette.rules" ] || return 0

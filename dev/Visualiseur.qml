@@ -1,6 +1,5 @@
 import QtQuick
 import "."
-import Quickshell
 
 // ════════════════════════════════════════════════════════════════════════════
 // VISUALISEUR — le dessin. Aucune capture ici : tout vient de VisualiseurAudio.

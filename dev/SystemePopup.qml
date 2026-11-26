@@ -131,13 +131,14 @@ Item {
     function charger() {
         etat.running = false
         etat.running = true
-        if (root.ouvert) SystemServices.metriquesActif = true
+        if (root.ouvert) SystemServices.acquerirMetriques("systeme_popup")
     }
 
     // Un seul gestionnaire de démarrage par objet : deux `Component.onCompleted`
     // dans le même Item lèvent « Property value set multiple times » et le
     // composant ne se crée pas — le panneau s'ouvre alors sur une carte vide.
     Component.onCompleted: { charger(); rafraichirProcessus() }
+    Component.onDestruction: SystemServices.relacherMetriques("systeme_popup")
 
     // Le choix courant vient du registre, pas d'une copie locale : c'est lui qui
     // fait foi, y compris quand il a été changé depuis le panneau.
@@ -183,10 +184,12 @@ Item {
 
     onOuvertChanged: {
         if (ouvert) {
-            SystemServices.metriquesActif = true
+            SystemServices.acquerirMetriques("systeme_popup")
             rafraichirProcessus()
+        } else {
+            root.dernierPidArrete = 0
+            SystemServices.relacherMetriques("systeme_popup")
         }
-        else root.dernierPidArrete = 0
     }
 
     Process {

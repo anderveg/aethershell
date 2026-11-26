@@ -33,7 +33,7 @@ QtObject {
     property var file: []
 
     readonly property Process proc: Process {
-        id: proc
+        id: presetProc
         stdout: StdioCollector {
             onStreamFinished: root._traiter(text)
         }
@@ -102,13 +102,13 @@ QtObject {
     }
 
     function _lancerSuivant() {
-        if (proc.running || file.length === 0) return
+        if (presetProc.running || file.length === 0) return
         const args = file[0]
         const q = file.slice()
         q.shift()
         file = q
-        proc.command = [Quickshell.shellPath("core/as-core"), "config"].concat(args)
-        proc.running = true
+        presetProc.command = [Quickshell.shellPath("core/as-core"), "config"].concat(args)
+        presetProc.running = true
     }
 
     function _traiter(texte) {

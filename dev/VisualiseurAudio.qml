@@ -303,10 +303,10 @@ Singleton {
         onTriggered: racine.dormir()
     }
 
-    // Écoute de contrôle périodique en veille : 3 s de capture toutes les 20 s.
+    // Écoute de contrôle périodique en veille : 1,2 s de capture toutes les 60 s (~2 %).
     Timer {
         id: sonde
-        interval: 20000
+        interval: 60000
         repeat: true
         running: false
         onTriggered: if (racine.veille) racine.reveiller(true)
@@ -315,7 +315,7 @@ Singleton {
     // Fin d'une écoute de contrôle : sans la moindre activité, on rendort.
     Timer {
         id: finSonde
-        interval: 3000
+        interval: 1200
         repeat: false
         onTriggered: {
             if (racine.veille || racine.activiteVue) return

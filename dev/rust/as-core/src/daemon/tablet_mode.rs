@@ -680,17 +680,6 @@ fn watch_input_method() {
             continue;
         }
 
-        let _ = Command::new("python3")
-            .args([
-                "-c",
-                "import gi; gi.require_version('Gtk', '3.0'); from gi.repository import Gtk, GLib; \
-                 w = Gtk.Window(); e = Gtk.Entry(); w.add(e); w.set_default_size(1, 1); w.set_decorated(False); \
-                 w.show_all(); GLib.timeout_add(60, Gtk.main_quit); Gtk.main()",
-            ])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn();
-
         let mut pending_active = false;
         let mut current_active = false;
         let mut saw_activate = false;

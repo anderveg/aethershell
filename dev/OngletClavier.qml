@@ -1,6 +1,4 @@
 import QtQuick
-import Quickshell
-import Quickshell.Io
 import "."
 
 // Onglet « Clavier & Binds » du panneau de configuration, sorti de config_panel.qml.

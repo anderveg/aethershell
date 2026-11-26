@@ -1,6 +1,4 @@
 import QtQuick
-import Quickshell
-import Quickshell.Io
 import "."
 
 // Onglet « Apps & Alertes » du panneau de configuration, sorti de config_panel.qml.

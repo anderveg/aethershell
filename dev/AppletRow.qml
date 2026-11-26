@@ -1,6 +1,5 @@
 import QtQuick
 import "."
-import Quickshell
 
 // RANGÉE D'APPLETS d'un îlot — résolue de manière instantanée et réactive
 // via ShellState.appletsPourIle(ile) en JS pur, sans sous-processus Python.

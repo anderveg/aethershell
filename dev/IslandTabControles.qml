@@ -689,7 +689,7 @@ Item {
             rowSpacing: 5
 
             QuickTile {
-                glyphName: root.wifiConnected ? "wifi-full" : "wifi"
+                glyphName: SystemServices.signalIconFor(Number((root.wifiInfo && root.wifiInfo.signal) || 0), root.wifiConnected)
                 title: "Wi-Fi"
                 subtitle: !root.wifiEnabled
                     ? "Désactivé"

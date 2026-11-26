@@ -105,7 +105,24 @@ QtObject {
     property bool systemeCharge: false
     property var reseauData: ({})
     property bool reseauCharge: false
-    property bool metriquesActif: false
+    property var _metriquesDemandeurs: ({})
+    readonly property bool metriquesActif: Object.keys(_metriquesDemandeurs).length > 0
+
+    function acquerirMetriques(id) {
+        const cle = String(id || "")
+        if (!cle || root._metriquesDemandeurs[cle]) return
+        const nxt = Object.assign({}, root._metriquesDemandeurs)
+        nxt[cle] = true
+        root._metriquesDemandeurs = nxt
+    }
+
+    function relacherMetriques(id) {
+        const cle = String(id || "")
+        if (!cle || !root._metriquesDemandeurs[cle]) return
+        const nxt = Object.assign({}, root._metriquesDemandeurs)
+        delete nxt[cle]
+        root._metriquesDemandeurs = nxt
+    }
 
     property Process metriquesDaemonProc: Process {
         running: root.metriquesActif

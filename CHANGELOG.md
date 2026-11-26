@@ -9,6 +9,24 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **`x.yy.x.x`** : ajout de fonctionnalités décisives (ex. : ajout de l'Îlot dynamique).
 - **Version majeure (`y.x.x.x`)** : conservation du schéma déjà en place (proposée lorsque l'ampleur des changements le justifie ; décision finale validée par l'utilisateur).
 
+## [0.4.7.1] — 2026-11-26
+
+### Corrigé
+- **Icônes dynamiques** : force du signal Wi-Fi, batterie et volume dans les applets détachés (`IlotCoinsApplets.qml`) et l'îlot étendu (`IslandTabControles.qml`, `IslandTabSysteme.qml`).
+- **Réveil NVIDIA** : suppression de l'écran noir avant saisie de `hyprlock` (`dev/hypr_modular/hypridle.conf` : temporisation et second `dpms("on")` après verrouillage).
+- **SDDM** : affichage du bouton clavier virtuel (`HideVirtualKeyboard="false"` dans `greeter_gen.rs`), redirection des logs `sddm`/`kwin_wayland` vers `journald` (`dev/sddm/greeter-palette`), et exécution automatique de `dev/sddm/install.sh` via empreinte SHA-256 dans `install.sh`.
+- **Déploiement atomique & verrous** : utilisation de `.tmp.$$` + `mv -f` et protection des verrous `*.verrou` (`FileLock`) dans `install.sh`.
+- **Démon de métriques** : arrêt automatique dès qu'aucun consommateur n'est actif (`SystemServices.qml`, `SystemePopup.qml`, `IslandTabSysteme.qml`, `widgets/reseau.qml`, `widgets/systeme.qml`).
+- **Réseau & configuration** : timeout réseau (`10s` connexion / `30s` lecture) sur le téléchargement de modèles dans `wallfx/img_ops.rs` et suppression du `.unwrap()` sur regex dynamique dans `config_hypr.rs`.
+- **Sécurité des secrets** : suppression du repli `/tmp` pour les secrets (`config_panel.qml`, `UsbPopup.qml`, `first_run.qml`).
+
+### Optimisé / Modifié
+- **Démon réseau** : cadence découplée (1 tour sur 8 dans `daemon/mod.rs`) et regex `OnceLock` dans `daemon/reseau.rs`.
+- **Visualiseur audio en veille** : sonde réduite à 1,2 s / 60 s et masquage de la surface bureau en veille (`VisualiseurAudio.qml`, `DesktopWidgetsLayer.qml`).
+- **Cache `mtime`** : cache des raccourcis (`binds_cache.json`) dans `config_hypr.rs`.
+- **Tablet mode** : suppression de la dépendance `python3-gi`/GTK3 dans `daemon/tablet_mode.rs`.
+- **Nettoyage `qmllint` Qt 6** : résolution des `unused-imports` sur 19 fichiers, `id-shadows-member` dans `EnvPresets.qml` et création du singleton `dev/Backend.qml` (`dev/qmldir`).
+
 ## [0.4.7.0] — 2026-11-25
 
 ### Ajouté

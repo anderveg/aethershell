@@ -148,9 +148,11 @@ Item {
     // Les choix passent par un fichier, jamais par l'entrée standard : l'écriture
     // est vérifiée (signal `saved`) avant de lancer le script, donc rien ne peut
     // partir dans le vide.
+    readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || ""
+
     FileView {
         id: chargeFile
-        path: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/qs-first-run.json"
+        path: root.runtimeDir !== "" ? (root.runtimeDir + "/qs-first-run.json") : ""
         atomicWrites: true
         printErrors: true
         onSaved: root.lancerApplication()
@@ -232,6 +234,10 @@ Item {
     }
 
     function ecrireEtAppliquer() {
+        if (root.runtimeDir === "") {
+            root.rapport = "répertoire runtime XDG_RUNTIME_DIR absent"
+            return
+        }
         applicationEnCours = true
         rapport = ""
         chargeFile.setText(chargeAAppliquer)   // → onSaved → lancerApplication()

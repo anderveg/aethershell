@@ -81,7 +81,8 @@ Item {
     readonly property bool hasDisk: Boolean(detail.disk && Number(detail.disk.total_go) > 0)
     readonly property bool hasPower: Boolean((detail.gpu && detail.gpu.power_w !== undefined && detail.gpu.power_w !== null) || detail.fan_rpm !== undefined)
 
-    Component.onCompleted: SystemServices.metriquesActif = true
+    Component.onCompleted: SystemServices.acquerirMetriques("widget_systeme")
+    Component.onDestruction: SystemServices.relacherMetriques("widget_systeme")
 
     implicitWidth: cardWidth
     implicitHeight: widgetH > 0 ? Math.max(colonne.implicitHeight, widgetH) : colonne.implicitHeight

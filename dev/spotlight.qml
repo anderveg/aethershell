@@ -1,7 +1,6 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import Quickshell.Wayland
 
 // Spotlight Pill (`shell-spotlight` dans `main.qml`), moteur partagé via `LauncherEngine.qml`.
 Item {

@@ -1,6 +1,4 @@
 import QtQuick
-import Quickshell
-import Quickshell.Io
 
 // ────────────────────────────────────────────────────────────────────────────
 // ÉCRAN DES RACCOURCIS (SUPER + K)

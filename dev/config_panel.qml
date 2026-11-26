@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
-import Quickshell.Wayland
 
 // ════════════════════════════════════════════════════════════════════════════
 // SYSTEM CONFIGURATION PANEL (config_panel.qml)
@@ -1277,11 +1276,13 @@ Rectangle {
         return ["preferred", "3840x2160@30", "1920x1080@120", "1920x1080@60", "1280x720@60"]
     }
 
+    readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || ""
+
     // Clé d'API : écrite dans un fichier du répertoire runtime, puis remise à
     // config_manager qui la range dans secrets.json et supprime le fichier.
     FileView {
         id: cleApiFile
-        path: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/qs-api-key.json"
+        path: root.runtimeDir !== "" ? (root.runtimeDir + "/qs-api-key.json") : ""
         atomicWrites: true
         printErrors: false
         onSaved: root.envoyerCleApi()
@@ -1294,7 +1295,7 @@ Rectangle {
     // le répertoire runtime, puis config_manager le range dans secrets.json.
     FileView {
         id: homelabSecretFile
-        path: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/qs-homelab-secret.json"
+        path: root.runtimeDir !== "" ? (root.runtimeDir + "/qs-homelab-secret.json") : ""
         atomicWrites: true
         printErrors: false
         onSaved: homelabSecretProc.running = true
@@ -1377,7 +1378,7 @@ Rectangle {
     }
 
     function homelabSetSecret(valeur) {
-        if (String(valeur).trim() === "") return
+        if (root.runtimeDir === "" || String(valeur).trim() === "") return
         homelabSecretFile.setText(JSON.stringify({
             section: "proxmox", nom: "token_secret", valeur: String(valeur).trim()
         }))
@@ -1401,6 +1402,7 @@ Rectangle {
     }
 
     function plankaSetSecret(nom, valeur) {
+        if (root.runtimeDir === "") return
         const v = String(valeur || "").trim()
         if (v === "") return
         root.plankaTestEtat = ""
@@ -1425,6 +1427,10 @@ Rectangle {
         const ref = String(provider.key || "").split(".")
         if (ref.length < 2) {
             root.etatCle(provider.id, "référence de clé invalide dans llm_providers.json")
+            return
+        }
+        if (root.runtimeDir === "") {
+            root.etatCle(provider.id, "répertoire runtime XDG_RUNTIME_DIR absent")
             return
         }
         root.pendingProvider = provider

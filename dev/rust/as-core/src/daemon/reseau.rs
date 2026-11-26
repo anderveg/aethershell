@@ -173,15 +173,13 @@ fn trafic_info(dev: &str, persister: bool, out: &mut Map<String, Value>) {
 }
 
 fn latence_ms(gw: &str) -> Option<i64> {
+    use std::sync::OnceLock;
+    static RE_TIME: OnceLock<Regex> = OnceLock::new();
+    static RE_RTT: OnceLock<Regex> = OnceLock::new();
     let out = run_cmd_stdout("ping", &["-c", "1", "-W", "1", gw])?;
-    let cap = Regex::new(r"(?:time|temps)[=<]([\d.]+)\s*ms")
-        .ok()
-        .and_then(|r| r.captures(&out))
-        .or_else(|| {
-            Regex::new(r"rtt[^=]*=\s*[\d.]+/([\d.]+)/")
-                .ok()
-                .and_then(|r| r.captures(&out))
-        })?;
+    let re_time = RE_TIME.get_or_init(|| Regex::new(r"(?:time|temps)[=<]([\d.]+)\s*ms").unwrap());
+    let re_rtt = RE_RTT.get_or_init(|| Regex::new(r"rtt[^=]*=\s*[\d.]+/([\d.]+)/").unwrap());
+    let cap = re_time.captures(&out).or_else(|| re_rtt.captures(&out))?;
     cap[1].parse::<f64>().ok().map(|v| v.round() as i64)
 }
 

@@ -71,7 +71,12 @@ pub fn download_file(url: &str, dest: &Path, expected_size: Option<u64>, min_siz
     }
     let part = dest.with_extension("part");
     let _ = fs::remove_file(&part);
-    let resp = ureq::get(url)
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(10))
+        .timeout_read(std::time::Duration::from_secs(30))
+        .build();
+    let resp = agent
+        .get(url)
         .set("User-Agent", "AetherShell/1.0")
         .call()
         .map_err(|e| e.to_string())?;

@@ -162,6 +162,8 @@ EOF
     mkdir -p "$(dirname "$SDDM_LOCALE_DROPIN")"
     cat > "$SDDM_LOCALE_DROPIN" <<EOF
 [Service]
+StandardOutput=journal
+StandardError=journal
 EnvironmentFile=-/etc/locale.conf
 Environment="LANG=$loc" "LC_ALL=$loc" "XKB_DEFAULT_LAYOUT=$layout" "QT_LOGGING_RULES=$QT_LOG_FILTER"
 EOF

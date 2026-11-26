@@ -125,6 +125,13 @@ Item {
         }
     }
 
+    readonly property bool _demandeMetriques: root.visible && Theme.islandPanelOpen && Theme.islandPanelTab === 2
+    on_DemandeMetriquesChanged: {
+        if (_demandeMetriques) SystemServices.acquerirMetriques("island_systeme")
+        else SystemServices.relacherMetriques("island_systeme")
+    }
+    Component.onDestruction: SystemServices.relacherMetriques("island_systeme")
+
     function refreshTelemetry() {
         if (SystemServices.metriquesActif && SystemServices.systemeData && SystemServices.systemeData.ok) {
             root.appliquerSysteme(SystemServices.systemeData)
@@ -498,7 +505,7 @@ Item {
                     spacing: 8
 
                     Icon {
-                        glyph: root.wifiInfo.connected ? "wifi-full" : "wifi-none"
+                        glyph: SystemServices.signalIconFor(Number((root.wifiInfo && root.wifiInfo.signal) || 0), Boolean(root.wifiInfo.connected))
                         size: Theme.iconMd
                         color: root.wifiInfo.connected ? Theme.accent : Theme.error
                     }

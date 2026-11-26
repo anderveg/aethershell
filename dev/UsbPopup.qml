@@ -30,10 +30,16 @@ Item {
 
     function charger() { SystemServices.rafraichirUsb() }
 
+    readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || ""
+
     function agir(geste, cible) {
         action.nom = String(geste)
         action.cible = String(cible)
         if (action.nom === "deverrouiller") {
+            if (root.runtimeDir === "") {
+                root.dernierMessage = "répertoire runtime XDG_RUNTIME_DIR absent"
+                return
+            }
             phraseFile.setText(root.phrase)
             phraseFile.save()
             return
@@ -59,7 +65,7 @@ Item {
     // jamais dans les arguments du processus (visibles dans /proc/<pid>/cmdline).
     FileView {
         id: phraseFile
-        path: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/qs-luks-phrase"
+        path: root.runtimeDir !== "" ? (root.runtimeDir + "/qs-luks-phrase") : ""
         atomicWrites: true
         printErrors: false
         onSaved: {

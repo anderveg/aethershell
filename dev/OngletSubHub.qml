@@ -1,5 +1,4 @@
 import QtQuick
-import "."
 
 // Hub générique regroupant deux sous-onglets verticaux dans un pôle du panneau.
 Column {

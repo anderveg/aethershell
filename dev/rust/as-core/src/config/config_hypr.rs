@@ -1,5 +1,5 @@
 use crate::common::io::{read_json_value, run_cmd, write_json_atomic, write_text_atomic};
-use crate::common::paths::{core_dir, home_dir};
+use crate::common::paths::{core_dir, home_dir, quickshell_cache_dir};
 use regex::Regex;
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
@@ -576,11 +576,12 @@ pub fn set_monitor_mode(output_name: &str, mode_str: &str, scale_str: &str) -> b
         hw = hypr_dir().join(format!("hardware-{}.lua", distro_fichier()));
     }
     if let Ok(txt) = fs::read_to_string(&hw) {
-        let block_re = Regex::new(&format!(
+        let Ok(block_re) = Regex::new(&format!(
             r#"hl\.monitor\(\{{[^{{}}]*?output\s*=\s*"{}"[^{{}}]*?\}}\)"#,
             regex::escape(output_name)
-        ))
-        .unwrap();
+        )) else {
+            return false;
+        };
         let new_txt = block_re
             .replace_all(&txt, |caps: &regex::Captures| {
                 let mut block = caps[0].to_string();
@@ -660,21 +661,52 @@ fn parse_binds_file(path: &Path, default_category: &str) -> Vec<Value> {
     binds
 }
 
+fn binds_mtime_sig(files: &[PathBuf]) -> String {
+    use std::time::UNIX_EPOCH;
+    let mut parts = Vec::with_capacity(files.len());
+    for p in files {
+        let m = fs::metadata(p)
+            .and_then(|md| md.modified())
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| format!("{}:{}", d.as_secs(), d.subsec_nanos()))
+            .unwrap_or_else(|| "0:0".to_string());
+        parts.push(format!("{}={}", p.display(), m));
+    }
+    parts.join("|")
+}
+
 pub fn get_binds_list() -> Vec<Value> {
     let hdir = hypr_dir();
-    let mut binds = parse_binds_file(&hdir.join("binds.lua"), "");
+    let main_binds = hdir.join("binds.lua");
+    let mut user_files: Vec<PathBuf> = Vec::new();
     let udir = hdir.join("user");
     if let Ok(rd) = fs::read_dir(&udir) {
-        let mut files: Vec<PathBuf> = rd
+        user_files = rd
             .flatten()
             .map(|e| e.path())
             .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("lua"))
             .collect();
-        files.sort();
-        for f in files {
-            binds.extend(parse_binds_file(&f, "Personnel"));
+        user_files.sort();
+    }
+
+    let mut all_files = Vec::with_capacity(1 + user_files.len());
+    all_files.push(main_binds.clone());
+    all_files.extend(user_files.iter().cloned());
+    let sig = binds_mtime_sig(&all_files);
+    let cache_path = quickshell_cache_dir().join("binds_cache.json");
+    let cached = read_json_value(&cache_path);
+    if cached.get("sig").and_then(|v| v.as_str()) == Some(sig.as_str()) {
+        if let Some(arr) = cached.get("binds").and_then(|v| v.as_array()) {
+            return arr.clone();
         }
     }
+
+    let mut binds = parse_binds_file(&main_binds, "");
+    for f in user_files {
+        binds.extend(parse_binds_file(&f, "Personnel"));
+    }
+    let _ = write_json_atomic(&cache_path, &json!({ "sig": sig, "binds": binds }), 0o644);
     binds
 }
 

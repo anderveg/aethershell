@@ -24,14 +24,19 @@ pub fn run_daemon(args: &[String]) -> i32 {
         .unwrap_or(2.0);
     let interval = Duration::from_secs_f64(interval_sec);
     let empty_opts = Map::new();
+    let mut tour: u64 = 0;
+    let mut last_net = serde_json::Value::Null;
 
     loop {
         let start = Instant::now();
         let sys = systeme::analyser(&empty_opts, true, false);
-        let net = reseau::analyser(false);
+        if tour % 8 == 0 || last_net.is_null() {
+            last_net = reseau::analyser(false);
+        }
+        tour = tour.wrapping_add(1);
         let payload = json!({
             "systeme": sys,
-            "reseau": net,
+            "reseau": last_net,
         });
         if let Ok(line) = serde_json::to_string(&payload) {
             let mut out = io::stdout().lock();
