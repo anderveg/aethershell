@@ -1831,9 +1831,112 @@ elide: Text.ElideRight
         }
     }
 
-
-
 }   // fin Grid fenêtres
+
+// 13. Transitions des workspaces (style + vitesse)
+Column {
+    width: parent.width
+    spacing: 8
+
+    Row {
+        width: parent.width
+        spacing: 8
+        Text {
+            width: parent.width - 80
+            anchors.verticalCenter: parent.verticalCenter
+            text: I18n.t("ws_anim.title")
+            color: Theme.fg
+            font.pixelSize: Theme.textSm
+            font.bold: true
+            elide: Text.ElideRight
+        }
+        Text {
+            width: 72
+            anchors.verticalCenter: parent.verticalCenter
+            horizontalAlignment: Text.AlignRight
+            text: ConfigStore.wsAnimSpeed.toFixed(1)
+            color: Theme.accent
+            font.pixelSize: Theme.textSm
+            font.bold: true
+        }
+    }
+
+    Row {
+        id: wsAnimRow
+        width: parent.width
+        spacing: 6
+
+        Repeater {
+            model: [
+                { id: "fade",              label: I18n.t("ws_anim.fade") },
+                { id: "slide",             label: I18n.t("ws_anim.slide") },
+                { id: "slidefade 20%",     label: I18n.t("ws_anim.slidefade") },
+                { id: "slidevert",         label: I18n.t("ws_anim.slidevert") },
+                { id: "slidefadevert 20%", label: I18n.t("ws_anim.slidefadevert") }
+            ]
+
+            Rectangle {
+                required property var modelData
+                readonly property bool sel: ConfigStore.wsAnimStyle === modelData.id
+                width: Math.floor((wsAnimRow.width - 24) / 5)
+                height: 30
+                radius: Theme.globalRadius
+                color: sel ? Theme.accent : (wsAnimMa.containsMouse ? Qt.alpha(Theme.accent, 0.16) : Qt.alpha(Theme.surfaceVariant, 0.45))
+                border.color: sel ? Theme.accent : Qt.alpha(Theme.fg, 0.12)
+                border.width: 1
+
+                Text {
+                    anchors.centerIn: parent
+                    width: parent.width - 6
+                    horizontalAlignment: Text.AlignHCenter
+                    text: parent.modelData.label
+                    color: parent.sel ? Theme.bg : Theme.fg
+                    font.pixelSize: Theme.textXs
+                    font.bold: parent.sel
+                    elide: Text.ElideRight
+                }
+
+                MouseArea {
+                    id: wsAnimMa
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        ConfigStore.wsAnimStyle = parent.modelData.id
+                        root.runConfigCmd(["style", "ws_anim_style", parent.modelData.id])
+                    }
+                }
+            }
+        }
+    }
+
+    Row {
+        width: parent.width
+        spacing: 10
+        Text {
+            width: 150
+            anchors.verticalCenter: parent.verticalCenter
+            text: I18n.t("ws_anim.speed")
+            color: Qt.alpha(Theme.fg, 0.8)
+            font.pixelSize: Theme.textXs
+            elide: Text.ElideRight
+        }
+        Slider {
+            width: parent.width - 160
+            anchors.verticalCenter: parent.verticalCenter
+            minimumValue: 0.5
+            maximumValue: 10.0
+            stepSize: 0.5
+            decimals: 1
+            value: ConfigStore.wsAnimSpeed
+            onValueModified: newValue => {
+                const v = Math.round(newValue * 10) / 10
+                ConfigStore.wsAnimSpeed = v
+                root.runConfigCmd(["style", "ws_anim_speed", String(v)])
+            }
+        }
+    }
+}
 
 }   // end CollapsibleSection secAspect
 

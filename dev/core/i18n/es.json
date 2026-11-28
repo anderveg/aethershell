@@ -160,5 +160,12 @@
   "onboard.applying": "Aplicando…",
   "onboard.done": "¡Listo!",
   "onboard.choose_dirs": "Elegir mis carpetas",
-  "onboard.next": "Siguiente"
+  "onboard.next": "Siguiente",
+  "ws_anim.title": "Transiciones de escritorios",
+  "ws_anim.speed": "Velocidad de transición",
+  "ws_anim.fade": "Desvanecer",
+  "ws_anim.slide": "Deslizar",
+  "ws_anim.slidefade": "Deslizar + fundido",
+  "ws_anim.slidevert": "Vertical",
+  "ws_anim.slidefadevert": "Vert. + fundido"
 }

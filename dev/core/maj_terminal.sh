@@ -68,12 +68,14 @@ echo "Commande : $CMD" | tee -a "$LOG"
 eval "$CMD" 2>&1 | tee -a "$LOG"
 CODE=${PIPESTATUS[0]}
 echo "=== Fin de la mise à jour (code $CODE) : $(date) ===" | tee -a "$LOG"
+echo ""
 if [ $CODE -ne 0 ]; then
-    echo ""
     echo "❌ La commande a échoué (code $CODE). Journal complet : $LOG"
-    echo ""
-    read -r -p "Appuyez sur Entrée pour fermer cette fenêtre..." _
+else
+    echo "✅ Mise à jour terminée (code 0). Journal complet : $LOG"
 fi
+echo ""
+read -r -p "Appuyez sur Entrée pour fermer cette fenêtre..." _
 exit $CODE
 EOF
 chmod +x "$WRAPPER"

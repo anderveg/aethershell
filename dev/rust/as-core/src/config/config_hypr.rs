@@ -285,6 +285,42 @@ pub fn update_hypr_gaps(key: &str, val: &str) -> bool {
     true
 }
 
+pub fn normalize_ws_anim_style(raw: &str) -> &'static str {
+    match raw.trim() {
+        "slide" => "slide",
+        "slidefade 20%" | "slidefade" => "slidefade 20%",
+        "slidevert" => "slidevert",
+        "slidefadevert 20%" | "slidefadevert" => "slidefadevert 20%",
+        _ => "fade",
+    }
+}
+
+pub fn apply_ws_animation(raw_style: &str, raw_speed: f64) -> bool {
+    let style = normalize_ws_anim_style(raw_style);
+    let speed = ((raw_speed.clamp(0.5, 10.0) * 10.0).round()) / 10.0;
+    let bezier = if style == "fade" { "almostLinear" } else { "easeOutQuint" };
+    let gen_path = hypr_dir().join("general.lua");
+    if let Ok(txt) = fs::read_to_string(&gen_path) {
+        let mut updated = txt;
+        for leaf in ["workspaces", "workspacesIn", "workspacesOut"] {
+            if let Ok(re) = Regex::new(&format!(r#"(?m)^.*hl\.animation\(\{{\s*leaf\s*=\s*"{leaf}".*$"#)) {
+                let line = format!(
+                    r#"hl.animation({{ leaf = "{leaf}", enabled = true, speed = {speed}, bezier = "{bezier}", style = "{style}" }})"#,
+                );
+                updated = re.replace_all(&updated, line.as_str()).to_string();
+            }
+        }
+        let _ = write_text_atomic(&gen_path, &updated, 0o644);
+    }
+    for leaf in ["workspaces", "workspacesIn", "workspacesOut"] {
+        let cmd = format!(
+            r#"hl.animation({{ leaf = "{leaf}", enabled = true, speed = {speed}, bezier = "{bezier}", style = "{style}" }})"#,
+        );
+        hyprctl_silent(&["eval", &cmd]);
+    }
+    true
+}
+
 pub fn apply_shell_blur(style: &Map<String, Value>, widgets: &[Value]) -> bool {
     let enabled = style
         .get("shell_blur_enabled")

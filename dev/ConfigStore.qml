@@ -61,6 +61,8 @@ Scope {
     property string matugenScheme: "scheme-tonal-spot"
     property real matugenContrast: 0
     property bool blurEnabled: true
+    property string wsAnimStyle: "fade"
+    property real wsAnimSpeed: 1.9
     property bool launchHistory: false
     property int blurSize: 3
     property int blurPasses: 3
@@ -151,6 +153,8 @@ Scope {
         if (typeof data.matugen_scheme === "string" && data.matugen_scheme.length > 0) root.matugenScheme = data.matugen_scheme
         if (typeof data.matugen_contrast === "number") root.matugenContrast = data.matugen_contrast
         if (typeof data.blur_enabled === "boolean") root.blurEnabled = data.blur_enabled
+        if (typeof data.ws_anim_style === "string" && data.ws_anim_style.length > 0) root.wsAnimStyle = data.ws_anim_style
+        if (typeof data.ws_anim_speed === "number") root.wsAnimSpeed = data.ws_anim_speed
         if (typeof data.blur_size === "number") root.blurSize = data.blur_size
         if (typeof data.blur_passes === "number") root.blurPasses = data.blur_passes
         if (typeof data.blur_vibrancy === "number") root.blurVibrancy = data.blur_vibrancy

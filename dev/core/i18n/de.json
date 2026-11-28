@@ -160,5 +160,12 @@
   "onboard.applying": "Wird angewendet…",
   "onboard.done": "Fertig!",
   "onboard.choose_dirs": "Ordner wählen",
-  "onboard.next": "Weiter"
+  "onboard.next": "Weiter",
+  "ws_anim.title": "Arbeitsflächen-Übergänge",
+  "ws_anim.speed": "Übergangsgeschwindigkeit",
+  "ws_anim.fade": "Überblenden",
+  "ws_anim.slide": "Gleiten",
+  "ws_anim.slidefade": "Gleiten + Blenden",
+  "ws_anim.slidevert": "Vertikal",
+  "ws_anim.slidefadevert": "Vert. + Blenden"
 }

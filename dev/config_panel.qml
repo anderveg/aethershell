@@ -1037,6 +1037,8 @@ Rectangle {
     readonly property string matugenScheme: ConfigStore.matugenScheme
     readonly property real matugenContrast: ConfigStore.matugenContrast
     readonly property bool blurEnabled: ConfigStore.blurEnabled
+    readonly property string wsAnimStyle: ConfigStore.wsAnimStyle
+    readonly property real wsAnimSpeed: ConfigStore.wsAnimSpeed
     readonly property bool launchHistory: ConfigStore.launchHistory
     readonly property int blurSize: ConfigStore.blurSize
     readonly property int blurPasses: ConfigStore.blurPasses

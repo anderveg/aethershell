@@ -160,5 +160,12 @@
   "onboard.applying": "Applying…",
   "onboard.done": "Done!",
   "onboard.choose_dirs": "Choose my folders",
-  "onboard.next": "Next"
+  "onboard.next": "Next",
+  "ws_anim.title": "Workspace transitions",
+  "ws_anim.speed": "Transition speed",
+  "ws_anim.fade": "Fade",
+  "ws_anim.slide": "Slide",
+  "ws_anim.slidefade": "Slide + fade",
+  "ws_anim.slidevert": "Vertical",
+  "ws_anim.slidefadevert": "Vert. + fade"
 }

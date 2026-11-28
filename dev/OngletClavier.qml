@@ -39,7 +39,7 @@ CollapsibleSection {
     objectName: "secLangue"
     title: I18n.t("lang.title")
     summary: I18n.t("lang.summary")
-    icon: "globe"
+    icon: "keyboard"
     expanded: root.sectionOpen("clavier_langue", false)
     onToggled: expanded => {
         root.setPanelSection("clavier_langue", expanded)

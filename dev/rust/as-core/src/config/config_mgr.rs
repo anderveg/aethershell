@@ -312,6 +312,7 @@ fn update_style_var(key: &str, value: &str) {
 
     let mut data = read_map(&style_path());
     let mut blur_changed = false;
+    let mut ws_anim_changed = false;
     let fval = value.replace(',', ".").parse::<f64>().unwrap_or(0.0);
 
     match key {
@@ -398,6 +399,14 @@ fn update_style_var(key: &str, value: &str) {
         "langue" => {
             data.insert(key.into(), json!(crate::common::i18n::normalize_lang(value)));
         }
+        "ws_anim_style" => {
+            data.insert(key.into(), json!(crate::config::config_hypr::normalize_ws_anim_style(value)));
+            ws_anim_changed = true;
+        }
+        "ws_anim_speed" => {
+            data.insert(key.into(), json!((fval.clamp(0.5, 10.0) * 10.0).round() / 10.0));
+            ws_anim_changed = true;
+        }
         "matugen_contrast" => { data.insert(key.into(), json!(fval.clamp(-1.0, 1.0))); }
         "blur_size" => { data.insert(key.into(), json!((fval as i64).clamp(1, 20))); }
         "blur_passes" => { data.insert(key.into(), json!((fval as i64).clamp(1, 8))); }
@@ -455,6 +464,11 @@ fn update_style_var(key: &str, value: &str) {
     let _ = write_json_atomic(&style_path(), &Value::Object(data.clone()), 0o644);
     if blur_changed {
         apply_shell_blur(&data, &load_widgets_vec());
+    }
+    if ws_anim_changed {
+        let ws_style = data.get("ws_anim_style").and_then(|v| v.as_str()).unwrap_or("fade");
+        let ws_speed = data.get("ws_anim_speed").and_then(|v| v.as_f64()).unwrap_or(1.9);
+        crate::config::config_hypr::apply_ws_animation(ws_style, ws_speed);
     }
     let rofi_script = core_dir().join("sync_theme.sh");
     if rofi_script.is_file() {
@@ -817,6 +831,8 @@ pub fn get_full_config_state() -> Value {
         "lock_bg_image": get_s("lock_bg_image", ""),
         "matugen_scheme": get_s("matugen_scheme", "scheme-tonal-spot"),
         "theme_mode": get_s("theme_mode", "auto"),
+        "ws_anim_style": get_s("ws_anim_style", "fade"),
+        "ws_anim_speed": get_f("ws_anim_speed", 1.9),
         "langue": style.get("langue").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(crate::common::i18n::normalize_lang).unwrap_or_else(crate::common::i18n::default_lang),
         "matugen_contrast": get_f("matugen_contrast", 0.0),
         "blur_enabled": get_b("blur_enabled", true),

@@ -9,6 +9,19 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/).
 - **`x.yy.x.x`** : ajout de fonctionnalités décisives (ex. : ajout de l'Îlot dynamique).
 - **Version majeure (`y.x.x.x`)** : conservation du schéma déjà en place (proposée lorsque l'ampleur des changements le justifie ; décision finale validée par l'utilisateur).
 
+## [0.4.9.0] — 2026-11-27
+
+### Ajouté
+- **Cheatsheet en clavier visuel interactif** (`Cheatsheet.qml`) : refonte de l'écran des raccourcis (`SUPER + K`) en clavier complet adapté à la disposition (`ConfigStore.kbLayout` : `azerty`, `qwertz`, `es`, `qwerty`), avec touche `Super` toujours en surbrillance par défaut, modificateurs `Shift`/`Ctrl`/`Alt` cliquables et cumulables, bandeau souris/médias, dépliage `F1`–`F9` et info-bulle détaillée au survol (description complète, catégorie, dispatcher Hyprland et autres combinaisons sur la même touche).
+- **Transitions des workspaces** (`OngletApparence.qml`, `ConfigStore.qml`, `config_hypr.rs`, `config_mgr.rs`) : choix du type de transition (`slide`, `slidevert`, `fade`) et de la vitesse dans le panneau de configuration.
+
+### Modifié
+- **Mise à jour depuis le panneau** (`dev/core/maj_terminal.sh`) : pause demandant d'appuyer sur **Entrée** avant de fermer le terminal aussi en cas de succès (`code 0`).
+
+### Corrigé
+- **Tiroirs de l'onglet Apparence** (`OngletApparence.qml`) : rétablissement de l'affichage de tous les tiroirs de l'onglet.
+- **Keycodes AZERTY dans la cheatsheet** (`Cheatsheet.qml`) : séparation stricte de `ugrave` (`ù`) et `parenright` (`)`) vis-à-vis de `apostrophe` (`4 '`) et `minus` (`6 -`).
+
 ## [0.4.8.0] — 2026-11-26
 
 ### Ajouté
